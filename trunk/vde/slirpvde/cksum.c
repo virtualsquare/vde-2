@@ -34,6 +34,7 @@
  * in_cksum.c,v 1.2 1994/08/02 07:48:16 davidg Exp
  */
 
+#include <config.h>
 #include <slirp.h>
 
 /*

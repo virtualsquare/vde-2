@@ -43,6 +43,7 @@
  */
 
 #define WANT_SYS_IOCTL_H
+#include <config.h>
 #include <slirp.h>
 
 /* patchable/settable parameters for tcp */

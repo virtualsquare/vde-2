@@ -2,6 +2,7 @@
  * Licensed under the GPL
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -14,7 +15,8 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 #include <sys/poll.h>
-#include "../vde.h"
+
+#include <vde.h>
 
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048

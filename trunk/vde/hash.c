@@ -4,6 +4,7 @@
  * Modified 2003 Renzo Davoli
  */
 
+#include <config.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -15,8 +16,9 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/signal.h>
-#include "switch.h"
-#include "hash.h"
+
+#include <switch.h>
+#include <hash.h>
 
 #define HASH_SIZE 128
 #define HASH_MOD 11

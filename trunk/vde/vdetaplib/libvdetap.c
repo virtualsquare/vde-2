@@ -1,6 +1,7 @@
 /* Copyright 2004 Renzo Davoli
  * Reseased under the GPLv2 */
 
+#include <config.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
@@ -57,7 +58,7 @@ static int addpid(int pid) {
 	}
 }
 
-void _init(void)
+void libvdetap_init(void)
 {
 	register int i;
 	for (i=1;i<MAX;i++) 
@@ -65,7 +66,7 @@ void _init(void)
 	flh=pidpool;
 }
 
-void _fini(void)
+void libvdetap_fini(void)
 {
 	struct pidlist *plp=plh;
 	while (plp != NULL) {

@@ -1,6 +1,7 @@
 /* Copyright 2004 Renzo Davoli
  * Reseased under the GPLv2 */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/select.h>

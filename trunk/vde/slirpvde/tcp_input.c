@@ -42,8 +42,10 @@
  * terms and conditions of the copyright.
  */
 
+#include <config.h>
 #include <slirp.h>
-#include "ip_icmp.h"
+
+#include <ip_icmp.h>
 
 struct socket tcb;
 

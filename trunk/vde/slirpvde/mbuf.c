@@ -15,6 +15,7 @@
  * the flags
  */
 
+#include <config.h>
 #include <slirp.h>
 
 struct	mbuf *mbutl;

@@ -8,6 +8,8 @@
 #ifndef _MISC_H_
 #define _MISC_H_
 
+#include <slirp.h>
+
 struct ex_list {
 	int ex_pty;			/* Do we want a pty? */
 	int ex_addr;			/* The last byte of the address */

@@ -42,6 +42,7 @@
  * terms and conditions of the copyright.
  */
 
+#include <config.h>
 #include <slirp.h>
 
 #define max(x,y) ((x) > (y) ? (x) : (y))

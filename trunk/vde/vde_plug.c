@@ -2,6 +2,7 @@
  * Licensed under the GPL
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -15,7 +16,7 @@
 #include <sys/uio.h>
 #include <sys/poll.h>
 #include <sys/utsname.h>
-#include "vde.h"
+#include <vde.h>
 #ifdef VDE_IP_LOG
 #define DO_SYSLOG
 #endif

@@ -37,6 +37,8 @@
 #ifndef _UDP_H_
 #define _UDP_H_
 
+#include <mbuf.h>
+
 #define UDP_TTL 0x60
 #define UDP_UDPDATALEN 16192
 
@@ -96,7 +98,8 @@ extern struct udpstat udpstat;
 extern struct socket udb;
 
 void udp_init _P((void));
-void udp_input _P((register struct mbuf *, int));
+/*void udp_input (register struct mbuf *, int);*/
+void udp_input (register struct mbuf *m, int iphlen);
 int udp_output _P((struct socket *, struct mbuf *, struct sockaddr_in *));
 int udp_attach _P((struct socket *));
 void udp_detach _P((struct socket *));

@@ -6,6 +6,7 @@
  */
 
 #define WANT_SYS_IOCTL_H
+#include <config.h>
 #include <slirp.h>
 
 u_int curtime, time_fasttimo, last_slowtimo, detach_time;
@@ -121,8 +122,7 @@ insque_32(a, b)
 }
 
 inline void
-remque_32(a)
-	void *a;
+remque_32(void *a)
 {
 	register struct quehead_32 *element = (struct quehead_32 *) a;
 	((struct quehead_32 *)(element->qh_link))->qh_rlink = element->qh_rlink;

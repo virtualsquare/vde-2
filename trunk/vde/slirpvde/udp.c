@@ -42,8 +42,10 @@
  * terms and conditions of the copyright.
  */
 
+#include <config.h>
 #include <slirp.h>
-#include "ip_icmp.h"
+
+#include <ip_icmp.h>
 
 #ifdef VDE
 extern int dhcpmgmt;
@@ -75,9 +77,7 @@ udp_init()
  * ip->ip_len length data (IPDU)
  */
 void
-udp_input(m, iphlen)
-	register struct mbuf *m;
-	int iphlen;
+udp_input(register struct mbuf *m, int iphlen)
 {
 	register struct ip *ip;
 	register struct udphdr *uh;
@@ -386,7 +386,7 @@ udp_tos(so)
 }
 
 #ifdef EMULATE_TALK
-#include "talkd.h"
+#include <talkd.h>
 #endif
 
 /*

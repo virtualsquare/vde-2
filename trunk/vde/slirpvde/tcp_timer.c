@@ -34,6 +34,7 @@
  * tcp_timer.c,v 1.2 1994/08/02 07:49:10 davidg Exp
  */
 
+#include <config.h>
 #include <slirp.h>
 
 #define max(x,y) ((x) > (y) ? (x) : (y))
