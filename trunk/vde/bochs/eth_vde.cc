@@ -222,6 +222,7 @@ void bx_vde_pktmover_c::rx_timer ()
   struct sockaddr_un datain;
   socklen_t datainsize;
 
+  datainsize=sizeof(datain);
   if (fd<0) return;
   //nbytes = read (fd, buf, sizeof(buf));
   nbytes=recvfrom(fddata,buf,sizeof(buf),MSG_DONTWAIT|MSG_WAITALL,(struct sockaddr *) &datain, &datainsize);

@@ -295,7 +295,8 @@ int main(int argc, char **argv)
 {
   int fddata;
   char *sockname;
-  struct sockaddr_un dataout,datain;
+  struct sockaddr_un dataout;
+  struct sockaddr_un datain;
   int datainsize;
   int result;
   int group=0;
@@ -352,11 +353,17 @@ int main(int argc, char **argv)
 
 	}
 	if (pollv[1].revents & POLLIN) {
+		datainsize=sizeof(datain);
 		nx=recvfrom(fddata,bufin+2,BUFSIZE-2,0,(struct sockaddr *) &datain, &datainsize);
-		bufin[0]=nx >> 8;
-		bufin[1]=nx & 0xff;
-		write(STDOUT_FILENO,bufin,nx+2);
-		//fprintf(stderr,"%s: SENT %d %x %x \n",myname,nx,bufin[0],bufin[1]);
+		if (nx<0)
+			perror("vde_plug: recvfrom ");
+		else
+		{
+			bufin[0]=nx >> 8;
+			bufin[1]=nx & 0xff;
+			write(STDOUT_FILENO,bufin,nx+2);
+			//fprintf(stderr,"%s: SENT %d %x %x \n",myname,nx,bufin[0],bufin[1]);
+		}
 	}
   }
   
