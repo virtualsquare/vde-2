@@ -24,7 +24,7 @@ vdetap: vdetap.o
 vdetap.o: vdetap.c
 
 clean:
-	rm -f *.o *.a *.so
+	rm -f *.o *.a *.so vdetap
 
 install:
 	install -d $(BIN_DIR) 
