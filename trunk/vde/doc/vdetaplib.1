@@ -1,0 +1,104 @@
+.\" Copyright (c) 2004 Renzo Davoli
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 2 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public
+.\" License along with this manual; if not, write to the Free
+.\" Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
+.\" USA.
+
+.TH VDETAPLIB 1 "February 23, 2004" "Virtual Distributed Ethernet"
+.SH NAME
+vdetaplib \- Virtual Distributed Ethernet tap emulation library
+.SH SYNOPSIS
+No synopsis
+
+.br
+.SH DESCRIPTION
+\fBvdetaplib\fP 
+is a library that emulates tap (tuntap level2 interface, see
+in kernel sources ./Documentation/networking/tun.c) and connects
+tap virtual interfaces to vde networks.
+
+To use it, the libvdetab.so library must be preloaded (sh,ksh or bash syntax):
+.RS
+.br
+.B 
+export LD_PRELOAD=/usr/local/lib/libvdetap.so
+.RE
+(csh, tchs syntax):
+.RS
+.br
+.B
+setenv LD_PRELOAD /usr/local/lib/libvdetap.so
+.RE
+
+If you want to divert all tap requests to a single vde_switch set the
+variable VDEALLTAP to the vde socket. 
+(sh,ksh or bash syntax):
+.RS
+.br
+.B
+export VDEALLTAP=/tmp/vde.ctl
+.RE
+(csh, tchs syntax):
+.RS
+.br
+.B
+setenv VDEALLTAP /tmp/vde.ctl
+.RE
+
+It is also possible to set each single interface to different vde_switches
+by setting the environment variable with the same name of the interface.
+(sh,ksh or bash syntax):
+.RS
+.br
+.B
+export tap0=/tmp/vde.ctl
+.br
+.B
+export tap1=/tmp/myvde.ctl
+.br
+.B
+export ppc=/tmp/ppc.ctl
+.RE
+(csh, tchs syntax):
+.RS
+.br
+.B
+setenv tap0 /tmp/vde.ctl
+.br
+.B
+setenv tap1 /tmp/myvde.ctl
+.br
+.B
+setenv ppc /tmp/ppc.ctl
+.RE
+.br
+
+The variable to set the specific interface is checked first then
+VDEALLTAP. VDEALLTAP thus works as a default choice for the vde switch
+to be used.
+If VDEALLTAP is not set and there is no specific environment variable
+(and for tun -- IFF_TUN interfaces) the kernel provided interface is used.
+In this latter case access to /dev/net/tun is required, generally root access.
+.br
+.SH SEE ALSO
+.BR vde_switch (1),
+.BR vdeq (1).
+.br
+.SH AUTHOR
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
