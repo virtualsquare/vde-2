@@ -1,3 +1,6 @@
+/* Copyright 2004 Renzo Davoli
+ * Reseased under the GPLv2 */
+
 #include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
