@@ -78,12 +78,10 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int int
 
 unsigned char bufin[BUFSIZE];
 
-//struct pollfd pollv[]={{STDIN_FILENO,POLLIN|POLLHUP,0},{0,POLLIN|POLLHUP,0}};
 struct pollfd *pollv;
 
 char *filename;
 char *vdeqname;
-char *numfd;
 #define NUMW 10
 
 static int countnics(const char *s)
@@ -169,19 +167,12 @@ int main(int argc, char **argv)
 	  perror("malloc nics");
 	  exit(1);
   }
-  if ((numfd= (char *) malloc(nb_nics * NUMW * sizeof (char)))<0) {
-	  perror("malloc numfd");
-	  exit(1);
-  }
 
   for (i=0; i<nb_nics; i++) {
-	char curfd[NUMW];
   	if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sp[i]) < 0){
 	  	perror("socketpair");
 	  	exit(1);
 	}
-	snprintf(curfd,NUMW,"%d%c",sp[i][0],(i<nb_nics-1)?',':0);
-	strcat(numfd,curfd);
   }
 
   if ((sockname= (char **) malloc(sizeof(char *) * nb_nics))<0) {
@@ -207,17 +198,21 @@ int main(int argc, char **argv)
   printf("as %s\n",argsock);
 	    for (i=0; i<nb_nics; i++)
 		    printf("%d -> %s\n",i,sockname[i]); */
-  newargc=argc+3-args;
+  newargc=argc+1+(2*nb_nics)-args;
   if ((newargv=(char **) malloc ((newargc+1)* sizeof(char *))) <0) {
 	  perror("malloc");
 	  exit(1);
   }
 
   newargv[0]=filename;
-  newargv[1]="-tun-fd";
-  newargv[2]=numfd;
+  for (i=0; i<nb_nics; i++) {
+	char numfd[10];
+	sprintf(numfd,"%d",sp[i][0]);
+  	newargv[2*i+1]="-tun-fd";
+  	newargv[2*i+2]=strdup(numfd);
+  }
    
-  for (i=3;args<argc;i++,args++) newargv[i]=argv[args];
+  for (i=(2*nb_nics)+1;args<argc;i++,args++) newargv[i]=argv[args];
 
   newargv[i]=0;
 

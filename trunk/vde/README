@@ -2,6 +2,7 @@ VDE : Virtual Distributed Ethernet.
 
 (c) 2003/2004 Renzo Davoli
 Based on uml-router Copyright 2002 Yon Uriarte and Jeff Dike
+qemu-vde-HOWTO is (c) by Jim Brown
 
 Components of the VDE architecture:
 - VDE switches: virtual counterpart of ethernet switches.
