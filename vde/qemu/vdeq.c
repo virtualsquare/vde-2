@@ -100,11 +100,11 @@ static void usage()
 {
 	if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) 
 		fprintf(stderr,"Usage: %s [-h]\n"
-				"\t %s  [-vdesock sock1 [,sock2...]] qemu_options\n"
+				"\t %s  [-sock sock1 [,sock2...]] qemu_options\n"
 				"\t (%s executes a qemu machine named %s)\n", vdeqname,vdeqname,vdeqname,filename);
 	else 
 		fprintf(stderr,"Usage: %s [-h]\n"
-				"\t %s qemu_executable [-vdesock sock1 [,sock2...]] qemu_options\n", vdeqname, vdeqname);
+				"\t %s qemu_executable [-sock sock1 [,sock2...]] qemu_options\n", vdeqname, vdeqname);
 	exit(0);
 }
 

@@ -29,7 +29,7 @@ vde_switch \- Virtual Distributed Ethernet switch
 .B \-hub  
 ] 
 [ 
-.BI \-unix 
+.BI \-sock 
 .I socketpath  
 ]  
 [ 
@@ -69,7 +69,7 @@ users when no -tap option is specified.
 .B \-hub, 
 turn off the switch engine. It operates as a hub.
 .TP
-.B \-unix "\fIsocketpath\fP", 
+.B \-sock "\fIsocketpath\fP", 
 specify the UNIX socket to be used by local programs for joining the VDE.
 The default value is "/tmp/vde.ctl"
 .TP

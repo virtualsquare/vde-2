@@ -133,6 +133,8 @@ void usage(char *name) {
 
 struct option slirpvdeopts[] = {
 	{"socket",1,NULL,'s'},
+	{"sock",1,NULL,'s'},
+	{"vdesock",1,NULL,'s'},
 	{"unix",1,NULL,'s'},
 	{"dhcp",0,NULL,'d'},
 	{"network",0,NULL,'n'},
