@@ -6,7 +6,7 @@
 #define __SWITCH_H__
 
 #define ETH_ALEN 6
-extern int daemonize;
+void printlog(int priority, const char *format, ...);
 
 extern void **g_fdsdata;
 extern int g_nfds;

@@ -11,6 +11,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <syslog.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/signal.h>
@@ -63,7 +64,7 @@ void insert_into_hash(char *src, void *port)
 
   new = malloc(sizeof(*new));
   if(new == NULL){
-    perror("Failed to malloc hash entry");
+    printlog(LOG_WARNING,"Failed to malloc hash entry %s",strerror(errno));
     return;
   }
 
@@ -202,7 +203,7 @@ void hash_init(void)
   sa.sa_handler = sig_alarm;
   sa.sa_flags = SA_RESTART;
   if(sigaction(SIGALRM, &sa, NULL) < 0){
-    perror("Setting handler for SIGALRM");
+    printlog(LOG_WARNING,"Setting handler for SIGALRM %s", strerror(errno));
     return;
   }
   kill(getpid(), SIGALRM);
