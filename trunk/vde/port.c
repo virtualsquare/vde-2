@@ -310,7 +310,7 @@ int handle_sock_data(int fd, int hub)
 
   p=NULL;
   for(i=g_minfds ; i<g_nfds ; i++) {
-	    if (g_fdsdata != NULL) { 
+	    if (g_fdsdata[i] != NULL) { 
 		    p=(struct port *)(g_fdsdata[i]); 
 		    mine=&data;
 		    port=p->data;
