@@ -153,7 +153,12 @@ int main(int argc, char **argv)
 			  strcmp(filename,"--help")==0
 		  )) {
 	  usage();
-  } else if (argc > args+1 && strcmp(argv[args],"-vdesock")==0) {
+  } else if (argc > args+1 && 
+		  (strcmp(argv[args],"-vdesock")==0) ||
+		  (strcmp(argv[args],"-sock")==0) ||
+		  (strcmp(argv[args],"-unix")==0) ||
+		  (strcmp(argv[args],"-s")==0)
+	    ){
 	  argsock=argv[args+1];
 	  args+=2;
   } else
