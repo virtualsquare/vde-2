@@ -4,9 +4,4 @@ slirpvde is based upon:
 	slirp support for Qemu by Fabrice Bellard
 	slirp-vde interface by Renzo Davoli
 
-Important: I have had no time yet to write an autoconfiguration file.
-Edit the Makefile to change CFLAGS depending on the endianess of your computer.
-
-(Not tested yet on i386 but it should work)
-
 2004.05.03

@@ -3,14 +3,7 @@ misc.o sbuf.o slirp.o socket.o tcp_input.o tcp_output.o tcp_subr.o \
 tcp_timer.o udp.o \
 bootp.o
 
-############ BIG ENDIAN CFLAGS
-CFLAGS=-I. -DWORDS_BIGENDIAN -DVDE
-############ BIG ENDIAN CFLAGS W/DEBUG
-#CFLAGS=-I. -DDEBUG -DWORDS_BIGENDIAN -DVDE
-############ LITTLE ENDIAN CFLAGS
-#CFLAGS=-I. -DVDE
-############ LITTLE ENDIAN CFLAGS W/DEBUG
-#CFLAGS=-I. -DDEBUG -DVDE
+CFLAGS=-I. -DVDE
 
 all: libslirp.a slirpvde
 
@@ -40,42 +33,13 @@ tcp_subr.o: tcp_subr.c
 tcp_timer.o: tcp_timer.c
 udp.o: udp.c ip_icmp.h
 
-#bootp.o: bootp.c
-#
-#cksum.o: cksum.c
-#
-#debug.o: debug.c
-#
-#if.o: if.c
-#
-#ip_icmp.o: ip_icmp.c
-#
-#ip_input.o: ip_input.c
-#
-#ip_output.o: ip_output.c
-#
-#mbuf.o: mbuf.c
-#
-#misc.o: misc.c
-#
-#sbuf.o: sbuf.c
-#
-#slirp.o: slirp.c
-#
-#socket.o: socket.c
-#
-#tcp_input.o: tcp_input.c
-#
-#tcp_output.o: tcp_output.c
-#
-#tcp_subr.o: tcp_subr.c
-#
-#tcp_timer.o: tcp_timer.c
-#
-#udp.o: udp.c
-#
 slirpvde: slirpvde.o libslirp.a
 	$(CC) -o slirpvde slirpvde.o libslirp.a
 
 clean:
 	rm -rf *.o slirpvde libslirp.a
+
+install : slirpvde
+	install -d $(DESTDIR)$(BIN_DIR)
+	install -s slirpvde $(DESTDIR)$(BIN_DIR)
+
