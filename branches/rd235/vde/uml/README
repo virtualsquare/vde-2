@@ -1,0 +1,5 @@
+VDE-switch is already compatible with UML-switch (from which it was originally
+derived).
+
+linux ubd0=.... eth0=daemon,,,/tmp/vde.ctl .... 
+
