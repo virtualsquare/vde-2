@@ -312,7 +312,7 @@ int main(int argc, char **argv)
   uname(&me);
   if (argv[0][0] == '-')
 	  netusage(); //implies exit
-  sockname=(argc == 2)?argv[argc-1]:VDESTDSOCK;
+  sockname=VDESTDSOCK;
   /* option parsing */
   {
 	  int c;
@@ -375,7 +375,8 @@ int main(int argc, char **argv)
 		  }
 	  }
 
-	  sockname=(optind < argc && sockname==NULL)?argv[optind]:VDESTDSOCK;
+	  if (optind < argc && sockname==VDESTDSOCK)
+		  sockname=argv[optind];
   }
   if((fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0){
     perror("socket");
