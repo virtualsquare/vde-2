@@ -1,3 +1,6 @@
+/* Copyright 2004 Renzo Davoli
+ * Reseased under the GPLv2 */
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
