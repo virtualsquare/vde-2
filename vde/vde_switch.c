@@ -1,5 +1,6 @@
 /* Copyright 2001, 2002 Jeff Dike and others
  * Copyright 2003 Renzo Davoli (modified for daemon and vde)
+ * Copyright 2005 Mattia Belletti (-pid option for daemons)
  * Licensed under the GPL
  */
 
