@@ -7,6 +7,8 @@ BIN = $(BINSW) dpipe vde_plug
 CFLAGS = -Wall $(TUNTAP) -O3
 
 BIN_DIR ?= /usr/local/bin
+LIB_DIR ?= /usr/local/lib
+MAN_DIR ?= /usr/local/man
 
 ifneq ($(TUNTAP),)
 	OBJS += tuntap.o
@@ -15,6 +17,7 @@ endif
 all : $(BIN)
 	$(MAKE) -C qemu $(MAKECMDGOALS)
 	$(MAKE) -C slirpvde $(MAKECMDGOALS)
+	$(MAKE) -C vdetaplib $(MAKECMDGOALS)
 
 hash.o:	hash.c switch.h hash.h
 
@@ -39,9 +42,12 @@ clean :
 	rm -f $(BIN) *.o *~ 
 	$(MAKE) -C qemu $(MAKECMDGOALS)
 	$(MAKE) -C slirpvde $(MAKECMDGOALS)
+	$(MAKE) -C vdetaplib $(MAKECMDGOALS)
 
 install : $(BIN)
-	install -d $(DESTDIR)$(BIN_DIR) 
-	install -s $(BIN) $(DESTDIR)$(BIN_DIR)
+	install -d $(BIN_DIR) 
+	install -s $(BIN) $(BIN_DIR)
 	$(MAKE) -C qemu $(MAKECMDGOALS) BIN_DIR=$(BIN_DIR)
 	$(MAKE) -C slirpvde $(MAKECMDGOALS) BIN_DIR=$(BIN_DIR)
+	$(MAKE) -C vdetaplib $(MAKECMDGOALS) BIN_DIR=$(BIN_DIR) LIB_DIR=$(LIB_DIR)
+	$(MAKE) -C doc $(MAKECMDGOALS) MAN_DIR=$(MAN_DIR)
