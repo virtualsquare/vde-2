@@ -261,6 +261,7 @@ int main(int argc, char **argv)
 				  sendto(fddata[i],bufin,nx,0,(struct sockaddr *) &(dataout[i]), sizeof(struct sockaddr_un));
 			  }
 			  if (pollv[2*i+1].revents & POLLIN) {
+				  datainsize=sizeof(datain);
 				  nx=recvfrom(fddata[i],bufin,BUFSIZE,0,(struct sockaddr *) &datain, &datainsize);
 				  //fprintf(stderr,"TX to qemu %d\n",nx);
 				  write(sp[i][1],bufin,nx);
