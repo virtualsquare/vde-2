@@ -23,6 +23,7 @@ struct packet {
   unsigned char data[1500];
 };
 
+
 // for dedugging if needed
 /*
 void packet_dump (struct packet *p)
@@ -62,13 +63,11 @@ void close_port(int i, int fd)
   struct port *port=(struct port *)(g_fdsdata[i]);
 
   if(port == NULL){
-    	if (! daemonize) 
-  	    	fprintf(stderr, "No port associated with descriptor %d\n", fd);
+  	printlog(LOG_WARNING, "No port associated with descriptor %d", fd);
      	return;
   }
   else if(port->control != fd){
-    	if (! daemonize) 
-  	    	fprintf(stderr, "file descriptor mismatch %d %d\n", port->control, fd);
+  	 printlog(LOG_WARNING, "file descriptor mismatch %d %d", port->control, fd);
      	 return;
   }
 
@@ -89,7 +88,7 @@ void close_port(int i, int fd)
 			  if(port != NULL && port != p && port->pg == p->pg) break;
 		  }
 		  if (p == NULL) {
-			  perror("portgroup inconsistency");
+			  printlog(LOG_WARNING,"portgroup inconsistency");
 		  } else 
 		  {
 			  hash_reassign(port,p);
@@ -102,10 +101,7 @@ void close_port(int i, int fd)
   }
   
 #ifdef INFO
-  if (!daemonize) 
- 	 printf("Disconnect %d\n",port->control);
-  else
-	  syslog(LOG_INFO,"Disconnect %d",port->control);
+ 	 printlog(LOG_INFO,"Disconnect %d",port->control);
 #endif
   free(port);
 }
@@ -124,13 +120,7 @@ static void update_src(struct port *port, struct packet *p)
     /* old value differs from actual input port */
 
 #ifdef INFO
-    if (!daemonize) 
-	   printf(" Addr: %02x:%02x:%02x:%02x:%02x:%02x New port %d",
-	   p->header.src[0], p->header.src[1], p->header.src[2],
-	   p->header.src[3], p->header.src[4], p->header.src[5],
-	   port->control);
-    else
-	   syslog(LOG_INFO," Addr: %02x:%02x:%02x:%02x:%02x:%02x New port %d",
+	   printlog(LOG_INFO," Addr: %02x:%02x:%02x:%02x:%02x:%02x New port %d",
 	   p->header.src[0], p->header.src[1], p->header.src[2],
 	   p->header.src[3], p->header.src[4], p->header.src[5],
 	   port->control);
@@ -138,18 +128,11 @@ static void update_src(struct port *port, struct packet *p)
 
     if(last != NULL){
 #ifdef INFO
-      if (!daemonize) 
-	      printf(" old port %d", last->control);
-      else
-	      syslog(LOG_INFO," old port %d", last->control);
+	    printlog(LOG_INFO," old port %d", last->control);
 #endif
       delete_hash(p->header.src);
     }
     insert_into_hash(p->header.src, port);
-#ifdef INFO
-    if (!daemonize) printf("\n");
-#endif
-
   }
   update_entry_time(p->header.src);
 }
@@ -164,25 +147,16 @@ static void send_dst(struct port *port, struct packet *packet, int len,
   if((target == NULL) || IS_BROADCAST(packet->header.dest) || hub){
 #ifdef INFO
     if((target == NULL) && !IS_BROADCAST(packet->header.dest)){
-      if (!daemonize) { 
-	      printf("unknown Addr: %02x:%02x:%02x:%02x:%02x:%02x from port ",
-	        packet->header.dest[0], packet->header.dest[1], 
-	        packet->header.dest[2], packet->header.dest[3], 
-	        packet->header.dest[4], packet->header.dest[5]);
-      		if(port == NULL) printf("UNKNOWN\n");
-      		else printf("%d\n", port->control);
-      } else {
       	if(port == NULL)
-	      syslog(LOG_NOTICE,"unknown Addr: %02x:%02x:%02x:%02x:%02x:%02x from port UNKNOWN",
+	      printlog(LOG_WARNING,"unknown Addr: %02x:%02x:%02x:%02x:%02x:%02x from port UNKNOWN",
 	        packet->header.dest[0], packet->header.dest[1], 
 	        packet->header.dest[2], packet->header.dest[3], 
 	        packet->header.dest[4], packet->header.dest[5]);
 	else
-	      syslog(LOG_NOTICE,"unknown Addr: %02x:%02x:%02x:%02x:%02x:%02x from port %d",
+	      printlog(LOG_WARNING,"unknown Addr: %02x:%02x:%02x:%02x:%02x:%02x from port %d",
 	        packet->header.dest[0], packet->header.dest[1], 
 	        packet->header.dest[2], packet->header.dest[3], 
 	        packet->header.dest[4], packet->header.dest[5], port->control);
-      }
     } 
 #endif
 
@@ -217,10 +191,7 @@ static void handle_direct_data (struct port *p, int hub, struct packet *packet, 
   if(p != NULL) update_src(p, packet);
 #ifdef INFO
   else {
-	  if (!daemonize) 
-		  printf("Unknown connection for packet, shouldn't happen.\n");
-	  else
-		  syslog(LOG_NOTICE,"Unknown connection for packet, shouldn't happen.");
+	  printlog(LOG_WARNING,"Unknown connection for packet, shouldn't happen.");
   }
 #endif
 
@@ -236,7 +207,7 @@ void handle_tap_data(int i, int fd, int hub)
 
   len = read(fd, &packet, sizeof(packet));
   if(len < 0){
-    if(errno != EAGAIN) perror("Reading tap data");
+    if(errno != EAGAIN) printlog(LOG_WARNING,"Reading tap data %s",strerror(errno));
     return;
   }
   port=(struct port *)(g_fdsdata[i]);
@@ -250,7 +221,7 @@ int setup_port(int i, int fd, void (*sender)(int fd, void *packet, int len,
 
   port = malloc(sizeof(struct port));
   if(port == NULL){
-    perror("malloc");
+    printlog(LOG_WARNING,"malloc %s",strerror(errno));
     return(-1);
   }
   g_fdsdata[i]=port;
@@ -277,7 +248,7 @@ int setup_port(int i, int fd, void (*sender)(int fd, void *packet, int len,
 	  { 
 		  port->pg=malloc(sizeof(struct portgroup)); 
 		  if(port->pg == NULL){ 
-			  perror("malloc"); 
+			  printlog(LOG_WARNING,"malloc %s",strerror(errno));
 			  return(-1); 
 		  } 
 		  port->pg->ident=portgroup; 
@@ -285,8 +256,7 @@ int setup_port(int i, int fd, void (*sender)(int fd, void *packet, int len,
 	  }
   }
 #ifdef INFO
-  if (!daemonize) printf("New connection %d\n",fd);
-  else syslog(LOG_INFO,"New connection %d",fd);
+  printlog(LOG_INFO,"New connection %d",fd);
 #endif
   return(0);
 }
@@ -301,15 +271,12 @@ static void send_sock(int fd, void *packet, int len, void *data)
   struct sock_data *mine = data;
   int err;
   
-  err = sendto(mine->fd, packet, len, 0, (struct sockaddr *) &mine->sock,
+  do {
+  	err = sendto(mine->fd, packet, len, 0, (struct sockaddr *) &mine->sock,
 	       sizeof(mine->sock));
-  if(err != len){
-    if (! daemonize) 
-	    fprintf(stderr, "send_sock sending to fd %d ", mine->fd);
-    else
-	    syslog(LOG_NOTICE, "send_sock sending to fd %d ", mine->fd);
-    perror("");
-  }
+  } while (err == -1 && errno == EAGAIN);
+  if(err != len)
+	    printlog(LOG_WARNING, "send_sock sending to fd %d %s", mine->fd, strerror(errno));
 }
 
 //static int match_sock(int port_fd, int data_fd, void *port_data, 
@@ -335,7 +302,7 @@ int handle_sock_data(int fd, int hub)
   len = recvfrom(fd, &packet, sizeof(packet), 0, 
 		 (struct sockaddr *) &data.sock, &socklen);
   if(len <= 0){
-    if(len < 0 && errno != EAGAIN) perror("handle_sock_data");
+    if(len < 0 && errno != EAGAIN) printlog(LOG_WARNING,"handle_sock_data %s",strerror(errno));
     if (len == 0) return 1;
     else return 0;
   }
@@ -366,7 +333,7 @@ int handle_sock_direct_data(int i, int fd, int hub)
   len = recvfrom(fd, &packet, sizeof(packet), 0, 
 		 (struct sockaddr *) &data.sock, &socklen);
   if(len <= 0){
-    if(len < 0 && errno != EAGAIN) perror("handle_sock_data");
+    if(len < 0 && errno != EAGAIN) printlog(LOG_WARNING,"handle_sock_direct_data %s",strerror(errno));
     if (len == 0) return 1;
     else return 0;
   }
@@ -383,7 +350,7 @@ int setup_sock_port(int i, int fd, struct sockaddr_un *name, int data_fd, int po
 
   data = malloc(sizeof(*data));
   if(data == NULL){
-    perror("setup_sock_port");
+    printlog(LOG_WARNING,"setup_sock_port %s",strerror(errno));
     return(-1);
   }
   *data = ((struct sock_data) { fd : 	data_fd,

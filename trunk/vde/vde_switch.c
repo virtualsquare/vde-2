@@ -28,9 +28,30 @@
 #ifdef notdef
 #include <stddef.h>
 #endif
+#include <stdarg.h>
 
 static int hub = 0;
 static int compat_v0 = 0;
+static char *prog;
+static int daemonize = 0;
+static int logok = 0;
+
+void printlog(int priority, const char *format, ...)
+{
+	va_list arg;
+
+	va_start (arg, format);
+
+	if (logok)
+		vsyslog(priority,format,arg);
+	else {
+		fprintf(stderr,"%s: ",prog);
+		vfprintf(stderr,format,arg);
+		fprintf(stderr,"\n");
+	}
+	va_end (arg);
+
+}
 
 enum request_type { REQ_NEW_CONTROL };
 
@@ -78,12 +99,10 @@ static struct sockaddr_un data_sun;
 static void cleanup(int x,void* data)
 {
   if(unlink(ctl_socket) < 0){
-    printf("Couldn't remove control socket '%s' : ", ctl_socket);
-    perror("");
+    printlog(LOG_WARNING,"Couldn't remove control socket '%s' : %s", ctl_socket, strerror(errno));
   }
   if((data_socket != NULL) && (unlink(data_socket) < 0)){
-    printf("Couldn't remove data socket '%s' : ", data_socket);
-    perror("");
+    printlog(LOG_WARNING,"Couldn't remove data socket '%s' : %s", data_socket, strerror(errno));
   }
 }
 
@@ -101,11 +120,11 @@ static void add_fd(int fd)
   if(nfds == maxfds){
     maxfds = maxfds ? 2 * maxfds : 8;
     if((fds = realloc(fds, maxfds * sizeof(struct pollfd))) == NULL){
-      perror("realloc fds");
+      printlog(LOG_ERR,"realloc fds %s",strerror(errno));
       exit(1);
     }
     if((g_fdsdata = realloc(g_fdsdata, maxfds * sizeof(void *))) == NULL){
-      perror("realloc fds");
+      printlog(LOG_ERR,"realloc fdsdata %s",strerror(errno));
       exit(1);
     }
   }
@@ -125,7 +144,7 @@ static void remove_fd(int fd)
     if(fds[i].fd == fd) break;
   }
   if(i == nfds){
-    fprintf(stderr, "remove_fd : Couldn't find descriptor %d\n", fd);
+    printlog(LOG_WARNING,"remove_fd : Couldn't find descriptor %d", fd);
   } else {
    memmove(&fds[i], &fds[i + 1], (maxfds - i - 1) * sizeof(struct pollfd));
    memmove(&g_fdsdata[i], &g_fdsdata[i + 1], (maxfds - i - 1) * sizeof(void *));
@@ -136,7 +155,7 @@ static void remove_fd(int fd)
 
 static void sig_handler(int sig)
 {
-  printf("Caught signal %d, cleaning up and exiting\n", sig);
+  printlog(LOG_ERR,"Caught signal %d, cleaning up and exiting", sig);
   cleanup(1,NULL);
   signal(sig, SIG_DFL);
   kill(getpid(), sig);
@@ -156,7 +175,7 @@ static void new_port_v0(int i, int fd, struct request_v0 *req, int data_fd)
     setup_sock_port(i, fd, &req->u.new_control.name, data_fd,0);
     break;
   default:
-    printf("Bad request type : %d\n", req->type);
+    printlog(LOG_WARNING,"Bad request type : %d", req->type);
     close_descriptor(i, fd);
   }
 }
@@ -175,12 +194,12 @@ static void new_port_v1_v3(int i, int fd, enum request_type type_group,
     if(err) return;
     n = write(fd, &data_sun, sizeof(data_sun));
     if(n != sizeof(data_sun)){
-      perror("Sending data socket name");
+      printlog(LOG_WARNING,"Sending data socket name %s",strerror(errno));
       close_descriptor(i, fd);
     }
     break;
   default:
-    printf("Bad request type : %d\n", type);
+    printlog(LOG_WARNING,"Bad request type : %d", type);
     close_descriptor(i, fd);
   }
 }
@@ -193,25 +212,22 @@ static void new_port(int i, int fd, int data_fd)
   len = read(fd, &req, sizeof(req));
   if(len < 0){
     if(errno != EAGAIN){
-      perror("Reading request");
+      printlog(LOG_WARNING,"Reading request %s", strerror(errno));
       close_descriptor(i, fd);
     }
     return;
   }
   else if(len == 0){
-    if (! daemonize) 
-	    printf("EOF from new port\n");
-    else
-	    syslog(LOG_NOTICE,"EOF from new port \n");
-    close_descriptor(i, fd);
-    return;
+	  printlog(LOG_WARNING,"EOF from new port");
+	  close_descriptor(i, fd);
+	  return;
   }
   if(req.v1.magic == SWITCH_MAGIC){
     if(req.v3.version == 3) 
       new_port_v1_v3(i,fd, req.v3.type, &req.v3.sock, data_fd);
     else if(req.v3.version > 2 || req.v3.version == 2) 
-      fprintf(stderr, "Request for a version %d port, which this "
-	      "vde_switch doesn't support\n", req.v3.version);
+      printlog(LOG_ERR, "Request for a version %d port, which this "
+	      "vde_switch doesn't support", req.v3.version);
     else new_port_v1_v3(i, fd, req.v1.type, &req.v1.u.new_control.name, data_fd);
   }
   else new_port_v0(i, fd, &req.v0, data_fd);
@@ -225,11 +241,11 @@ void accept_connection(int fd)
   len = sizeof(addr);
   new = accept(fd, &addr, &len);
   if(new < 0){
-    perror("accept");
+    printlog(LOG_WARNING,"accept %s",strerror(errno));
     return;
   }
   if(fcntl(new, F_SETFL, O_NONBLOCK) < 0){
-    perror("fcntl - setting O_NONBLOCK");
+    printlog(LOG_WARNING,"fcntl - setting O_NONBLOCK %s",strerror(errno));
     close(new);
     return;
   }
@@ -241,19 +257,18 @@ int still_used(struct sockaddr_un *sun)
   int test_fd, ret = 1;
 
   if((test_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
-    perror("socket");
+    printlog(LOG_ERR,"socket %s",strerror(errno));
     exit(1);
   }
   if(connect(test_fd, (struct sockaddr *) sun, sizeof(*sun)) < 0){
     if(errno == ECONNREFUSED){
       if(unlink(sun->sun_path) < 0){
-	fprintf(stderr, "Failed to removed unused socket '%s': ", 
-		sun->sun_path);
-	perror("");
+	printlog(LOG_ERR,"Failed to removed unused socket '%s': %s", 
+		sun->sun_path,strerror(errno));
       }
       ret = 0;
     }
-    else perror("connect");
+    else printlog(LOG_ERR,"connect %s",strerror(errno));
   }
   close(test_fd);
   return(ret);
@@ -269,7 +284,7 @@ int bind_socket(int fd, const char *name, struct sockaddr_un *sock_out)
   if(bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
     if((errno == EADDRINUSE) && still_used(&sun)) return(EADDRINUSE);
     else if(bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-      perror("bind");
+      printlog(LOG_ERR,"bind %s",strerror(errno));
       return(EPERM);
     }
   }
@@ -277,7 +292,6 @@ int bind_socket(int fd, const char *name, struct sockaddr_un *sock_out)
   return(0);
 }
 
-static char *prog;
 
 void bind_sockets_v0(int ctl_fd, const char *ctl_name, 
 		     int data_fd, const char *data_name)
@@ -301,41 +315,41 @@ void bind_sockets_v0(int ctl_fd, const char *ctl_name,
   try_remove_ctl = ctl_present;
   try_remove_data = data_present;
   if(ctl_present && ctl_used){
-    fprintf(stderr, "The control socket '%s' has another server "
-	    "attached to it\n", ctl_name);
+    printlog(LOG_WARNING,"The control socket '%s' has another server "
+	    "attached to it", ctl_name);
     try_remove_ctl = 0;
   }
   else if(ctl_present && !ctl_used)
-    fprintf(stderr, "The control socket '%s' exists, isn't used, but couldn't "
-	    "be removed\n", ctl_name);
+    printlog(LOG_ERR,"The control socket '%s' exists, isn't used, but couldn't "
+	    "be removed", ctl_name);
   if(data_present && data_used){
-    fprintf(stderr, "The data socket '%s' has another server "
-	    "attached to it\n", data_name);
+    printlog(LOG_ERR,"The data socket '%s' has another server "
+	    "attached to it", data_name);
     try_remove_data = 0;
   }
   else if(data_present && !data_used)
-    fprintf(stderr, "The data socket '%s' exists, isn't used, but couldn't "
-	    "be removed\n", data_name);
+    printlog(LOG_ERR,"The data socket '%s' exists, isn't used, but couldn't "
+	    "be removed", data_name);
   if(try_remove_ctl || try_remove_data){
-    fprintf(stderr, "You can either\n");
+    printlog(LOG_ERR,"You can either");
     if(try_remove_ctl && !try_remove_data) 
-      fprintf(stderr, "\tremove '%s'\n", ctl_socket);
+      printlog(LOG_ERR,"tremove '%s'", ctl_socket);
     else if(!try_remove_ctl && try_remove_data) 
-      fprintf(stderr, "\tremove '%s'\n", data_socket);
-    else fprintf(stderr, "\tremove '%s' and '%s'\n", ctl_socket, data_socket);
-    fprintf(stderr, "\tor rerun with different, unused filenames for "
-	    "sockets:\n");
-    fprintf(stderr, "\t\t%s -unix <control> <data>\n", prog);
-    fprintf(stderr, "\t\tand run the UMLs with "
-	    "'eth0=daemon,,unix,<control>,<data>\n");
+      printlog(LOG_ERR,"tremove '%s'", data_socket);
+    else printlog(LOG_ERR,"tremove '%s' and '%s'", ctl_socket, data_socket);
+    printlog(LOG_ERR,"tor rerun with different, unused filenames for "
+	    "sockets:");
+    printlog(LOG_ERR,"t\t%s -unix <control> <data>", prog);
+    printlog(LOG_ERR,"t\tand run the UMLs with "
+	    "'eth0=daemon,,unix,<control>,<data>");
     exit(1);
   }
   else {
-    fprintf(stderr, "You should rerun with different, unused filenames for "
-	    "sockets:\n");
-    fprintf(stderr, "\t%s -unix <control> <data>\n", prog);
-    fprintf(stderr, "\tand run the UMLs with "
-	    "'eth0=daemon,,unix,<control>,<data>'\n");
+    printlog(LOG_ERR,"You should rerun with different, unused filenames for "
+	    "sockets:");
+    printlog(LOG_ERR,"t%s -unix <control> <data>", prog);
+    printlog(LOG_ERR,"tand run the UMLs with "
+	    "'eth0=daemon,,unix,<control>,<data>'");
     exit(1);
   }
 }
@@ -356,7 +370,7 @@ void bind_data_socket(int fd, struct sockaddr_un *sun)
   sun->sun_family = AF_UNIX;
   memcpy(sun->sun_path, &name, sizeof(name));
   if(bind(fd, (struct sockaddr *) sun, sizeof(*sun)) < 0){
-    perror("Binding to data socket");
+    printlog(LOG_ERR,"Binding to data socket %s",strerror(errno));
     exit(1);
   }
 }
@@ -400,7 +414,6 @@ static void Usage(void)
   exit(1);
 }
 
-int daemonize = 0;
 int main(int argc, char **argv)
 {
   int connect_fd, data_fd, n, i, /*new,*/ one = 1;
@@ -436,13 +449,13 @@ int main(int argc, char **argv)
 #endif      
     }
     else if(!strcmp(argv[0], "-hub")){
-      printf("%s will be a hub instead of a switch\n", prog);
+      printlog(LOG_INFO,"s will be a hub instead of a switch", prog);
       hub = 1;
       argc--;
       argv++;
     }
     else if(!strcmp(argv[0], "-compat-v0")){
-      printf("Control protocol 0 compatibility\n");
+      printlog(LOG_INFO,"Control protocol 0 compatibility");
       compat_v0 = 1;
       data_socket = "/tmp/uml.data";
       argc--;
@@ -457,24 +470,24 @@ int main(int argc, char **argv)
   }
 
   if((connect_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
-    perror("socket");
+    printlog(LOG_ERR,"socket: %s",strerror(errno));
     exit(1);
   }
   if(setsockopt(connect_fd, SOL_SOCKET, SO_REUSEADDR, (char *) &one, 
 		sizeof(one)) < 0){
-    perror("setsockopt");
+    printlog(LOG_ERR,"setsockopt: %s",strerror(errno));
     exit(1);
   }
   if(fcntl(connect_fd, F_SETFL, O_NONBLOCK) < 0){
-    perror("Setting O_NONBLOCK on connection fd");
+    printlog(LOG_ERR,"Setting O_NONBLOCK on connection fd: %s",strerror(errno));
     exit(1);
   }
   if((data_fd = socket(PF_UNIX, SOCK_DGRAM, 0)) < 0){
-    perror("socket");
+    printlog(LOG_ERR,"socket: %s",strerror(errno));
     exit(1);
   }
   if(fcntl(data_fd, F_SETFL, O_NONBLOCK) < 0){
-    perror("Setting O_NONBLOCK on data fd");
+    printlog(LOG_ERR,"Setting O_NONBLOCK on data fd %s",strerror(errno));
     exit(1);
   }
 
@@ -482,27 +495,24 @@ int main(int argc, char **argv)
   else bind_sockets(connect_fd, ctl_socket, data_fd);
 
   if(listen(connect_fd, 15) < 0){
-    perror("listen");
+    printlog(LOG_ERR,"listen: %s",strerror(errno));
     exit(1);
   }
 
-  if(signal(SIGINT, sig_handler) < 0)
-    perror("Setting handler for SIGINT");
+  if(signal(SIGINT, sig_handler) < 0) {
+    printlog(LOG_ERR,"Setting handler for SIGINT: %s",strerror(errno));
+  }
   hash_init();
 
-  if (!daemonize) {
-  	if(compat_v0) 
-    		printf("%s attached to unix sockets '%s' and '%s'\n", prog, ctl_socket,
-	   	data_socket);
-  	else printf("%s attached to unix socket '%s'\n", prog, ctl_socket);
-  } else {
+  if (daemonize) {
 	openlog(basename(prog), LOG_PID, 0);
+	logok=1;
 	syslog(LOG_INFO,"UML_SWITCH started");
-  	if(compat_v0) 
-    		syslog(LOG_INFO,"attached to unix sockets '%s' and '%s'\n", ctl_socket,
-	   	data_socket);
-  	else syslog(LOG_INFO,"attached to unix socket '%s'\n", ctl_socket);
   }
+  if(compat_v0) 
+	  printlog(LOG_INFO,"attached to unix sockets '%s' and '%s'", ctl_socket,
+			  data_socket);
+  else printlog(LOG_INFO,"attached to unix socket '%s'", ctl_socket);
   if(isatty(0) && ! daemonize)
     add_fd(0);
   add_fd(connect_fd);
@@ -518,7 +528,7 @@ int main(int argc, char **argv)
 #endif
 
   if (daemonize && daemon(0, 1)) {
-    perror("daemon");
+    printlog(LOG_ERR,"daemon: %s",strerror(errno));
     exit(1);
   }
 
@@ -528,30 +538,30 @@ int main(int argc, char **argv)
     n = poll(fds, nfds, -1);
     if(n < 0){
       if(errno == EINTR) continue;
-      perror("poll");
+      printlog(LOG_WARNING,"poll %s",strerror(errno));
       break;
     }
     for(i = 0; i < nfds; i++){
       if(fds[i].revents == 0) continue;
       if(fds[i].fd == 0){
 	if(fds[i].revents & POLLHUP){
-	  printf("EOF on stdin, cleaning up and exiting\n");
+	  printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
 	  exit(0);
 	}
 
 	n = read(0, buf, sizeof(buf));
 	if(n < 0){
-	  perror("Reading from stdin");
+	  printlog(LOG_WARNING,"Reading from stdin %s",strerror(errno));
 	  break;
 	}
 	else if(n == 0){
-	  printf("EOF on stdin, cleaning up and exiting\n");
+	  printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
 	  exit(0);
 	}
       }
       else if(fds[i].fd == connect_fd){
 	if(fds[i].revents & POLLHUP){
-	  printf("Error on connection fd\n");
+	  printlog(LOG_WARNING,"Error on connection fd");
 	  continue;
 	}
 	accept_connection(connect_fd);

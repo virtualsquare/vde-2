@@ -9,10 +9,12 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <syslog.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <linux/if_tun.h>
 #include "port.h"
+#include "switch.h"
 
 void send_tap(int fd, void *packet, int len, void *unused)
 {
@@ -20,7 +22,7 @@ void send_tap(int fd, void *packet, int len, void *unused)
 
   n = write(fd, packet, len);
   if(n != len){
-    if(errno != EAGAIN) perror("send_tap");
+    if(errno != EAGAIN) printlog(LOG_WARNING,"send_tap %s",strerror(errno));
   }
 }
 
@@ -30,14 +32,14 @@ int open_tap(char *dev)
   int fd;
 
   if((fd = open("/dev/net/tun", O_RDWR)) < 0){
-    perror("Failed to open /dev/net/tun");
+    printlog(LOG_ERR,"Failed to open /dev/net/tun %s",strerror(errno));
     return(-1);
   }
   memset(&ifr, 0, sizeof(ifr));
   ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
   strncpy(ifr.ifr_name, dev, sizeof(ifr.ifr_name) - 1);
   if(ioctl(fd, TUNSETIFF, (void *) &ifr) < 0){
-    perror("TUNSETIFF failed");
+    printlog(LOG_ERR,"TUNSETIFF failed %s",strerror(errno));
     close(fd);
     return(-1);
   }
