@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <getopt.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/poll.h>
@@ -31,7 +32,6 @@
 #include <stdarg.h>
 
 static int hub = 0;
-static int compat_v0 = 0;
 static char *prog;
 static int daemonize = 0;
 static int logok = 0;
@@ -55,16 +55,6 @@ void printlog(int priority, const char *format, ...)
 
 enum request_type { REQ_NEW_CONTROL };
 
-struct request_v0 {
-  enum request_type type;
-  union {
-    struct {
-      unsigned char addr[ETH_ALEN];
-      struct sockaddr_un name;
-    } new_control;
-  } u;
-};
-
 #define SWITCH_MAGIC 0xfeedface
 
 struct request_v1 {
@@ -86,7 +76,6 @@ struct request_v3 {
 };
 
 union request {
-  struct request_v0 v0;
   struct request_v1 v1;
   struct request_v3 v3;
 };
@@ -168,18 +157,6 @@ static void close_descriptor(int i, int fd)
   remove_fd(fd);
 }
 
-static void new_port_v0(int i, int fd, struct request_v0 *req, int data_fd)
-{
-  switch(req->type){
-  case REQ_NEW_CONTROL:
-    setup_sock_port(i, fd, &req->u.new_control.name, data_fd,0);
-    break;
-  default:
-    printlog(LOG_WARNING,"Bad request type : %d", req->type);
-    close_descriptor(i, fd);
-  }
-}
-
 static void new_port_v1_v3(int i, int fd, enum request_type type_group, 
 			   struct sockaddr_un *sock, int data_fd)
 {
@@ -230,7 +207,11 @@ static void new_port(int i, int fd, int data_fd)
 	      "vde_switch doesn't support", req.v3.version);
     else new_port_v1_v3(i, fd, req.v1.type, &req.v1.u.new_control.name, data_fd);
   }
-  else new_port_v0(i, fd, &req.v0, data_fd);
+  else {
+	  printlog(LOG_WARNING,"V0 request not supported");
+	  close_descriptor(i, fd);
+	  return;
+  }
 }
 
 void accept_connection(int fd)
@@ -293,67 +274,6 @@ int bind_socket(int fd, const char *name, struct sockaddr_un *sock_out)
 }
 
 
-void bind_sockets_v0(int ctl_fd, const char *ctl_name, 
-		     int data_fd, const char *data_name)
-{
-  int ctl_err, ctl_present = 0, ctl_used = 0;
-  int data_err, data_present = 0, data_used = 0;
-  int try_remove_ctl, try_remove_data;
-
-  ctl_err = bind_socket(ctl_fd, ctl_name, NULL);
-  if(ctl_err != 0) ctl_present = 1;
-  if(ctl_err == EADDRINUSE) ctl_used = 1;
-
-  data_err = bind_socket(data_fd, data_name, &data_sun);
-  if(data_err != 0) data_present = 1;
-  if(data_err == EADDRINUSE) data_used = 1;
-
-  if(!ctl_err && !data_err){
-    return;
-  }
-
-  try_remove_ctl = ctl_present;
-  try_remove_data = data_present;
-  if(ctl_present && ctl_used){
-    printlog(LOG_WARNING,"The control socket '%s' has another server "
-	    "attached to it", ctl_name);
-    try_remove_ctl = 0;
-  }
-  else if(ctl_present && !ctl_used)
-    printlog(LOG_ERR,"The control socket '%s' exists, isn't used, but couldn't "
-	    "be removed", ctl_name);
-  if(data_present && data_used){
-    printlog(LOG_ERR,"The data socket '%s' has another server "
-	    "attached to it", data_name);
-    try_remove_data = 0;
-  }
-  else if(data_present && !data_used)
-    printlog(LOG_ERR,"The data socket '%s' exists, isn't used, but couldn't "
-	    "be removed", data_name);
-  if(try_remove_ctl || try_remove_data){
-    printlog(LOG_ERR,"You can either");
-    if(try_remove_ctl && !try_remove_data) 
-      printlog(LOG_ERR,"tremove '%s'", ctl_socket);
-    else if(!try_remove_ctl && try_remove_data) 
-      printlog(LOG_ERR,"tremove '%s'", data_socket);
-    else printlog(LOG_ERR,"tremove '%s' and '%s'", ctl_socket, data_socket);
-    printlog(LOG_ERR,"tor rerun with different, unused filenames for "
-	    "sockets:");
-    printlog(LOG_ERR,"t\t%s -unix <control> <data>", prog);
-    printlog(LOG_ERR,"t\tand run the UMLs with "
-	    "'eth0=daemon,,unix,<control>,<data>");
-    exit(1);
-  }
-  else {
-    printlog(LOG_ERR,"You should rerun with different, unused filenames for "
-	    "sockets:");
-    printlog(LOG_ERR,"t%s -unix <control> <data>", prog);
-    printlog(LOG_ERR,"tand run the UMLs with "
-	    "'eth0=daemon,,unix,<control>,<data>'");
-    exit(1);
-  }
-}
-
 void bind_data_socket(int fd, struct sockaddr_un *sun)
 {
   struct {
@@ -403,13 +323,9 @@ void bind_sockets(int ctl_fd, const char *ctl_name, int data_fd)
 static void Usage(void)
 {
 #ifdef TUNTAP
-  fprintf(stderr, "Usage : %s [ -unix control-socket ] [ -tap tuntap-device ] [ -hub ] [-daemon]\n"
-	  "or : %s -compat-v0 [ -unix control-socket data-socket ] "
-	  "[ -hub ]\n", prog, prog);
+  fprintf(stderr, "Usage : %s [ -unix control-socket ] [ -tap tuntap-device ] [ -hub ] [-daemon]\n" , prog);
 #else
-  fprintf(stderr, "Usage : %s [ -unix control-socket ] [ -hub ] [-daemon]\n"
-	  "or : %s -compat-v0 [ -unix control-socket data-socket ] "
-	  "[ -hub ]\n", prog, prog);
+  fprintf(stderr, "Usage : %s [ -unix control-socket ] [ -hub ] [-daemon]\n", prog);
 #endif
   exit(1);
 }
@@ -424,97 +340,98 @@ int main(int argc, char **argv)
 
   on_exit(cleanup, NULL);
   prog = argv[0];
-  argv++;
-  argc--;
-  while(argc > 0){
-    if(!strcmp(argv[0], "-unix")){
-      if(argc < 2) Usage();
-      ctl_socket = argv[1];
-      argc -= 2;
-      argv += 2;
-      if(!compat_v0) break;
-      if(argc < 1) Usage();
-      data_socket = argv[0];
-      argc--;
-      argv++;
-    }
-    if(!strcmp(argv[0], "-tap")){
+  /* option parsing */
+  {
+	  int c;
+	  while (1) {
+		  int option_index = 0;
+
+		  static struct option long_options[] = {
+			  {"sock", 1, 0, 's'},
+			  {"vdesock", 1, 0, 's'},
+			  {"unix", 1, 0, 's'},
+			  {"tap", 1, 0, 't'},
+			  {"daemon", 0, 0, 'd'},
+			  {"hub", 0, 0, 'x'},
+			  {"help",0,0,'h'},
+			  {0, 0, 0, 0}
+		  };
+		  c = getopt_long_only (argc, argv, "s:t:dxh",
+				  long_options, &option_index);
+		  if (c == -1)
+			  break;
+		  switch (c) {
+			  case 's':
+				  ctl_socket=strdup(optarg);
+				  break;
+
+			  case 't':
 #ifdef TUNTAP
-      tap_dev = argv[1];
-      argv += 2;
-      argc -= 2;
+				  tap_dev=strdup(optarg);
 #else
-      fprintf(stderr, "-tap isn't supported since TUNTAP isn't enabled\n");
-      Usage();
-#endif      
-    }
-    else if(!strcmp(argv[0], "-hub")){
-      printlog(LOG_INFO,"s will be a hub instead of a switch", prog);
-      hub = 1;
-      argc--;
-      argv++;
-    }
-    else if(!strcmp(argv[0], "-compat-v0")){
-      printlog(LOG_INFO,"Control protocol 0 compatibility");
-      compat_v0 = 1;
-      data_socket = "/tmp/uml.data";
-      argc--;
-      argv++;
-    }
-    else if(!strcmp(argv[0], "-daemon")){
-      daemonize = 1;
-      argc--;
-      argv++;
-    }
-    else Usage();
+				  fprintf(stderr, "-tap isn't supported since TUNTAP isn't enabled\n");
+				  Usage();
+#endif
+				  break;
+			  case 'x':
+				  printlog(LOG_INFO,"s will be a hub instead of a switch", prog);
+				  hub = 1;
+				  break;
+			  case 'd':
+				  daemonize=1;
+				  break;
+			  case 'h':
+			  default:
+				  Usage();
+		  }
+	  }
+	  if(optind < argc)
+		  Usage();
+
   }
 
   if((connect_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
-    printlog(LOG_ERR,"socket: %s",strerror(errno));
-    exit(1);
+	  printlog(LOG_ERR,"socket: %s",strerror(errno));
+	  exit(1);
   }
   if(setsockopt(connect_fd, SOL_SOCKET, SO_REUSEADDR, (char *) &one, 
-		sizeof(one)) < 0){
-    printlog(LOG_ERR,"setsockopt: %s",strerror(errno));
-    exit(1);
+			  sizeof(one)) < 0){
+	  printlog(LOG_ERR,"setsockopt: %s",strerror(errno));
+	  exit(1);
   }
   if(fcntl(connect_fd, F_SETFL, O_NONBLOCK) < 0){
-    printlog(LOG_ERR,"Setting O_NONBLOCK on connection fd: %s",strerror(errno));
-    exit(1);
+	  printlog(LOG_ERR,"Setting O_NONBLOCK on connection fd: %s",strerror(errno));
+	  exit(1);
   }
   if((data_fd = socket(PF_UNIX, SOCK_DGRAM, 0)) < 0){
-    printlog(LOG_ERR,"socket: %s",strerror(errno));
-    exit(1);
+	  printlog(LOG_ERR,"socket: %s",strerror(errno));
+	  exit(1);
   }
   if(fcntl(data_fd, F_SETFL, O_NONBLOCK) < 0){
-    printlog(LOG_ERR,"Setting O_NONBLOCK on data fd %s",strerror(errno));
-    exit(1);
+	  printlog(LOG_ERR,"Setting O_NONBLOCK on data fd %s",strerror(errno));
+	  exit(1);
   }
 
-  if(compat_v0) bind_sockets_v0(connect_fd, ctl_socket, data_fd, data_socket);
-  else bind_sockets(connect_fd, ctl_socket, data_fd);
+  bind_sockets(connect_fd, ctl_socket, data_fd);
 
   if(listen(connect_fd, 15) < 0){
-    printlog(LOG_ERR,"listen: %s",strerror(errno));
-    exit(1);
+	  printlog(LOG_ERR,"listen: %s",strerror(errno));
+	  exit(1);
   }
 
   if(signal(SIGINT, sig_handler) < 0) {
-    printlog(LOG_ERR,"Setting handler for SIGINT: %s",strerror(errno));
+	  printlog(LOG_ERR,"Setting handler for SIGINT: %s",strerror(errno));
   }
   hash_init();
 
   if (daemonize) {
-	openlog(basename(prog), LOG_PID, 0);
-	logok=1;
-	syslog(LOG_INFO,"UML_SWITCH started");
+	  openlog(basename(prog), LOG_PID, 0);
+	  logok=1;
+	  syslog(LOG_INFO,"UML_SWITCH started");
   }
-  if(compat_v0) 
-	  printlog(LOG_INFO,"attached to unix sockets '%s' and '%s'", ctl_socket,
-			  data_socket);
-  else printlog(LOG_INFO,"attached to unix socket '%s'", ctl_socket);
+  printlog(LOG_INFO,"attached to unix socket '%s'", ctl_socket);
   if(isatty(0) && ! daemonize)
-    add_fd(0);
+	  add_fd(0);
   add_fd(connect_fd);
   add_fd(data_fd);
   g_minfds=g_nfds;
@@ -523,61 +440,61 @@ int main(int argc, char **argv)
   if(tap_dev != NULL) tap_fd = open_tap(tap_dev);
   if(tap_fd > -1) {
 	  add_fd(tap_fd);
-          setup_port(g_nfds-1, tap_fd, send_tap, NULL, 0, 0);
+	  setup_port(g_nfds-1, tap_fd, send_tap, NULL, 0, 0);
   }
 #endif
 
   if (daemonize && daemon(0, 1)) {
-    printlog(LOG_ERR,"daemon: %s",strerror(errno));
-    exit(1);
+	  printlog(LOG_ERR,"daemon: %s",strerror(errno));
+	  exit(1);
   }
 
   while(1){
-    char buf[128];
+	  char buf[128];
 
-    n = poll(fds, nfds, -1);
-    if(n < 0){
-      if(errno == EINTR) continue;
-      printlog(LOG_WARNING,"poll %s",strerror(errno));
-      break;
-    }
-    for(i = 0; i < nfds; i++){
-      if(fds[i].revents == 0) continue;
-      if(fds[i].fd == 0){
-	if(fds[i].revents & POLLHUP){
-	  printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
-	  exit(0);
-	}
+	  n = poll(fds, nfds, -1);
+	  if(n < 0){
+		  if(errno == EINTR) continue;
+		  printlog(LOG_WARNING,"poll %s",strerror(errno));
+		  break;
+	  }
+	  for(i = 0; i < nfds; i++){
+		  if(fds[i].revents == 0) continue;
+		  if(fds[i].fd == 0){
+			  if(fds[i].revents & POLLHUP){
+				  printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
+				  exit(0);
+			  }
 
-	n = read(0, buf, sizeof(buf));
-	if(n < 0){
-	  printlog(LOG_WARNING,"Reading from stdin %s",strerror(errno));
-	  break;
-	}
-	else if(n == 0){
-	  printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
-	  exit(0);
-	}
-      }
-      else if(fds[i].fd == connect_fd){
-	if(fds[i].revents & POLLHUP){
-	  printlog(LOG_WARNING,"Error on connection fd");
-	  continue;
-	}
-	accept_connection(connect_fd);
-      }
-      else if(fds[i].fd == data_fd) handle_sock_data(data_fd, hub);
+			  n = read(0, buf, sizeof(buf));
+			  if(n < 0){
+				  printlog(LOG_WARNING,"Reading from stdin %s",strerror(errno));
+				  break;
+			  }
+			  else if(n == 0){
+				  printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
+				  exit(0);
+			  }
+		  }
+		  else if(fds[i].fd == connect_fd){
+			  if(fds[i].revents & POLLHUP){
+				  printlog(LOG_WARNING,"Error on connection fd");
+				  continue;
+			  }
+			  accept_connection(connect_fd);
+		  }
+		  else if(fds[i].fd == data_fd) handle_sock_data(data_fd, hub);
 #ifdef TUNTAP
-      else if(fds[i].fd == tap_fd) handle_tap_data(i, tap_fd, hub);
+		  else if(fds[i].fd == tap_fd) handle_tap_data(i, tap_fd, hub);
 #endif
-      else {
-	if (g_fdsdata[i] == NULL)
-		new_port(i,fds[i].fd, data_fd);
-	else 
-		if (handle_sock_direct_data(i, fds[i].fd, hub))
-			close_descriptor(i, fds[i].fd);
-      }
-    }
+		  else {
+			  if (g_fdsdata[i] == NULL)
+				  new_port(i,fds[i].fd, data_fd);
+			  else 
+				  if (handle_sock_direct_data(i, fds[i].fd, hub))
+					  close_descriptor(i, fds[i].fd);
+		  }
+	  }
   }
   return 0;
 }

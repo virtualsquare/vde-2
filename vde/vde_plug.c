@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <getopt.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -291,10 +292,15 @@ static void netusage() {
 	exit(-1);
 }
 
+static void usage(char *progname) {
+	fprintf (stderr,"Usage: %s [-g num] [socketname]\n   ( 0 < num < 256 )\n\n",progname);
+	exit(-1);
+}
+
 int main(int argc, char **argv)
 {
   int fddata;
-  char *sockname;
+  char *sockname=NULL;
   struct sockaddr_un dataout;
   struct sockaddr_un datain;
   int datainsize;
@@ -306,37 +312,71 @@ int main(int argc, char **argv)
   uname(&me);
   if (argv[0][0] == '-')
 	  netusage(); //implies exit
-  if (argc > 2 && strcmp(argv[1],"-c")==0) {
-	  if (strcmp(argv[2],"vde_plug")==0) {
-		argv++; argc--;
-		argv++; argc--;
-#ifdef DO_SYSLOG
-		write_syslog_entry("START");
-		atexit(write_syslog_close);
-#ifdef VDE_IP_LOG
-		vde_ip_log=1;
-#endif
-#endif
-	}
-	else 
-		netusage(); //implies exit
-  }
-  while (argc > 2) {
-	  if (argc > 2 && strcmp(argv[1],"-g")==0 && (group=atoi(argv[2]))!=0 && group >= 0 && group <= 255 ) {
-		 argv+=2;argc-=2;
-#ifdef VDE_IP_LOG
-         } else if (strcmp(argv[1],"-l")==0) {
-		 write_syslog_entry("START");
-		 atexit(write_syslog_close);
-		 vde_ip_log=1;
-		 argv++; argc--;
-#endif
-	 } else {
-	  	fprintf (stderr,"Usage: %s [-g num] [socketname]\n   ( 0 < num < 256 )\n\n",argv[0]);
-	  	exit(-1);
-	 }
-  }
   sockname=(argc == 2)?argv[argc-1]:VDESTDSOCK;
+  /* option parsing */
+  {
+	  int c;
+	  while (1) {
+		  int option_index = 0;
+
+		  static struct option long_options[] = {
+			  {"group", 1, 0, 's'},
+			  {"sock", 1, 0, 's'},
+			  {"vdesock", 1, 0, 's'},
+			  {"unix", 1, 0, 's'},
+			  {"help",0,0,'h'},
+			  {0, 0, 0, 0}
+		  };
+		  c = getopt_long_only (argc, argv, "c:g:s:l",
+				  long_options, &option_index);
+		  if (c == -1)
+			  break;
+
+		  switch (c) {
+			  case 'c':
+				  if (strcmp(optarg,"vde_plug")==0) {
+#ifdef DO_SYSLOG
+					  write_syslog_entry("START");
+					  atexit(write_syslog_close);
+#ifdef VDE_IP_LOG
+					  vde_ip_log=1;
+#endif
+#endif
+
+				  }
+				  else
+					  netusage(); //implies exit
+				  break;
+
+			  case 'g':
+				  group=atoi(optarg);
+				  if (group <= 0 || group > 255 )
+					  usage(argv[0]); //implies exit
+				  break;
+
+			  case 'h':
+			          usage(argv[0]); //implies exit
+				  break;
+
+			  case 's':
+				  sockname=strdup(optarg);
+				  break;
+
+			  case 'l':
+#ifdef VDE_IP_LOG
+				  write_syslog_entry("START");
+				  atexit(write_syslog_close);
+				  vde_ip_log=1;
+				  break;
+#endif
+
+			  default:
+				  usage(argv[0]); //implies exit
+		  }
+	  }
+
+	  sockname=(optind < argc && sockname==NULL)?argv[optind]:VDESTDSOCK;
+  }
   if((fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0){
     perror("socket");
     exit(1);
@@ -345,29 +385,29 @@ int main(int argc, char **argv)
   pollv[1].fd=fddata;
 
   for(;;) {
-	result=poll(pollv,2,-1);
-	if (pollv[0].revents & POLLHUP || pollv[1].revents & POLLHUP)
-		break;
-	if (pollv[0].revents & POLLIN) {
-		nx=read(STDIN_FILENO,bufin,sizeof(bufin));
-		splitpacket(bufin,nx,fddata,&dataout);
-		//sendto(fddata,bufin,nx,0,(struct sockaddr *) &dataout,sizeof(dataout));
+	  result=poll(pollv,2,-1);
+	  if (pollv[0].revents & POLLHUP || pollv[1].revents & POLLHUP)
+		  break;
+	  if (pollv[0].revents & POLLIN) {
+		  nx=read(STDIN_FILENO,bufin,sizeof(bufin));
+		  splitpacket(bufin,nx,fddata,&dataout);
+		  //sendto(fddata,bufin,nx,0,(struct sockaddr *) &dataout,sizeof(dataout));
 
-	}
-	if (pollv[1].revents & POLLIN) {
-		datainsize=sizeof(datain);
-		nx=recvfrom(fddata,bufin+2,BUFSIZE-2,0,(struct sockaddr *) &datain, &datainsize);
-		if (nx<0)
-			perror("vde_plug: recvfrom ");
-		else
-		{
-			bufin[0]=nx >> 8;
-			bufin[1]=nx & 0xff;
-			write(STDOUT_FILENO,bufin,nx+2);
-			//fprintf(stderr,"%s: SENT %d %x %x \n",myname,nx,bufin[0],bufin[1]);
-		}
-	}
+	  }
+	  if (pollv[1].revents & POLLIN) {
+		  datainsize=sizeof(datain);
+		  nx=recvfrom(fddata,bufin+2,BUFSIZE-2,0,(struct sockaddr *) &datain, &datainsize);
+		  if (nx<0)
+			  perror("vde_plug: recvfrom ");
+		  else
+		  {
+			  bufin[0]=nx >> 8;
+			  bufin[1]=nx & 0xff;
+			  write(STDOUT_FILENO,bufin,nx+2);
+			  //fprintf(stderr,"%s: SENT %d %x %x \n",myname,nx,bufin[0],bufin[1]);
+		  }
+	  }
   }
-  
+
   return(0);
 }
