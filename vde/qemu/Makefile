@@ -10,7 +10,8 @@ vdeq: vdeq.o
 install : vdeq
 	install -d $(DESTDIR)$(BIN_DIR)
 	install -s vdeq $(DESTDIR)$(BIN_DIR)
+	rm -f $(DESTDIR)$(BIN_DIR)/vdeqemu
 	ln -s $(DESTDIR)$(BIN_DIR)/vdeq $(DESTDIR)$(BIN_DIR)/vdeqemu
 
 clean:
-	rm *.o
+	rm -f *.o
