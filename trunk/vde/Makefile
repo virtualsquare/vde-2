@@ -6,7 +6,7 @@ BIN = $(BINSW) dpipe vde_plug
 #CFLAGS = -g -Wall $(TUNTAP) -DINFO -O3
 CFLAGS = -Wall $(TUNTAP) -O3
 
-BIN_DIR ?= /usr/bin
+BIN_DIR ?= /usr/local/bin
 
 ifneq ($(TUNTAP),)
 	OBJS += tuntap.o
