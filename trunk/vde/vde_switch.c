@@ -323,9 +323,9 @@ void bind_sockets(int ctl_fd, const char *ctl_name, int data_fd)
 static void Usage(void)
 {
 #ifdef TUNTAP
-  fprintf(stderr, "Usage : %s [ -unix control-socket ] [ -tap tuntap-device ] [ -hub ] [-daemon]\n" , prog);
+  fprintf(stderr, "Usage : %s [ -sock control-socket ] [ -tap tuntap-device ] [ -hub ] [-daemon]\n" , prog);
 #else
-  fprintf(stderr, "Usage : %s [ -unix control-socket ] [ -hub ] [-daemon]\n", prog);
+  fprintf(stderr, "Usage : %s [ -sock control-socket ] [ -hub ] [-daemon]\n", prog);
 #endif
   exit(1);
 }

@@ -86,8 +86,10 @@ Is useful when vde is used for mobility. Several physical interfaces can
 be used at a time during handoffs to prevent hichups in connectivity.
 .TP
 .B "\fIsocketpath\fP", 
-specify the UNIX socket to be used by local programs for joining the VDE.
-The default value is "/tmp/vde.ctl"
+(This option can be also set as: 
+.B -sock "\fIsocketpath\fP"
+) specify the UNIX socket to be used by local programs for joining the VDE.
+The default value is "/tmp/vde.ctl".
 .SH SEE ALSO
 .BR vde_switch (1),
 .BR vdeq (1).

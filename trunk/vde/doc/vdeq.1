@@ -27,7 +27,7 @@ vdeq \- Virtual Distributed Ethernet wrapper for QEMU virtual machines
 .B vdeq 
 .B qemu
 [
-.B \-vdesock
+.B \-sock
 .I socketpath
 [
 .I ,socketpath
@@ -40,7 +40,7 @@ vdeq \- Virtual Distributed Ethernet wrapper for QEMU virtual machines
 .br
 .B vde\fP{\fIqemu_name\fP} 
 [
-.B \-vdesock
+.B \-sock
 .I socketpath
 [
 .I ,socketpath
@@ -82,19 +82,19 @@ starts qemu as above.
 .RS
 .br
 .B 
-vdeq qemu -vdesock /tmp/vde.ctl,/tmp/my.ctl -b c -hda=sampledisk
+vdeq qemu -sock /tmp/vde.ctl,/tmp/my.ctl -b c -hda=sampledisk
 .RE
 .RS
 .br
 .B 
-vdeqemu -vdesock /tmp/vde.ctl,/tmp/my.ctl -b c -hda=sampledisk
+vdeqemu -sock /tmp/vde.ctl,/tmp/my.ctl -b c -hda=sampledisk
 .RE
 both start qemu with two ethernet interface connected to the standard switch and
 to the switch with local socket "/tmp/my.ctl" respectively 
 
 .SH OPTIONS
 .TP
-.B \-vdesock 
+.B \-sock 
 .I socketpath, 
 specify the UNIX socket to be used by local programs for joining the VDE.
 The default value is "/tmp/vde.ctl"
