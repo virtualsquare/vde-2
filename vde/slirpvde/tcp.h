@@ -77,7 +77,7 @@ struct tcphdr {
 	u_int16_t	th_urp;			/* urgent pointer */
 };
 
-#include "tcp_var.h"
+#include <tcp_var.h>
 
 #define	TCPOPT_EOL		0
 #define	TCPOPT_NOP		1

@@ -42,8 +42,11 @@
  * terms and conditions of the copyright.
  */
 
+#include <config.h>
 #include <slirp.h>
-#include "ip_icmp.h"
+#include <misc.h>
+
+#include <ip_icmp.h>
 
 int ip_defttl;
 struct ipstat ipstat;
@@ -68,8 +71,7 @@ ip_init()
  * try to reassemble.  Process options.  Pass to next level.
  */
 void
-ip_input(m)
-	struct mbuf *m;
+ip_input(struct mbuf *m)
 {
 	register struct ip *ip;
 	int hlen;

@@ -3,6 +3,7 @@
  * Licensed under the GPL
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -13,17 +14,19 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/poll.h>
+#include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <syslog.h>
 #include <libgen.h>
 #include <endian.h>
-#include "vde.h"
-#include "switch.h"
-#include "port.h"
-#include "hash.h"
+#include <vde.h>
+#include <switch.h>
+#include <port.h>
+#include <hash.h>
 #ifdef TUNTAP
-#include "tuntap.h"
+#include <tuntap.h>
 #endif
 
 #ifdef notdef
@@ -85,6 +88,8 @@ static char *ctl_socket = VDESTDSOCK;
 static char *data_socket = NULL;
 static struct sockaddr_un data_sun;
 
+static char *pidfile = NULL;
+
 static void cleanup(int x,void* data)
 {
   if(unlink(ctl_socket) < 0){
@@ -92,6 +97,9 @@ static void cleanup(int x,void* data)
   }
   if((data_socket != NULL) && (unlink(data_socket) < 0)){
     printlog(LOG_WARNING,"Couldn't remove data socket '%s' : %s", data_socket, strerror(errno));
+  }
+  if((pidfile != NULL) && unlink(pidfile) < 0) {
+    printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
   }
 }
 
@@ -320,12 +328,37 @@ void bind_sockets(int ctl_fd, const char *ctl_name, int data_fd)
   exit(1);
 }
 
+static void save_pidfile(const char *pidfile)
+{
+	int fd = open(pidfile,
+			O_WRONLY | O_CREAT | O_EXCL,
+			S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	FILE *f;
+
+	if(fd == -1) {
+		printlog(LOG_ERR, "Error in pidfile creation: %s", strerror(errno));
+		exit(1);
+	}
+
+	if((f = fdopen(fd, "w")) == NULL) {
+		printlog(LOG_ERR, "Error in FILE* construction: %s", strerror(errno));
+		exit(1);
+	}
+
+	if(fprintf(f, "%ld\n", (long int)getpid()) <= 0) {
+		printlog(LOG_ERR, "Error in writing pidfile");
+		exit(1);
+	}
+
+	fclose(f);
+}
+
 static void Usage(void)
 {
 #ifdef TUNTAP
-  fprintf(stderr, "Usage : %s [ -sock control-socket ] [ -tap tuntap-device ] [ -hub ] [-daemon]\n" , prog);
+  fprintf(stderr, "Usage : %s [ -sock control-socket ] [ -tap tuntap-device ] [ -hub ] [-daemon] [ -pidfile pidfile ]\n" , prog);
 #else
-  fprintf(stderr, "Usage : %s [ -sock control-socket ] [ -hub ] [-daemon]\n", prog);
+  fprintf(stderr, "Usage : %s [ -sock control-socket ] [ -hub ] [-daemon] [ -pidfile pidfile ]\n", prog);
 #endif
   exit(1);
 }
@@ -333,8 +366,8 @@ static void Usage(void)
 int main(int argc, char **argv)
 {
   int connect_fd, data_fd, n, i, /*new,*/ one = 1;
-  char *tap_dev = NULL;
 #ifdef TUNTAP
+  char *tap_dev = NULL;
   int tap_fd  = -1;
 #endif
 
@@ -353,10 +386,11 @@ int main(int argc, char **argv)
 			  {"tap", 1, 0, 't'},
 			  {"daemon", 0, 0, 'd'},
 			  {"hub", 0, 0, 'x'},
+			  {"pidfile", 1, 0, 'p'},
 			  {"help",0,0,'h'},
 			  {0, 0, 0, 0}
 		  };
-		  c = getopt_long_only (argc, argv, "s:t:dxh",
+		  c = getopt_long_only (argc, argv, "s:t:dxp:h",
 				  long_options, &option_index);
 		  if (c == -1)
 			  break;
@@ -380,6 +414,9 @@ int main(int argc, char **argv)
 			  case 'd':
 				  daemonize=1;
 				  break;
+				case 'p':
+					pidfile=strdup(optarg);
+					break;
 			  case 'h':
 			  default:
 				  Usage();
@@ -448,6 +485,10 @@ int main(int argc, char **argv)
 	  printlog(LOG_ERR,"daemon: %s",strerror(errno));
 	  exit(1);
   }
+
+	/* once here, we're sure we're the true process which will continue as a
+	 * server: save PID file if needed */
+	if(pidfile) save_pidfile(pidfile);
 
   while(1){
 	  char buf[128];

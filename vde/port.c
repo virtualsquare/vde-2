@@ -3,6 +3,7 @@
  * Licensed under the GPL
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,9 +11,10 @@
 #include <syslog.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include "switch.h"
-#include "hash.h"
-#include "port.h"
+
+#include <switch.h>
+#include <hash.h>
+#include <port.h>
 
 struct packet {
   struct {

@@ -6,9 +6,10 @@
  */
 
 #define WANT_SYS_IOCTL_H
+#include <config.h>
 #include <slirp.h>
-#include "ip_icmp.h"
-#include "main.h"
+#include <ip_icmp.h>
+#include <main.h>
 
 void
 so_init()

@@ -2,6 +2,7 @@
  * Licensed under the GPL
  */
 
+#include <config.h>
 #include<stdio.h>
 #include<unistd.h>
 #include<stdlib.h>
