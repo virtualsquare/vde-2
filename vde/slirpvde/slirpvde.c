@@ -127,7 +127,7 @@ void slirp_output(const uint8_t *pkt, int pkt_len)
 }
 
 void usage(char *name) {
-	fprintf(stderr,"Usage: %s [-socket vdesock] [-dhcp] [-network netaddr] \n\t%s [-s vdesock] [-d] [-n netaddr]",name);
+	fprintf(stderr,"Usage: %s [-socket vdesock] [-dhcp] [-network netaddr] \n\t%s [-s vdesock] [-d] [-n netaddr]\n",name,name);
 	exit(-1);
 }
 

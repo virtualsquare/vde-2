@@ -1,5 +1,3 @@
-BIN_DIR ?= /usr/local/bin
-
 ALL: vdeq
 
 vdeq.o: vdeq.c ../vde.h

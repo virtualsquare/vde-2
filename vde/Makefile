@@ -13,6 +13,8 @@ ifneq ($(TUNTAP),)
 endif
 
 all : $(BIN)
+	$(MAKE) -C qemu $(MAKECMDGOALS)
+	$(MAKE) -C slirpvde $(MAKECMDGOALS)
 
 hash.o:	hash.c switch.h hash.h
 
@@ -35,7 +37,11 @@ vde_plug: vde_plug.o
 
 clean : 
 	rm -f $(BIN) *.o *~ 
+	$(MAKE) -C qemu $(MAKECMDGOALS)
+	$(MAKE) -C slirpvde $(MAKECMDGOALS)
 
 install : $(BIN)
-	install -d $(DESTDIR)$(BIN_DIR)
+	install -d $(DESTDIR)$(BIN_DIR) 
 	install -s $(BIN) $(DESTDIR)$(BIN_DIR)
+	$(MAKE) -C qemu $(MAKECMDGOALS) BIN_DIR=$(BIN_DIR)
+	$(MAKE) -C slirpvde $(MAKECMDGOALS) BIN_DIR=$(BIN_DIR)
