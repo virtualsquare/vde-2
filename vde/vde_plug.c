@@ -306,7 +306,7 @@ int main(int argc, char **argv)
   uname(&me);
   if (argv[0][0] == '-')
 	  netusage(); //implies exit
-  if (argc > 2 && strcmp(argv[1],"-c")==0)
+  if (argc > 2 && strcmp(argv[1],"-c")==0) {
 	  if (strcmp(argv[2],"vde_plug")==0) {
 		argv++; argc--;
 		argv++; argc--;
@@ -320,7 +320,8 @@ int main(int argc, char **argv)
 	}
 	else 
 		netusage(); //implies exit
-  while (argc > 1) {
+  }
+  while (argc > 2) {
 	  if (argc > 2 && strcmp(argv[1],"-g")==0 && (group=atoi(argv[2]))!=0 && group >= 0 && group <= 255 ) {
 		 argv+=2;argc-=2;
 #ifdef VDE_IP_LOG
@@ -328,6 +329,7 @@ int main(int argc, char **argv)
 		 write_syslog_entry("START");
 		 atexit(write_syslog_close);
 		 vde_ip_log=1;
+		 argv++; argc--;
 #endif
 	 } else {
 	  	fprintf (stderr,"Usage: %s [-g num] [socketname]\n   ( 0 < num < 256 )\n\n",argv[0]);
