@@ -24,7 +24,6 @@ slirpvde_SOURCES = \
 		   slirp_config.h \
 		   slirp.h \
 		   ctl.h \
-		   slirpvde_config.h \
 		   socket.c \
 		   socket.h \
 		   tcp.h \

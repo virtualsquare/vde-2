@@ -89,6 +89,7 @@ static char *data_socket = NULL;
 static struct sockaddr_un data_sun;
 
 static char *pidfile = NULL;
+static char pidfile_path[_POSIX_PATH_MAX];
 
 static void cleanup(int x,void* data)
 {
@@ -98,7 +99,7 @@ static void cleanup(int x,void* data)
   if((data_socket != NULL) && (unlink(data_socket) < 0)){
     printlog(LOG_WARNING,"Couldn't remove data socket '%s' : %s", data_socket, strerror(errno));
   }
-  if((pidfile != NULL) && unlink(pidfile) < 0) {
+  if((pidfile != NULL) && unlink(pidfile_path) < 0) {
     printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
   }
 }
@@ -328,9 +329,14 @@ void bind_sockets(int ctl_fd, const char *ctl_name, int data_fd)
   exit(1);
 }
 
-static void save_pidfile(const char *pidfile)
+static void save_pidfile()
 {
-	int fd = open(pidfile,
+	if(pidfile[0] != '/')
+		strncat(pidfile_path, pidfile, PATH_MAX - strlen(pidfile_path));
+	else
+		strcpy(pidfile_path, pidfile);
+
+	int fd = open(pidfile_path,
 			O_WRONLY | O_CREAT | O_EXCL,
 			S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	FILE *f;
@@ -481,6 +487,11 @@ int main(int argc, char **argv)
   }
 #endif
 
+  if(getcwd(pidfile_path, PATH_MAX-1) == NULL) {
+    printlog(LOG_ERR, "getcwd: %s", strerror(errno));
+    exit(1);
+  }
+	strcat(pidfile_path, "/");
   if (daemonize && daemon(0, 1)) {
 	  printlog(LOG_ERR,"daemon: %s",strerror(errno));
 	  exit(1);
@@ -488,7 +499,7 @@ int main(int argc, char **argv)
 
 	/* once here, we're sure we're the true process which will continue as a
 	 * server: save PID file if needed */
-	if(pidfile) save_pidfile(pidfile);
+	if(pidfile) save_pidfile();
 
   while(1){
 	  char buf[128];
