@@ -163,6 +163,7 @@ static void bootp_reply(struct bootp_t *bp)
     struct in_addr dns_addr;
     int dhcp_msg_type, val;
     uint8_t *q,replytype;
+    uint8_t client_ethaddr[6];
 
     /* extract exact DHCP msg type */
     dhcp_decode(bp->bp_vend, DHCP_OPT_LEN, &dhcp_msg_type,&reqaddr);
