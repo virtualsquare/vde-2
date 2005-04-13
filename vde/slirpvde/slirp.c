@@ -15,7 +15,7 @@ const uint8_t special_ethaddr[6] = {
     0x52, 0x54, 0x00, 0x12, 0x35, 0x00
 };
 
-uint8_t client_ethaddr[6];
+static uint8_t client_ethaddr[256][6];
 
 int do_slowtimo;
 int link_up;
@@ -78,6 +78,8 @@ void slirp_init(char *network)
     debug_init("/tmp/slirp.log", DEBUG_DEFAULT);
 
     link_up = 1;
+
+    memset(client_ethaddr,0xff,sizeof(client_ethaddr));
 
     if_init();
     ip_init();
@@ -466,6 +468,55 @@ struct arphdr
 	unsigned char		ar_tip[4];		/* target IP address		*/
 };
 
+struct ip_part_header
+{
+	unsigned char filler[12];
+	unsigned char ip_sip[4];
+	unsigned char ip_tip[4];
+};
+
+static void client_eth_register(const unsigned char *eth_addr, const unsigned char *ip_addr) 
+{
+	int host=ip_addr[3];
+	if (memcmp(ip_addr, &special_addr, 3) == 0 && host != 0 && host != 0xff)
+	{
+		memcpy(client_ethaddr[host],eth_addr,ETH_ALEN);
+		/*printf("register %02x:%02x:%02x:%02x:%02x:%02x %d.%d.%d.%d\n",
+			eth_addr[0], eth_addr[1], eth_addr[2],
+			eth_addr[3], eth_addr[4], eth_addr[5],
+			ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3]);*/
+	}
+}
+
+static void client_eth_get(unsigned char *eth_addr, const unsigned char *ip_addr) 
+{
+	int host=ip_addr[3];
+	if (memcmp(ip_addr, &special_addr, 3) == 0 && host != 0 && host != 0xff)
+	{
+		memcpy(eth_addr,client_ethaddr[host],ETH_ALEN);
+		/*printf("get %02x:%02x:%02x:%02x:%02x:%02x %d.%d.%d.%d\n",
+			eth_addr[0], eth_addr[1], eth_addr[2],
+			eth_addr[3], eth_addr[4], eth_addr[5],
+			ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3]);*/
+	}
+}
+
+static void client_eth_register_ip(const uint8_t *pkt, int pkt_len)
+{
+	struct ethhdr *eh = (struct ethhdr *)pkt;
+	struct ip_part_header *ih=(struct ip_part_header *) (pkt+ETH_HLEN);
+	if (pkt_len >= 20) {
+		client_eth_register(eh->h_source,ih->ip_sip);
+	}
+}
+
+static void client_eth_get_ip(unsigned char *eth_addr, const uint8_t *pkt, int pkt_len)
+{
+	struct ip_part_header *ih=(struct ip_part_header *) pkt;
+	if (pkt_len >= 20)
+		client_eth_get(eth_addr,ih->ip_tip);
+}
+
 void arp_input(const uint8_t *pkt, int pkt_len)
 {
     struct ethhdr *eh = (struct ethhdr *)pkt;
@@ -481,8 +532,8 @@ void arp_input(const uint8_t *pkt, int pkt_len)
         if (!memcmp(ah->ar_tip, &special_addr, 3) &&
             (ah->ar_tip[3] == CTL_DNS || ah->ar_tip[3] == CTL_ALIAS)) {
 
-            /* XXX: make an ARP request to have the client address */
-            memcpy(client_ethaddr, eh->h_source, ETH_ALEN);
+            /* make an ARP request to have the client address */
+            client_eth_register(ah->ar_sha, ah->ar_sip);
 
             /* ARP request for alias/dns mac address */
             memcpy(reh->h_dest, pkt + ETH_ALEN, ETH_ALEN);
@@ -528,6 +579,7 @@ void slirp_input(const uint8_t *pkt, int pkt_len)
         m->m_len = pkt_len;
         memcpy(m->m_data, pkt, pkt_len);
 
+	client_eth_register_ip(m->m_data, m->m_len);
         m->m_data += ETH_HLEN;
         m->m_len -= ETH_HLEN;
 
@@ -547,7 +599,7 @@ void if_encap(const uint8_t *ip_data, int ip_data_len)
     if (ip_data_len + ETH_HLEN > sizeof(buf))
         return;
 
-    memcpy(eh->h_dest, client_ethaddr, ETH_ALEN);
+    client_eth_get_ip(eh->h_dest, ip_data, ip_data_len);
     memcpy(eh->h_source, special_ethaddr, ETH_ALEN - 1);
     eh->h_source[5] = CTL_ALIAS;
     eh->h_proto = htons(ETH_P_IP);

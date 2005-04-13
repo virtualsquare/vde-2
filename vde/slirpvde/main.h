@@ -44,8 +44,6 @@ extern int towrite_max;
 extern int ppp_exit;
 extern int so_options;
 extern int tcp_keepintvl;
-extern uint8_t client_ethaddr[6];
-
 #define PROTO_SLIP 0x1
 #ifdef USE_PPP
 #define PROTO_PPP 0x2
