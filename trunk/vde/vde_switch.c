@@ -2,6 +2,7 @@
  * Copyright 2003 Renzo Davoli (modified for daemon and vde)
  * Copyright 2005 Mattia Belletti (-pid option for daemons)
  * Licensed under the GPL
+ * Modified for --pidfile/-p and better cleanup management by Mattia Belletti.
  */
 
 #include <config.h>
