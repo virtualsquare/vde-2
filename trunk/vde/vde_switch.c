@@ -1,6 +1,6 @@
 /* Copyright 2001, 2002 Jeff Dike and others
  * Copyright 2003 Renzo Davoli (modified for daemon and vde)
- * Copyright 2005 Mattia Belletti (-pid option for daemons)
+ * Mattia Belletti (-pid option for daemons)
  * Licensed under the GPL
  * Modified for --pidfile/-p and better cleanup management by Mattia Belletti.
  */
@@ -86,6 +86,7 @@ union request {
 };
 
 static char *ctl_socket = VDESTDSOCK;
+static int ctl_socket_created = 0;
 
 static char *data_socket = NULL;
 static struct sockaddr_un data_sun;
@@ -95,7 +96,7 @@ static char pidfile_path[_POSIX_PATH_MAX];
 
 static void cleanup(int x,void* data)
 {
-  if(unlink(ctl_socket) < 0){
+  if(ctl_socket_create && unlink(ctl_socket) < 0){
     printlog(LOG_WARNING,"Couldn't remove control socket '%s' : %s", ctl_socket, strerror(errno));
   }
   if((data_socket != NULL) && (unlink(data_socket) < 0)){
@@ -310,6 +311,9 @@ void bind_sockets(int ctl_fd, const char *ctl_name, int data_fd)
 {
   int err, used=0;
 
+  /* do it in advance, so we avoid race conditions */
+  ctl_socket_created = 1;
+
   err = bind_socket(ctl_fd, ctl_name, NULL);
   if(err == 0){
     bind_data_socket(data_fd, &data_sun);
@@ -363,12 +367,39 @@ static void save_pidfile()
 
 static void Usage(void)
 {
+	printf(
+			"Usage: vde_switch [OPTIONS]\n"
+			"Runs a VDE switch.\n"
+			"\n"
+			"  -s, --sock SOCK            Choose name of the control UNIX socket\n"
+			"  -s, --vdesock SOCK         Same as --sock SOCK\n"
+			"  -s, --unix SOCK            Same as --sock SOCK\n"
 #ifdef TUNTAP
-  fprintf(stderr, "Usage : %s [ -sock control-socket ] [ -tap tuntap-device ] [ -hub ] [-daemon] [ -pidfile pidfile ]\n" , prog);
-#else
-  fprintf(stderr, "Usage : %s [ -sock control-socket ] [ -hub ] [-daemon] [ -pidfile pidfile ]\n", prog);
+			"  -t, --tap TAP              Enable routing through TAP tap interface\n"
 #endif
-  exit(1);
+			"  -d, --daemon               Daemonize vde_switch once run\n"
+			"  -x, --hub                  Make the switch act as a hub\n"
+			"  -p, --pidfile PIDFILE      Write pid of daemon to PIDFILE\n"
+			"  -h, --help                 Display this help and exit\n"
+			"  -v, --version              Display informations on version and exit\n"
+			"\n"
+			"Report bugs to PACKAGE_BUGREPORT\n"
+			);
+	exit(1);
+}
+
+static void version(void)
+{
+	printf(
+			"VDE " PACKAGE_VERSION "\n"
+			"Copyright (C) 2001, 2002 Jeff Dike and others\n"
+			"Copyright 2003 Renzo Davoli (modified for daemon and vde)\n"
+			"VDE comes with NO WARRANTY, to the extent permitted by law.\n"
+			"You may redistribute copies of VDE under the terms of the\n"
+			"GNU General Public License.\n"
+			"For more information about these matters, see the files\n"
+			"named COPYING.\n");
+	exit(0);
 }
 
 int main(int argc, char **argv)
@@ -395,7 +426,8 @@ int main(int argc, char **argv)
 			  {"daemon", 0, 0, 'd'},
 			  {"hub", 0, 0, 'x'},
 			  {"pidfile", 1, 0, 'p'},
-			  {"help",0,0,'h'},
+			  {"help",0 , 0, 'h'},
+			  {"version", 0, 0, 'v'},
 			  {0, 0, 0, 0}
 		  };
 		  c = getopt_long_only (argc, argv, "s:t:dxp:h",
@@ -425,6 +457,8 @@ int main(int argc, char **argv)
 				case 'p':
 					pidfile=strdup(optarg);
 					break;
+			  case 'v':
+				  version();
 			  case 'h':
 			  default:
 				  Usage();
