@@ -96,7 +96,7 @@ static char pidfile_path[_POSIX_PATH_MAX];
 
 static void cleanup(int x,void* data)
 {
-  if(ctl_socket_create && unlink(ctl_socket) < 0){
+  if(ctl_socket_created && unlink(ctl_socket) < 0){
     printlog(LOG_WARNING,"Couldn't remove control socket '%s' : %s", ctl_socket, strerror(errno));
   }
   if((data_socket != NULL) && (unlink(data_socket) < 0)){
