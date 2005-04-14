@@ -464,9 +464,35 @@ int main(int argc, char **argv)
 	  exit(1);
   }
 
-  if(signal(SIGINT, sig_handler) < 0) {
-	  printlog(LOG_ERR,"Setting handler for SIGINT: %s",strerror(errno));
-  }
+	{
+		/* setting signal handlers.
+		 * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
+		 * ignores all the others signals which could cause termination. */
+		struct { int sig; const char *name; int ignore; } signals[] = {
+			{ SIGHUP, "SIGHUP", 0 },
+			{ SIGINT, "SIGINT", 0 },
+			{ SIGPIPE, "SIGPIPE", 1 },
+			{ SIGALRM, "SIGALRM", 1 },
+			{ SIGTERM, "SIGTERM", 0 },
+			{ SIGUSR1, "SIGUSR1", 1 },
+			{ SIGUSR2, "SIGUSR2", 1 },
+			{ SIGPOLL, "SIGPOLL", 1 },
+			{ SIGPROF, "SIGPROF", 1 },
+			{ SIGVTALRM, "SIGVTALRM", 1 },
+			{ SIGSTKFLT, "SIGSTKFLT", 1 },
+			{ SIGIO, "SIGIO", 1 },
+			{ SIGPWR, "SIGPWR", 1 },
+			{ SIGUNUSED, "SIGUNUSED", 1 },
+			{ 0, NULL, 0 }
+		};
+		int i;
+
+		for(i = 0; signals[i].sig != 0; i++)
+			if(signal(signals[i].sig,
+						signals[i].ignore ? SIG_IGN : sig_handler) < 0)
+				printlog(LOG_ERR,"Setting handler for %s: %s", signals[i].name,
+						strerror(errno));
+	}
   hash_init();
 
   if (daemonize) {
