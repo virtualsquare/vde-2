@@ -44,8 +44,11 @@ void packet_dump (struct packet *p)
 }
 */
 
+/* descriptor of a port group */
 struct portgroup {
+	/* identifier of the port group */
 	int ident;
+	/* number of ports which reference this descriptor */
 	int counter;
 };
 
@@ -53,6 +56,9 @@ struct port {
   int control;
   void *data;
   int data_len;
+  /* pointer to a structure containing group description; reference counting
+	 * allows to share the same structure, and know at the same time how many
+	 * ports are grouped together */
   struct portgroup *pg;
   void (*sender)(int fd, void *packet, int len, void *data);
 };
@@ -216,6 +222,9 @@ void handle_tap_data(int i, int fd, int hub)
   handle_direct_data(port, hub, &packet, len);
 }
 
+/* initialize a port structure with control=fd, given data+data_len and sender
+ * function; add it to the port group given by identifier portgroup iff != 0,
+ * and then add it to the g_fdsdata array at index i. */
 int setup_port(int i, int fd, void (*sender)(int fd, void *packet, int len, 
 				      void *data), void *data, int data_len, int portgroup)
 {
@@ -246,6 +255,7 @@ int setup_port(int i, int fd, void (*sender)(int fd, void *packet, int len,
 		    }
 		  }
 	  }
+		/* enlarge the structure if needed */
 	  if (port->pg == NULL) 
 	  { 
 		  port->pg=malloc(sizeof(struct portgroup)); 
