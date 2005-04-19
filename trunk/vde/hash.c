@@ -88,6 +88,7 @@ void update_entry_time(char *src)
   e->last_seen = time(NULL);
 }
 
+/* removes given hash entry from the global table 'h' */
 static void delete_hash_entry(struct hash_entry *old)
 {
   int k = calc_hash(old->dst);
@@ -106,6 +107,8 @@ void delete_hash(char *dst)
   delete_hash_entry(old);
 }
 
+/* for each entry of the global hash table 'h', calls function f, passing to it
+ * the hash entry and the additional arg 'arg' */
 static void for_all_hash(void (*f)(struct hash_entry *, void *), void *arg)
 {
   int i;
@@ -177,6 +180,8 @@ void hash_delete_port (void *port)
 #define GC_INTERVAL 2
 #define GC_EXPIRE 100
 
+/* clean from the hash table entries older than GC_EXPIRE seconds, given that
+ * 'now' points to a time_t structure describing the current time */
 static void gc(struct hash_entry *e, void *now)
 {
   time_t t = *(time_t *) now;
@@ -185,6 +190,8 @@ static void gc(struct hash_entry *e, void *now)
     delete_hash_entry(e);
 }
 
+/* clean old entries in the hash table 'h', and prepare the timer to be called
+ * again between GC_INTERVAL seconds */
 static void sig_alarm(int sig)
 {
   struct itimerval it;
@@ -198,6 +205,7 @@ static void sig_alarm(int sig)
   setitimer(ITIMER_REAL, &it, NULL);
 }
 
+/* sets sig_alarm as handler for SIGALRM, and run it a first time */
 void hash_init(void)
 {
   struct sigaction sa;

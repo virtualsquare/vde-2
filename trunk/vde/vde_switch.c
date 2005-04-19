@@ -94,7 +94,7 @@ static struct sockaddr_un data_sun;
 static char *pidfile = NULL;
 static char pidfile_path[_POSIX_PATH_MAX];
 
-static void cleanup(int x,void* data)
+static void cleanup(void)
 {
   if(ctl_socket_created && unlink(ctl_socket) < 0){
     printlog(LOG_WARNING,"Couldn't remove control socket '%s' : %s", ctl_socket, strerror(errno));
@@ -107,6 +107,7 @@ static void cleanup(int x,void* data)
   }
 }
 
+/* array of pointer to struct port */
 void **g_fdsdata = NULL;
 int g_nfds = 0;
 int g_minfds = 0;
@@ -114,10 +115,13 @@ static struct pollfd *fds = NULL;
 static int maxfds = 0;
 static int nfds = 0;
 
+/* adds file descriptor 'fd' to the set of file descriptors whose input we wait
+ * for in main loop */
 static void add_fd(int fd)
 {
   struct pollfd *p;
 
+  /* enlarge fds and g_fdsdata array if needed */
   if(nfds == maxfds){
     maxfds = maxfds ? 2 * maxfds : 8;
     if((fds = realloc(fds, maxfds * sizeof(struct pollfd))) == NULL){
@@ -226,6 +230,8 @@ static void new_port(int i, int fd, int data_fd)
   }
 }
 
+/* accept a new connection from socket fd, then set received connection as non
+ * blocking and add it between the fds whose input we wait for */
 void accept_connection(int fd)
 {
   struct sockaddr addr;
@@ -245,6 +251,8 @@ void accept_connection(int fd)
   add_fd(new);
 }
 
+/* check to see if given unix socket is still in use; if it isn't, remove the
+ * socket from the file system */
 int still_used(struct sockaddr_un *sun)
 {
   int test_fd, ret = 1;
@@ -267,13 +275,16 @@ int still_used(struct sockaddr_un *sun)
   return(ret);
 }
 
+/* try to bind socket fd to unix socket at path name; resulting sockaddr is
+ * returned in sock_out if != NULL; returns 0 if alright, or the error
+ * otherwise. */
 int bind_socket(int fd, const char *name, struct sockaddr_un *sock_out)
 {
   struct sockaddr_un sun;
 
   sun.sun_family = AF_UNIX;
   strncpy(sun.sun_path, name, sizeof(sun.sun_path));
-  
+
   if(bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
     if((errno == EADDRINUSE) && still_used(&sun)) return(EADDRINUSE);
     else if(bind(fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
@@ -286,6 +297,9 @@ int bind_socket(int fd, const char *name, struct sockaddr_un *sock_out)
 }
 
 
+/* bind the data socket as an unix socket in the abstract namespace (as
+ * detailed in man 7 unix), exit with error from the program if it fails.
+ * obtained sockaddr is returned in sun, which must not be NULL. */
 void bind_data_socket(int fd, struct sockaddr_un *sun)
 {
   struct {
@@ -307,6 +321,9 @@ void bind_data_socket(int fd, struct sockaddr_un *sun)
   }
 }
 
+/* try to bind both control socket ctl_fd to file ctl_name and data socket
+ * data_fd, as detailed in bind_socket and bind_data_socket, and exit from the
+ * program with error if it can't */
 void bind_sockets(int ctl_fd, const char *ctl_name, int data_fd)
 {
   int err, used=0;
@@ -410,7 +427,7 @@ int main(int argc, char **argv)
   int tap_fd  = -1;
 #endif
 
-  on_exit(cleanup, NULL);
+  atexit(cleanup);
   prog = argv[0];
   /* option parsing */
   {
@@ -469,6 +486,8 @@ int main(int argc, char **argv)
 
   }
 
+	/* connect_fd is a stream UNIX socket, whose address can be reused, and set
+	 * nonblocking */
   if((connect_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
 	  printlog(LOG_ERR,"socket: %s",strerror(errno));
 	  exit(1);
@@ -482,6 +501,7 @@ int main(int argc, char **argv)
 	  printlog(LOG_ERR,"Setting O_NONBLOCK on connection fd: %s",strerror(errno));
 	  exit(1);
   }
+	/* data_fd is similar, but datagram */
   if((data_fd = socket(PF_UNIX, SOCK_DGRAM, 0)) < 0){
 	  printlog(LOG_ERR,"socket: %s",strerror(errno));
 	  exit(1);
@@ -491,8 +511,10 @@ int main(int argc, char **argv)
 	  exit(1);
   }
 
+	/* make needed binds to complete connect_fd and data_fd initialization */
   bind_sockets(connect_fd, ctl_socket, data_fd);
 
+	/* tell that connect_fd will be able to accept connections */
   if(listen(connect_fd, 15) < 0){
 	  printlog(LOG_ERR,"listen: %s",strerror(errno));
 	  exit(1);
@@ -527,14 +549,20 @@ int main(int argc, char **argv)
 				printlog(LOG_ERR,"Setting handler for %s: %s", signals[i].name,
 						strerror(errno));
 	}
+
+	/* initialize ARP table */
   hash_init();
 
+	/* take care about logging */
   if (daemonize) {
 	  openlog(basename(prog), LOG_PID, 0);
 	  logok=1;
-	  syslog(LOG_INFO,"UML_SWITCH started");
+	  syslog(LOG_INFO,"VDE_SWITCH started");
   }
   printlog(LOG_INFO,"attached to unix socket '%s'", ctl_socket);
+
+	/* add stdin (if tty), connect and data fds to the set of fds we wait for
+	 * input */
   if(isatty(0) && ! daemonize)
 	  add_fd(0);
   add_fd(connect_fd);
@@ -549,6 +577,8 @@ int main(int argc, char **argv)
   }
 #endif
 
+	/* saves current path in pidfile_path, because otherwise with daemonize() we
+	 * forget it */
   if(getcwd(pidfile_path, PATH_MAX-1) == NULL) {
     printlog(LOG_ERR, "getcwd: %s", strerror(errno));
     exit(1);
@@ -563,23 +593,33 @@ int main(int argc, char **argv)
 	 * server: save PID file if needed */
 	if(pidfile) save_pidfile();
 
+	/* main loop of events processing */
   while(1){
 	  char buf[128];
 
+		/* wait for some input */
 	  n = poll(fds, nfds, -1);
 	  if(n < 0){
 		  if(errno == EINTR) continue;
 		  printlog(LOG_WARNING,"poll %s",strerror(errno));
 		  break;
 	  }
+
+		/* check the input received */
 	  for(i = 0; i < nfds; i++){
 		  if(fds[i].revents == 0) continue;
+
+			/* special case for standard input */
 		  if(fds[i].fd == 0){
+				/* POLLHUP; e.g., pressed Ctrl+C on a non-daemonized vde_switch; thus
+				 * exit! */
 			  if(fds[i].revents & POLLHUP){
 				  printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
 				  exit(0);
 			  }
 
+				/* otherwise read data from stdin, log it, and eventually catch EOFs as
+				 * exits */
 			  n = read(0, buf, sizeof(buf));
 			  if(n < 0){
 				  printlog(LOG_WARNING,"Reading from stdin %s",strerror(errno));
@@ -590,6 +630,8 @@ int main(int argc, char **argv)
 				  exit(0);
 			  }
 		  }
+
+			/* special case for connect fd - is there some connection pending? */
 		  else if(fds[i].fd == connect_fd){
 			  if(fds[i].revents & POLLHUP){
 				  printlog(LOG_WARNING,"Error on connection fd");
@@ -597,8 +639,12 @@ int main(int argc, char **argv)
 			  }
 			  accept_connection(connect_fd);
 		  }
+
+			/* data socket - ??? */
 		  else if(fds[i].fd == data_fd) handle_sock_data(data_fd, hub);
+
 #ifdef TUNTAP
+			/* special case for tap data */
 		  else if(fds[i].fd == tap_fd) handle_tap_data(i, tap_fd, hub);
 #endif
 		  else {
