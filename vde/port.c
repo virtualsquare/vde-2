@@ -16,6 +16,7 @@
 #include <hash.h>
 #include <port.h>
 
+/* a full ethernet 802.3 frame */
 struct packet {
   struct {
     unsigned char dest[ETH_ALEN];
@@ -54,6 +55,7 @@ struct portgroup {
 
 struct port {
   int control;
+	/* tap case: NULL; data case: pointer to sock_data */
   void *data;
   int data_len;
   /* pointer to a structure containing group description; reference counting
@@ -119,13 +121,16 @@ static void update_src(struct port *port, struct packet *p)
   struct port *last;
 
   /* We don't like broadcast source addresses */
-  if(IS_BROADCAST(p->header.src)) return;  
+  if(IS_BROADCAST(p->header.src)) return;
 
   last = find_in_hash(p->header.src);
 
   if(last == NULL || (port != last && (port->pg == NULL || 
 			  port->pg != last->pg))){
-    /* old value differs from actual input port */
+    /* old value differs from actual input port - this can happen in two ways:
+		 * or the address is simply unknown (probably been forgot by the ARP cache,
+		 * or just connected), or it belongs to an unkown port group / different
+		 * port group */
 
 #ifdef INFO
 	   printlog(LOG_INFO," Addr: %02x:%02x:%02x:%02x:%02x:%02x New port %d",
@@ -134,12 +139,16 @@ static void update_src(struct port *port, struct packet *p)
 	   port->control);
 #endif
 
+    /* there was an entry for this address, but we felt compelled to add a new
+		 * one, so at least remove the old one before */
     if(last != NULL){
 #ifdef INFO
 	    printlog(LOG_INFO," old port %d", last->control);
 #endif
       delete_hash(p->header.src);
     }
+
+    /* add the new ARP entry */
     insert_into_hash(p->header.src, port);
   }
   update_entry_time(p->header.src);
@@ -193,6 +202,9 @@ static void send_dst(struct port *port, struct packet *packet, int len,
   }
 }
 
+/* we have received a packet of data; take the packet 'packet' of size 'len'
+ * and send it to port 'p', acting as a hub if asked for. if p is NULL, then we
+ * assume that data comes from no known source (this should not happen) */
 static void handle_direct_data (struct port *p, int hub, struct packet *packet, int len)
 {
   /* if we have an incoming port (we should) */
@@ -274,7 +286,9 @@ int setup_port(int i, int fd, void (*sender)(int fd, void *packet, int len,
 }
 
 struct sock_data {
+  /* fd from which data is read */
   int fd;
+  /* source address of read data */
   struct sockaddr_un sock;
 };
 
@@ -283,10 +297,10 @@ static void send_sock(int fd, void *packet, int len, void *data)
   struct sock_data *mine = data;
   int err;
   
-  do {
+  //do {
   	err = sendto(mine->fd, packet, len, 0, (struct sockaddr *) &mine->sock,
 	       sizeof(mine->sock));
-  } while (err == -1 && errno == EAGAIN);
+  //} while (err == -1 && errno == EAGAIN);
   if(err != len)
 	    printlog(LOG_WARNING, "send_sock sending to fd %d %s", mine->fd, strerror(errno));
 }
@@ -301,6 +315,8 @@ static void send_sock(int fd, void *packet, int len, void *data)
   //return(!memcmp(&port->sock, &mine->sock, sizeof(mine->sock)));
 //}
 
+/* handle data reception from data socket fd. hub is 1 if we act as hubs, 0
+ * otherwise */
 int handle_sock_data(int fd, int hub)
 {
   struct packet packet;
@@ -316,10 +332,14 @@ int handle_sock_data(int fd, int hub)
   if(len <= 0){
     if(len < 0 && errno != EAGAIN) printlog(LOG_WARNING,"handle_sock_data %s",strerror(errno));
     if (len == 0) return 1;
+		/* EGAIN case: receive would block, so tell everything's alright, and it
+		 * will be managed in the next select again */
     else return 0;
   }
   data.fd = fd;
 
+	/* goes through all ports, and look if it already knows about the one from
+	 * which we received some data */
   p=NULL;
   for(i=g_minfds ; i<g_nfds ; i++) {
 	    if (g_fdsdata[i] != NULL) { 
