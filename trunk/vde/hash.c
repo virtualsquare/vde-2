@@ -49,6 +49,8 @@ static struct hash_entry *find_entry(char *dst)
   return(NULL);  
 }
 
+/* looks in global hash table 'h' for given address, and return associated
+ * port */
 void *find_in_hash(char *dst)
 {
   struct hash_entry *e = find_entry(dst);
