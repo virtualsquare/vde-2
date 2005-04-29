@@ -160,7 +160,7 @@ static void remove_fd(int fd)
 static void sig_handler(int sig)
 {
   printlog(LOG_ERR,"Caught signal %d, cleaning up and exiting", sig);
-  cleanup(1,NULL);
+  cleanup();
   signal(sig, SIG_DFL);
   kill(getpid(), sig);
 }
