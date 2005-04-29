@@ -40,7 +40,7 @@ int open_tap(char *dev)
   memset(&ifr, 0, sizeof(ifr));
   ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
   strncpy(ifr.ifr_name, dev, sizeof(ifr.ifr_name) - 1);
-  printf("dev=\"%s\", ifr.ifr_name=\"%s\"\n", ifr.ifr_name, dev);
+  /*printf("dev=\"%s\", ifr.ifr_name=\"%s\"\n", ifr.ifr_name, dev);*/
   if(ioctl(fd, TUNSETIFF, (void *) &ifr) < 0){
     printlog(LOG_ERR,"TUNSETIFF failed %s",strerror(errno));
     close(fd);
