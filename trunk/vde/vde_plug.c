@@ -392,6 +392,10 @@ int main(int argc, char **argv)
 		  break;
 	  if (pollv[0].revents & POLLIN) {
 		  nx=read(STDIN_FILENO,bufin,sizeof(bufin));
+		  /* if POLLIN but not data it means that the stream has been
+		   * closed at the other end */
+		  if (nx==0)
+			  break;
 		  splitpacket(bufin,nx,fddata,&dataout);
 		  //sendto(fddata,bufin,nx,0,(struct sockaddr *) &dataout,sizeof(dataout));
 
