@@ -200,7 +200,7 @@ int main(int argc, char **argv)
   printf("as %s\n",argsock);
 	    for (i=0; i<nb_nics; i++)
 		    printf("%d -> %s\n",i,sockname[i]); */
-  newargc=argc+1+(2*nb_nics)-args;
+  newargc=argc+3+(2*nb_nics)-args;
   if ((newargv=(char **) malloc ((newargc+1)* sizeof(char *))) <0) {
 	  perror("malloc");
 	  exit(1);
@@ -213,8 +213,13 @@ int main(int argc, char **argv)
   	newargv[2*i+1]="-tun-fd";
   	newargv[2*i+2]=strdup(numfd);
   }
-   
-  for (i=(2*nb_nics)+1;args<argc;i++,args++) newargv[i]=argv[args];
+	{
+		char nnics[10];
+		sprintf(nnics,"%d",nb_nics);
+		newargv[2*nb_nics+1]="-nics";
+		newargv[2*nb_nics+2]=strdup(nnics);
+	}
+  for (i=(2*nb_nics)+3;args<argc;i++,args++) newargv[i]=argv[args];
 
   newargv[i]=0;
 
