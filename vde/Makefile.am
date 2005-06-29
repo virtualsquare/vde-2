@@ -1,8 +1,8 @@
 SUBDIRS = qemu slirpvde vdetaplib bochs uml doc
 
-AUTOMAKE_OPTIONS = foreign 1.9
+AUTOMAKE_OPTIONS = foreign
 
-EXTRA_DIST = LICENSE VERSION
+EXTRA_DIST = LICENSE VERSION ChangeLog
 
 bin_PROGRAMS = vde_switch dpipe vde_plug
 vde_switch_SOURCES = \
