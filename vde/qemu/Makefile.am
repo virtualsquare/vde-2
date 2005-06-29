@@ -6,8 +6,8 @@ INCLUDES = -I$(top_srcdir)
 EXTRA_DIST = README
 
 install-exec-hook:
-	rm -f $(bindir)/vdeqemu
-	ln -s $(bindir)/vdeq $(bindir)/vdeqemu
+	rm -f $(DESTDIR)$(bindir)/vdeqemu
+	$(LN_S) $(DESTDIR)$(bindir)/vdeq $(DESTDIR)$(bindir)/vdeqemu
 
 uninstall-local:
 	rm -f $(bindir)/vdeqemu
