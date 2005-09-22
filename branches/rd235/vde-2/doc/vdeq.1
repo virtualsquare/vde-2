@@ -1,0 +1,114 @@
+.\" Copyright (c) 2004 Renzo Davoli
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 2 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public
+.\" License along with this manual; if not, write to the Free
+.\" Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
+.\" USA.
+
+.TH VDEQ 1 "February 23, 2004" "Virtual Distributed Ethernet"
+.SH NAME
+vdeq \- Virtual Distributed Ethernet wrapper for QEMU virtual machines
+.SH SYNOPSIS
+.B vdeq 
+.B qemu
+[
+.B \-sock
+.I socketpath
+[
+.I ,socketpath
+[
+.I ,...
+]
+]
+]
+[ qemu_args ]
+.br
+.B vde\fP{\fIqemu_name\fP} 
+[
+.B \-sock
+.I socketpath
+[
+.I ,socketpath
+[
+.I ,...
+]
+]
+]
+[ qemu_args ]
+
+.br
+.SH DESCRIPTION
+\fBvdeq\fP 
+is a wrapper to start a QEMU virtual machine connected to a VDE network.
+It uses the qemu \fB \-tun-fd \fP parameter to set up the connection with
+a vde_switch.
+
+The command
+.RS
+.br
+.B 
+vdeq qemu -b c -hda=sampledisk
+.RE
+starts a qemu machine which boots from the sampledisk image and
+has a ne2000 ethernet interface connected to the standard vde_switch.
+.br
+
+It is also possible to create symbolic links to the vdeq executable to have
+a simpler command. If the link has a name that begins with vde the remaning part
+of the name is taken as the qemu command. For example if vdeq is linked to
+vdeqemu:
+.RS
+.br
+.B 
+vdeqemu -b c -hda=sampledisk
+.RE
+starts qemu as above.
+
+.RS
+.br
+.B 
+vdeq qemu -sock /tmp/vde.ctl,/tmp/my.ctl -b c -hda=sampledisk
+.RE
+.RS
+.br
+.B 
+vdeqemu -sock /tmp/vde.ctl,/tmp/my.ctl -b c -hda=sampledisk
+.RE
+both start qemu with two ethernet interface connected to the standard switch and
+to the switch with local socket "/tmp/my.ctl" respectively 
+
+.SH OPTIONS
+.TP
+.B \-sock 
+.I socketpath, 
+specify the UNIX socket to be used by local programs for joining the VDE.
+The default value is "/tmp/vde.ctl"
+It is also possible to indicate several socketpath (comma separated, no blanks):
+in this case several interfaces are defined. The first socketpath is connected
+to the first ne2k interface and so on.
+.br
+.TP
+.B -h, -help, --help
+print a Usage help.
+.SH SEE ALSO
+.BR vde_switch (1),
+.BR vde_plug (1),
+.BR dpipe (1).
+.br
+.SH AUTHOR
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
