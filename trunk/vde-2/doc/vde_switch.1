@@ -68,6 +68,13 @@ addresses despite of the change of IP addresses on the interfaces.
 vde_switch needs root privileges to open a tap interface, can be run by
 users when no -tap option is specified.
 
+vde-2 has several features: VLAN, Fast Spanning Tree Protocol, command line management
+(on console for foreground swithces, on a terminal for deamonized switches).
+If a vde_switch run in foreground mode simply type return to have the prompt.
+For daemons there is the -M option to specify the management socket. Unixterm is the tool
+to start a terminal for the management.
+Type "help" at the promt for a list of possible options.
+
 .SH OPTIONS
 .TP
 .B \-hub, 
@@ -83,17 +90,23 @@ The default value is "/tmp/vde.ctl"
 .TP
 .B \-tap "\fIinterface\fP" 
 connect the specified tuntap interface to this vde_switch (needs root privileges)
+It is possible to specify several tap interfaces, comma separated.
 .TP
 .B \-daemon
 Run as a daemon. Use syslog for logging.
 .TP
-.B \-h
+.B \-f rcfile
+rc file to set the initial switch configuration. This rc file has the same syntax of
+the command line interface.
+.TP
+.B \-h 
 help. please use it for a more complete list of options.
 vde_switch is a modular program, options vary depending of the compiled-in modules.
 .SH SEE ALSO
 .BR vde_plug (1),
 .BR vdeq (1).
 .BR dpipe (1).
+.BR unixterm (1).
 .br
 .SH AUTHOR
 VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
