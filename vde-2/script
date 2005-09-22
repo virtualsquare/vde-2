@@ -1,0 +1,3 @@
+vlan/create 2
+vlan/create 3
+vlan/create 4
