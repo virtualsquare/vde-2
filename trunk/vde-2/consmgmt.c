@@ -90,6 +90,11 @@ void printoutc(int fd, const char *format, ...)
 	}
 }
 
+void setmgmtperm(char *path)
+{
+	chmod(path,mgmt_mode);
+}
+
 static int help(int fd,char *arg)
 {
 	struct comlist *p;

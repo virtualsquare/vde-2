@@ -178,7 +178,7 @@ int ioctl(int fd, unsigned long int command, ...)
 					plh=NULL;
 					close(tapfd[0]);
 					sprintf(num,"%d",tapfd[1]);
-					execlp(VDETAPEXEC,"-",num,vdesock,(char *) 0);
+					execlp(VDETAPEXEC,"-",num,vdesock,name,(char *) 0);
 				}
 			}
 			else /*roll back to the native tuntap*/

@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <linux/un.h>
 #include <net/if.h>
 #include <stdarg.h>
@@ -39,14 +40,14 @@ static unsigned int wd_type;
 static unsigned int data_type;
 static int mode = 0700;
 
-static char *ctl_socket = VDESTDSOCK;
+static char *ctl_socket;
 
 #define MODULENAME "unix prog"
 
 #define SWITCH_MAGIC 0xfeedface
 #define REQBUFLEN 256
 
-enum request_type { REQ_NEW_CONTROL };
+enum request_type { REQ_NEW_CONTROL, REQ_NEW_PORT0 };
 
 struct request_v1 {
 	uint32_t magic;
@@ -158,6 +159,9 @@ static int new_port_v1_v3(int fd, int type_port,
 	int cluid=-1;
 	struct sockaddr_un sun_in;
 	switch(type){
+		case REQ_NEW_PORT0:
+			port_request= -1;
+			/* no break: falltrough */
 		case REQ_NEW_CONTROL:
 			port = setup_ep(port_request, fd, memdup(sun_out,sizeof(struct sockaddr_un)), &modfun); 
 			if(port<0) {
@@ -170,7 +174,6 @@ static int new_port_v1_v3(int fd, int type_port,
 				if ((cluid=checksockperm(sun_out->sun_path,sun_in.sun_path)) < 0) {
 					printlog(LOG_WARNING,"Data_out socket permission: %s",strerror(errno));
 					close_ep(port,fd);
-					//remove_fd(fd);
 					return -1;
 				}
 			}
@@ -178,10 +181,11 @@ static int new_port_v1_v3(int fd, int type_port,
 			if(n != sizeof(sun_in)){
 				printlog(LOG_WARNING,"Sending data socket name %s",strerror(errno));
 				close_ep(port,fd);
-				//remove_fd(fd); 
 				return -1;
 			}
-			if (cluid > 0) {
+			if (type==REQ_NEW_PORT0)
+				setmgmtperm(sun_in.sun_path);
+			else if (cluid > 0) {
 				chown(sun_in.sun_path,cluid,-1);
 				chmod(sun_in.sun_path,mode & 0700);
 			}
@@ -248,7 +252,6 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 			}
 		} else {
 			close_ep(*arg,fd);
-			//remove_fd(fd); 
 		}
 	}
 	else /*if (type == ctl_type)*/ {
@@ -389,6 +392,7 @@ static void delep (int fd, void* data, void *descr)
 
 void start_datasock(void)
 {
+	ctl_socket = (geteuid()==0)?VDESTDSOCK:VDETMPSOCK;
 	modfun.modname=swmi.swmname=MODULENAME;
 	swmi.swmnopts=Nlong_options;
 	swmi.swmopts=long_options;
