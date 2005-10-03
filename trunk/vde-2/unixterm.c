@@ -15,7 +15,7 @@
 #define BUFSIZE 1024
 char buf[BUFSIZE];
 
-main(int argc,char *argv[])
+int main(int argc,char *argv[])
 {
 	struct sockaddr_un sun;
 	int fd;
