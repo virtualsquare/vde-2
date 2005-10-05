@@ -19,7 +19,6 @@
 #include <pwd.h>
 #include <grp.h>
 #include <getopt.h>
-#include <vde.h>
 
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048
@@ -57,56 +56,27 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int por
     perror("socket");
     exit(1);
   }
-
-	if (name == NULL)
-		name=VDESTDSOCK;
-	else {
-		char *split;
-		if(name[strlen(name)-1] == ']' && (split=rindex(name,'[')) != NULL) {
-			*split=0;
-			split++;
-			port=atoi(split);
-			if (*name==0) name=VDESTDSOCK;
-		}
-	}
-	
 	sock.sun_family = AF_UNIX;
 	snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
 	if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-		if (name == VDESTDSOCK) {
-			name=VDETMPSOCK;
-			snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
-			if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-				snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name);
-				if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-					perror("connect");
-					exit(1);
-				}
-			}
-		}
-	}
-
-	req.magic=SWITCH_MAGIC;
-	req.version=3;
-	req.type=REQ_NEW_CONTROL+(port << 8);
-	req.sock.sun_family=AF_UNIX;
-
-	/* First choice, return socket from the switch close to the control dir*/
-	memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-	sprintf(req.sock.sun_path, "%s.%05d-%02d", name, pid, 0);
-	if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
-		/* if it is not possible -> /tmp */
-		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, 0);
-		if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0) {
-			perror("bind");
+		snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name); /* FALLBACK TO VDE v1 */
+		if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
+			perror("connect");
 			exit(1);
 		}
 	}
-						
+
+  req.magic=SWITCH_MAGIC;
+  req.version=3;
+  req.type=REQ_NEW_CONTROL+((port > 0)?port << 8:0);
+  
+	req.sock.sun_family=AF_UNIX;
+	snprintf(req.sock.sun_path, sizeof(req.sock.sun_path), "%s_%05d", name, pid);
+	memcpy(&inpath,&req.sock,sizeof(req.sock));
+
 	snprintf(req.description,MAXDESCR,"slirpvde user=%s PID=%d SOCK=%s",
 			callerpwd->pw_name,pid,req.sock.sun_path);
-	memcpy(&inpath,&req.sock,sizeof(req.sock));
+
 
   if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
     perror("bind");
@@ -243,7 +213,7 @@ struct option slirpvdeopts[] = {
 
 int main(int argc, char **argv)
 {
-  char *sockname=NULL;
+  char *sockname;
   struct sockaddr_un datain;
   int datainsize;
   int result,nfds;
@@ -258,6 +228,7 @@ int main(int argc, char **argv)
 	int mode=0700;
 
   filename=basename(argv[0]);
+  sockname="/tmp/vde.ctl";
 
   while ((opt=getopt_long_only(argc,argv,"s:n:p:g:m:d",slirpvdeopts,&longindx)) > 0) {
 		switch (opt) {

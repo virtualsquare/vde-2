@@ -1,12 +1,3 @@
-/* WIREFILTER (C) 2005 Renzo Davoli
- * Licensed under the GPLv2
- *
- * This filter can be used for testing network protcols. 
- * It is possible to loose, delay or reorder packets.
- * Options can be set on command line or interactively with a remote interface
- * on a unix socket (see unixterm).
- */
-
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -95,10 +86,6 @@ static int nextms()
 	}
 	return -1;
 }
-
-/* packet queues are priority queues implemented on a heap.
- * enqueue time = dequeue time = O(log n) max&mean
- */
 
 static void packet_dequeue()
 {

@@ -1,9 +1,3 @@
-/* Copyright 2005 Renzo Davoli VDE-2
- * Licensed under the GPLv2
- *
- * Minimal terminal emulator on a UNIX stream socket
- */
-
 #include <stdio.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -15,7 +9,7 @@
 #define BUFSIZE 1024
 char buf[BUFSIZE];
 
-int main(int argc,char *argv[])
+main(int argc,char *argv[])
 {
 	struct sockaddr_un sun;
 	int fd;

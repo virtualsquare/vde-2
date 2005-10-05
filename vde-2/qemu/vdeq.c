@@ -36,14 +36,14 @@ struct request_v3 {
 
 static struct passwd *callerpwd;
 
-static char** inpath;
+static struct sockaddr_un inpath;
 
-static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int intno)
+static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int intno, int port)
 {
   int pid = getpid();
   struct request_v3 req;
   int fdctl;
-	int port=0;
+
   struct sockaddr_un sock;
 
   if((fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
@@ -51,56 +51,32 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int int
     exit(1);
   }
 
-	if (name == NULL)
-		name=VDESTDSOCK;
-	else {
-		char *split;
-		if(name[strlen(name)-1] == ']' && (split=rindex(name,'[')) != NULL) {
-			*split=0;
-			split++;
-			port=atoi(split);
-			if (*name==0) name=VDESTDSOCK;
-		}
-	}
-
-	sock.sun_family = AF_UNIX;
+  sock.sun_family = AF_UNIX;
 	snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
 	if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-		if (name == VDESTDSOCK) {
-			name=VDETMPSOCK;
-			snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
-			if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-				snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name);
-				if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-					perror("connect");
-					exit(1);
-				}
-			}
-		}
-	}
-
-	req.magic=SWITCH_MAGIC;
-	req.version=3;
-	req.type=REQ_NEW_CONTROL+(port << 8);
-	req.sock.sun_family=AF_UNIX;
-
-	/* First choice, return socket from the switch close to the control dir*/
-	memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-	sprintf(req.sock.sun_path, "%s.%05d-%02d", name, pid, 0);
-	if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
-		/* if it is not possible -> /tmp */
-		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, 0);
-		if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0) {
-			perror("bind");
+		snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name); /* FALLBACK TO VDE v1 */
+		if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
+			perror("connect");
 			exit(1);
 		}
 	}
 
-	snprintf(req.description,MAXDESCR,"vdeqemu user=%s PID=%d SOCK=%s INT=%d",
-			callerpwd->pw_name,pid,req.sock.sun_path,intno);
+  req.magic=SWITCH_MAGIC;
+  req.version=3;
+  req.type=REQ_NEW_CONTROL+((port > 0)? port << 8:0);
+  
+  req.sock.sun_family=AF_UNIX;
+	snprintf(req.sock.sun_path, sizeof(req.sock.sun_path), "%s_%05d", name, pid);
+	memcpy(&inpath,&req.sock,sizeof(req.sock));
 
-	inpath[intno]=strdup(req.sock.sun_path);
+	snprintf(req.description,MAXDESCR,"vdeqemu user=%s PID=%d SOCK=%s",
+			callerpwd->pw_name,pid,req.sock.sun_path);
+
+
+  if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
+    perror("bind");
+    exit(1);
+  }
 
   if (send(fdctl,&req,sizeof(req),0) < 0) {
     perror("send");
@@ -158,6 +134,7 @@ int main(int argc, char **argv)
   struct sockaddr_un *dataout,datain;
   int datainsize;
   int result;
+  int port=0;
   int *connected_fd;
   register ssize_t nx;
   int args;
@@ -206,17 +183,12 @@ int main(int argc, char **argv)
 	  perror("malloc nics");
 	  exit(1);
   }
-  if ((inpath=(char **) malloc (nb_nics * sizeof(char *))) <0) {
-	  perror("malloc inpath");
-	  exit(1);
-  }
-	memset(inpath,0,(nb_nics * sizeof(char *)));
 
   for (i=0; i<nb_nics; i++) {
   	if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sp[i]) < 0){
 	  	perror("socketpair");
 	  	exit(1);
-		}
+	}
   }
 
   if ((sockname= (char **) malloc(sizeof(char *) * nb_nics))<0) {
@@ -287,7 +259,7 @@ int main(int argc, char **argv)
 		  perror("socket");
 		  exit(1);
 	  }
-	  connected_fd[i]=send_fd(sockname[i], fddata[i], &(dataout[i]), i);
+	  connected_fd[i]=send_fd(sockname[i], fddata[i], &(dataout[i]), i, port);
 	  pollv[2*i+1].fd=fddata[i];
 	  pollv[2*i].fd=sp[i][1];
 	  pollv[2*i].events= pollv[2*i+1].events=POLLIN|POLLHUP;
@@ -325,9 +297,5 @@ int main(int argc, char **argv)
 	  }
 	  execvp(filename,newargv);
   }  
-	for (i=0; i<nb_nics; i++) {
-		if (inpath[i] != NULL)
-			unlink(inpath[i]);
-	}
   return(0);
 }

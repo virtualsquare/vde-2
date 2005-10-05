@@ -1,6 +1,5 @@
 #ifndef VDESTDSOCK
-#define VDESTDSOCK	"/var/run/vde.ctl"
-#define VDETMPSOCK	"/tmp/vde.ctl"
+#define VDESTDSOCK	"/tmp/vde.ctl"
 #endif
 
 #define DO_SYSLOG

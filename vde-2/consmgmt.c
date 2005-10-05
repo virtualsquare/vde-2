@@ -90,11 +90,6 @@ void printoutc(int fd, const char *format, ...)
 	}
 }
 
-void setmgmtperm(char *path)
-{
-	chmod(path,mgmt_mode);
-}
-
 static int help(int fd,char *arg)
 {
 	struct comlist *p;
@@ -199,14 +194,8 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 			cmdout=handle_cmd(type,(type==console_type)?STDOUT_FILENO:fd,buf);
 			if (cmdout >= 0)
 				write(fd,prompt,strlen(prompt));
-			else {
-				if(type==mgmt_data) {
-					printoutc(fd,"9999 END OF SESSION");
-					remove_fd(fd);
-				}
-				if (cmdout == -2)
-					exit(0);
-			}
+			else if(type==mgmt_data) 
+				remove_fd(fd);
 		}
 	} else  {/* mgmt ctl */
 		struct sockaddr addr;
@@ -401,7 +390,8 @@ static int vde_logout()
 static int vde_shutdown() 
 { 
 	printlog(LOG_WARNING,"Shutdown from mgmt command");
-	return -2; 
+	exit(0);
+	return -1; 
 }
 
 static int showinfo(int fd) 

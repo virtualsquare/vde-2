@@ -258,6 +258,7 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int por
 	int fdctl;
 	int gid;
 	struct group *gs;
+
 	static struct sockaddr_un sock;
 
 	if((fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
@@ -265,55 +266,31 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int por
 		exit(1);
 	}
 
-	if (name == NULL)
-		name=VDESTDSOCK;
-	else {
-		char *split;
-		if(name[strlen(name)-1] == ']' && (split=rindex(name,'[')) != NULL) {
-			*split=0;
-			split++;
-			port=atoi(split);
-			if (*name==0) name=VDESTDSOCK;
-		}
-	}
-
 	sock.sun_family = AF_UNIX;
 	snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
 	if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-		if (name == VDESTDSOCK) {
-			name=VDETMPSOCK;
-			snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
-			if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-				snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name);
-				if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-					perror("connect");
-					exit(1);
-				}
-			}
+		snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name); /* FALLBACK TO VDE v1 */
+		if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
+			perror("connect");
+			exit(1);
 		}
 	}
 
 	req.magic=SWITCH_MAGIC;
 	req.version=3;
-	req.type=REQ_NEW_CONTROL+(port << 8);
-	req.sock.sun_family=AF_UNIX;
+	req.type=REQ_NEW_CONTROL+((port > 0)?port << 8:0);
 
-	/* First choice, return socket from the switch close to the control dir*/
-	memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-	sprintf(req.sock.sun_path, "%s.%05d-%02d", name, pid, 0);
-	if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
-		/* if it is not possible -> /tmp */
-		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, 0);
-		if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0) {
-			perror("bind");
-			exit(1);
-		}
-	}
+	req.sock.sun_family=AF_UNIX;
+	snprintf(req.sock.sun_path, sizeof(req.sock.sun_path), "%s_%05d", name, pid);
+	memcpy(&inpath,&req.sock,sizeof(req.sock));
 
 	snprintf(req.description,MAXDESCR,"vde_plug user=%s PID=%d %s SOCK=%s",
 			callerpwd->pw_name,pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"",req.sock.sun_path);
-	memcpy(&inpath,&req.sock,sizeof(req.sock));
+	if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
+		perror("bind");
+		exit(1);
+	}
+
 	if (send(fdctl,&req,sizeof(req)-MAXDESCR+strlen(req.description),0) < 0) {
 		perror("send");
 		exit(1);
@@ -414,6 +391,7 @@ int main(int argc, char **argv)
 
 	if (argv[0][0] == '-')
 		netusage(); //implies exit
+	sockname=VDESTDSOCK;
 	/* option parsing */
 	{
 		int c;
@@ -486,7 +464,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		if (optind < argc && sockname==NULL)
+		if (optind < argc && sockname==VDESTDSOCK)
 			sockname=argv[optind];
 	}
 	atexit(cleanup);

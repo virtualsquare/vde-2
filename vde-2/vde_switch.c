@@ -493,6 +493,7 @@ int main(int argc, char **argv)
 	parse_args(argc,argv);
 	atexit(cleanup);
 	setsighandlers();
+	qtimer_init();
 	hash_init(hash_size);
 #ifdef FSTP
 	fst_init(numports);
@@ -500,7 +501,6 @@ int main(int argc, char **argv)
 	port_init(numports);
 	init_mods();
 	loadrcfile();
-	qtimer_init();
 	main_loop();
 	return 0;
 }

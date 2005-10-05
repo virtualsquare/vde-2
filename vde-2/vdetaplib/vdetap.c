@@ -10,7 +10,6 @@
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <vde.h>
 #include <pwd.h>
 
 #define SWITCH_MAGIC 0xfeedface
@@ -30,7 +29,7 @@ static unsigned char bufin[BUFSIZE];
 
 static struct sockaddr_un inpath;
 
-static int send_fd(char *name, int fddata, struct sockaddr_un *datasock,char *info)
+static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int intno, int port)
 {
 	int pid = getpid();
 	struct request_v3 req;
@@ -38,7 +37,6 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock,char *in
 	struct passwd *callerpwd;
 
 	struct sockaddr_un sock;
-	int port=0;
 
 	callerpwd=getpwuid(getuid());
 
@@ -47,31 +45,13 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock,char *in
 		exit(1);
 	}
 
-	if (name == NULL)
-		name=VDESTDSOCK;
-	else {
-		char *split;
-		if(name[strlen(name)-1] == ']' && (split=rindex(name,'[')) != NULL) {
-			*split=0;
-			split++;
-			port=atoi(split);
-			if (*name==0) name=VDESTDSOCK;
-		}
-	} 
-
 	sock.sun_family = AF_UNIX;
 	snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
 	if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-		if (name == VDESTDSOCK) {
-			name=VDETMPSOCK;
-			snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
-			if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-				snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name);
-				if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-					perror("connect");
-					exit(1);
-				}
-			}
+		snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name); /* FALLBACK TO VDE v1 */
+		if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
+			perror("connect");
+			exit(1);
 		}
 	}
 
@@ -80,24 +60,17 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock,char *in
 	req.type=REQ_NEW_CONTROL+((port > 0)?port << 8:0);
 
 	req.sock.sun_family=AF_UNIX;
-
 	snprintf(req.sock.sun_path, sizeof(req.sock.sun_path), "%s_%05d", name, pid);
-	/* First choice, return socket from the switch close to the control dir*/
-	memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-	sprintf(req.sock.sun_path, "%s.%05d-%02d", name, pid, 0);
-	if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
-		/* if it is not possible -> /tmp */
-		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, 0);
-		if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0) {
-			perror("bind");
-			exit(1);
-		}
-	}
+	memcpy(&inpath,&req.sock,sizeof(req.sock));
 
 	snprintf(req.description,MAXDESCR,"tuntaplib user=%s PID=%d SOCK=%s",
 			callerpwd->pw_name,pid,req.sock.sun_path);
-	memcpy(&inpath,&req.sock,sizeof(req.sock));
+
+
+  if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
+		perror("bind");
+		exit(1);
+	}
 
 	if (send(fdctl,&req,sizeof(req)-MAXDESCR+strlen(req.description),0) < 0) {
 		perror("send");
@@ -123,7 +96,7 @@ main(int argc,char *argv[])
 	/*printf("argc = %d\n",argc);
 	for (i=0;i<argc;i++)
 		printf("argv %d -%s-\n",i,argv[i]);*/
-	if (argc != 4 && argv[0][0] != '-') {
+	if (argc != 3 && argv[0][0] != '-') {
 		fprintf(stderr,"vdetap must be activated by libvdetap e.g.\n"
 				"   sh%% export LD_PRELOAD=/usr/local/lib/libvdetap.so\n"
 				"   csh%% setenv LD_PRELOAD /usr/local/lib/libvdetap.so\n");
@@ -138,7 +111,7 @@ main(int argc,char *argv[])
 		perror("socket");
 		exit(1);
 	}
-	send_fd(argv[2],fddata,&dataout,argv[3]);
+	send_fd(argv[2],fddata,&dataout,0,0);
 	pollv[0].fd=fd;
 	pollv[1].fd=fddata;
 	for(;;) {
@@ -158,6 +131,5 @@ main(int argc,char *argv[])
 			write(fd,bufin,nx);
 		}
 	}
-	unlink(inpath.sun_path);
 }
 

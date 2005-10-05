@@ -23,7 +23,6 @@ struct comlist {
 
 void printlog(int priority, const char *format, ...);
 void loadrcfile(void);
-void setmgmtperm(char *path);
 
 void printoutc(int fd, const char *format, ...);
 void addcl(int ncl,struct comlist *cl);
