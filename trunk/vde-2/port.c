@@ -856,9 +856,9 @@ static int setmacaddr(char *strmac)
 
 static struct comlist cl[]={
 	{"port","============","PORT STATUS MENU",NULL,NOARG},
-	{"port/setnumports","","set the number of ports",portsetnumports,INTARG},
-	/*{"port/setmacaddr","MAC","set the switch MAC address",setmacaddr,STRARG},*/
 	{"port/showinfo","","show hash info",showinfo,NOARG|WITHFD},
+	{"port/setnumports","N","set the number of ports",portsetnumports,INTARG},
+	/*{"port/setmacaddr","MAC","set the switch MAC address",setmacaddr,STRARG},*/
 	{"port/sethub","0/1","1=HUB 0=switch",portsethub,INTARG},
 	{"port/setvlan","N VLAN","set port VLAN (untagged)",portsetvlan,STRARG},
 	{"port/create","N","create the port N (inactive)",portcreate,INTARG},

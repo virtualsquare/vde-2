@@ -651,9 +651,9 @@ static int fstsetedge(char *arg)
 }
 
 static struct comlist cl[]={
-	{"fstp","============","FAST SPANNING TREE MANAGEMENT MENU",NULL,NOARG},
-	{"fstp/setfstp","0/1","Fast spanning tree protocol 1=ON 0=OFF",fstpsetonoff,INTARG},
+	{"fstp","============","FAST SPANNING TREE MENU",NULL,NOARG},
 	{"fstp/showinfo","","show fstp info",fstpshowinfo,NOARG|WITHFD},
+	{"fstp/setfstp","0/1","Fast spanning tree protocol 1=ON 0=OFF",fstpsetonoff,INTARG},
 	{"fstp/setedge","VLAN PORT 1/0","Define an edge port for a vlan 1=Y 0=N",fstsetedge,STRARG},
 	{"fstp/bonus","VLAN PORT COST","set the port bonus for a vlan",fstsetbonus,STRARG},
 	{"fstp/print","[N]","print fst data for the defined vlan",fstprint,STRARG|WITHFD},

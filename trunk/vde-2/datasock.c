@@ -380,7 +380,7 @@ static int showinfo(int fd)
 
 static struct comlist cl[]={
 	{"ds","============","DATA SOCKET MENU",NULL,NOARG},
-	{"ds/showinfo","","show ds info",showinfo,NOARG},
+	{"ds/showinfo","","show ds info",showinfo,NOARG|WITHFD},
 };
 
 static void delep (int fd, void* data, void *descr)
