@@ -1,0 +1,84 @@
+.\" Copyright (c) 2004 Renzo Davoli
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 2 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public
+.\" License along with this manual; if not, write to the Free
+.\" Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
+.\" USA.
+
+.TH VDETELWEB 1 "October 10, 2005" "Virtual Distributed Ethernet"
+.SH NAME
+vdetelweb \- Virtual Distributed Ethernet Telnet and/or Web management module
+.SH SYNOPSIS
+.B vdetelweb 
+[ 
+.BI \-web  
+] 
+[ 
+.BI \-telnet 
+]  
+[ 
+.BI \-nodename
+.I nodename
+] 
+[
+.BI \-daemon 
+]
+.I mgmt_socket
+.br
+.SH DESCRIPTION
+A
+\fBvdetelweb\fP 
+implements a tiny telnet server and/or a tiny web server for the remote management
+of a VDE2 switch.
+.br
+.SH OPTIONS
+.TP
+.B \-web, 
+starts the web server.
+.TP
+.B \-telnet, 
+starts the telnet server. At least one option \-web or \-telnet must be set
+.TP
+.B \-nodename "\fInodename\fP"
+Specify the nodename as seen from remote connections (e.g. in the command prompt or
+in the web page title). uname nodename is used when this option is not specified.
+.TP
+.B \-daemon
+Run as a daemon. Use syslog for logging.
+.TP
+.B \-f \fIrcfile\fP
+rc file to set the initial switch configuration. 
+When not specified, vdetelweb searches for /etc/vde/vdetelwebrc and
+~/etc/vde/vdetelwebrc. One rc file must be accessible.
+.TP
+.B \-h 
+help. please use it for a more complete list of options.
+vde_switch is a modular program, options vary depending of the compiled-in modules.
+.TP
+.B \fImgmt_socket\fP
+is the managemnt socket for the vde-switch. (This option must match the path
+used in the -M option for the vde_switch).
+.SH SEE ALSO
+.BR vde_switch (1),
+.BR vde_plug (1),
+.BR vdeq (1).
+.BR dpipe (1).
+.BR unixterm (1).
+.br
+.SH AUTHOR
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
