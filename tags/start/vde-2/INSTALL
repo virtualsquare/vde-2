@@ -1,0 +1,14 @@
+If you've just downloaded the distribution from cvs, a:
+$ autoreconf --install
+builds up the building infrastructure (if you want to come back to a "cvs
+status", go through the ./configure and then 'make extraclean').
+
+If you've downloaded an official distribution, or already you've made the step
+before, do a:
+$ ./configure
+(./configure --help to have a list of pertinent arguments, like
+--disable-tuntap)
+then:
+$ make
+and if you want:
+$ make install
