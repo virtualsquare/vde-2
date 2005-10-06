@@ -314,9 +314,42 @@ static void postdata_parse(int fd,int vdefd,char *menu,char *postdata)
 {
 	char cmdbuf[BUFSIZE];
 	int cmdlen,arglen,rv;
-	char *postcmd,*cmd,*endcmd,*arg;
+	char *postcmd,*cmd,*endcmd,*arg=NULL;
 	/*printf("PD **%s**\n",postdata);*/
-	if ((postcmd=strstr(postdata,"COMMAND="))!=NULL) {
+	if ((postcmd=strstr(postdata,"X="))!=NULL) {
+		/* enter in a text field (catched through the hidden button) */
+		cmd=NULL;
+		while(postdata)
+		{
+			char *token=strsep(&postdata,"&");
+			int l=strlen(token);
+			char *targ=index(token,'=');
+			if(strncmp("X=",token,2) != 0) {
+				if (targ+1 < token+l)
+					if(cmd==NULL) {
+						char *point;
+						if ((point=strstr(token,".arg")) != NULL)
+							*point=0;
+						cmd=token;
+						arg=targ+1;
+					} else 
+						cmd="";
+			}
+		}
+		if(cmd!=NULL && *cmd != 0) {
+			strncpy(cmdbuf,menu,BUFSIZE);
+			strncat(cmdbuf,"/",BUFSIZE);
+			strncat(cmdbuf,cmd,BUFSIZE);
+			strncat(cmdbuf," ",BUFSIZE);
+			strncat(cmdbuf,uriconv(arg),BUFSIZE);
+			write(vdefd,cmdbuf,strlen(cmdbuf));
+			lwip_printf(fd,"<P> </P><B>%s %s</B><PRE>",prompt,cmdbuf);
+			rv=lwip_showout(fd,vdefd);
+			lwip_printf(fd,"</PRE><B>Result: %s</B>\r\n",strerror(rv-1000));
+		}
+	}
+	else if ((postcmd=strstr(postdata,"COMMAND="))!=NULL) {
+		/* accept button */
 		postcmd+=8;
 		for(cmdlen=0;postcmd[cmdlen] != '&' && postcmd[cmdlen] != 0; cmdlen++)
 			;
@@ -443,7 +476,10 @@ static void web_create_page(char *path,int fd,int vdefd,char *postdata)
 				lwip_printf(fd,"<B>%s</B>\r\n",strerror(rv-1000));
 		} else {
 			lwip_printf(fd,
-					"</TD><TD><FORM action=\"%s.html\" method=post>\r\n<TABLE>",path);
+					"</TD><TD><FORM action=\"%s.html\" method=post table-layout=fixed>\r\n<TABLE><THEAD><TR>\r\n"
+					"<TD><INPUT type=submit name=X style=\"visibility:hidden\" ></TD>\r\n"
+					"<TD><B>Syntax</B></TD><TD><B>Args</B>\r\n"
+					"</TD><TD><B>Description</B></TD></TR></THEAD>\r\n",path);
 			web_this_form(fd,this);
 			lwip_printf(fd,"</TABLE></FORM>\r\n");
 			if (postdata != NULL) {
