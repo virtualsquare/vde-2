@@ -89,6 +89,7 @@ static convert2base64(char *from,char *to,int tosize)
 		*(to++)=(n<0)?'=':base64ab[convbuf & 0x3f];
 		tosize -= 4;
 	}
+	*to=0;
 }
 
 static void createbase64passwd()
@@ -499,8 +500,8 @@ static char authmsg[]=
 "WWW-Authenticate: Basic realm=\"";
 
 //"Content-Length: 187\r\n"
+//"Connection: close\r\n"
 static char authmsg2[]= "\"\r\n"
-"Connection: close\r\n"
 "Content-Type: text/html\r\n"
 "\r\n"
 "<HTML><HEAD>\r\n"
@@ -546,7 +547,7 @@ int web_core(int fn,int fd,int vdefd)
 				lwip_write(fd,authmsg,sizeof(authmsg));
 				lwip_write(fd,prompt,strlen(prompt));
 				lwip_write(fd,authmsg2,sizeof(authmsg2));
-				return 0;
+				return 1;
 				break;
 			case WEB_AUTHORIZED:
 				lowercase(st->path);
