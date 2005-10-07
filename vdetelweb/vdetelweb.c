@@ -27,6 +27,7 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include  <errno.h>
+#include <netdb.h>
 #include  <sys/types.h>
 #include  <sys/socket.h>
 #include  <sys/select.h>
@@ -186,67 +187,132 @@ int openvdem(char *mgmt,char *progname, struct netif **nif,char *nodename)
 	return fd;
 }
 
-int readip4(char *arg,struct netif *nif)
+static void bitno2mask(unsigned char *addr,int bitno,int len)
 {
-	char *bit=rindex(arg,'/');
-	int bitno=0;
-	int addr[4];
-	struct ip_addr ipaddr,netmask;
-	if (bit == 0) 
-		printlog(LOG_ERR,"ip addresses must include the netmask e.g. 192.168.0.1/24");
-	else {
-		int i;
-		bitno=atoi(bit+1);
-		if(sscanf(arg,"%i.%i.%i.%i",&addr[0],&addr[1],&addr[2],&addr[3]) != 4){
-			printlog(LOG_ERR,"invalid ip address",arg);
-			return(-1);
-		}
-		IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
-		for(i=0;i<4;i++,bitno -= 8) {
-			if (bitno >= 8) 
-				addr[i]=255; 
-			else if (bitno <= 0) 
-				addr[i]=0;
-			else 
-				addr[i]=256 - (1<<(8-bitno));
-		}
-		IP64_MASKADDR(&netmask, addr[0],addr[1],addr[2],addr[3]);
-		lwip_add_addr(nif,&ipaddr,&netmask);
+	int i;
+	for(i=0;i<len;i++,bitno -= 8) {
+		if (bitno >= 8)
+			addr[i]=255;
+		else if (bitno <= 0)
+			addr[i]=0;
+		else
+			addr[i]=256 - (1<<(8-bitno));
 	}
 }
 
-int readip6(char *arg,struct netif *nif)
+static void sockaddr2ip_6addr(struct ip_addr *ipaddrp,unsigned char *addr)
 {
+	IP6_ADDR(ipaddrp,
+			(addr[0]<<8)|addr[1],
+			(addr[2]<<8)|addr[3],
+			(addr[4]<<8)|addr[5],
+			(addr[6]<<8)|addr[7],
+			(addr[8]<<8)|addr[9],
+			(addr[10]<<8)|addr[11],
+			(addr[12]<<8)|addr[13],
+			(addr[14]<<8)|addr[15]);
 }
 
-int readdefroute4(char *arg,struct netif *nif)
+static void readip(char *arg,struct netif *nif,int af)
 {
-	int addr[4];
-	struct ip_addr ipaddr;
-	sscanf(arg,"%d.%d.%d.%d",addr,addr+1,addr+2,addr+3);
-	IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
-	lwip_add_route(IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
+	char *bit=rindex(arg,'/');
+	if (bit == 0) 
+		printlog(LOG_ERR,"ip addresses must include the netmask i.e. addr/maskbits");
+	else {
+		int bitno=atoi(bit+1);
+		*bit=0; 
+		struct addrinfo *res,hint;
+		struct ip_addr ipaddr,netmask;
+		int err;
+		memset(&hint,0,sizeof(hint));
+		hint.ai_family=af;
+		if (err=getaddrinfo(arg,NULL,&hint,&res))
+			printlog(LOG_ERR,"ip address %s error %s",arg,gai_strerror(err));
+		else {
+			switch(res->ai_family) {
+				case PF_INET: {
+												struct sockaddr_in *in=(struct sockaddr_in *)res->ai_addr;
+												int addrh=ntohl(in->sin_addr.s_addr);
+												unsigned char i,addr[4];
+												for (i=0;i<4;i++,addrh>>=8)
+													addr[3-i]=addrh;
+												IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
+												bitno2mask(addr,bitno,4);
+												IP64_MASKADDR(&netmask, addr[0],addr[1],addr[2],addr[3]);
+												lwip_add_addr(nif,&ipaddr,&netmask);
+											}
+											break;
+				case PF_INET6:{
+												struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
+												char i;
+												unsigned char *addr=in->sin6_addr.s6_addr;
+												sockaddr2ip_6addr(&ipaddr,addr);
+												bitno2mask(addr,bitno,16);
+												sockaddr2ip_6addr(&netmask,addr);
+												lwip_add_addr(nif,&ipaddr,&netmask);
+											}
+											break;
+				default:
+											printlog(LOG_ERR,"unsupported Address Family: %s",arg);
+			}
+			freeaddrinfo(res);
+		}
+	}
 }
 
-int readdefroute6(char *arg,struct netif *nif)
+static void readdefroute(char *arg,struct netif *nif,int af)
 {
+	struct addrinfo *res,hint;
+	struct ip_addr ipaddr,netmask;
+	int err;
+	memset(&hint,0,sizeof(hint));
+	hint.ai_family=af;
+	if (err=getaddrinfo(arg,NULL,&hint,&res))
+		printlog(LOG_ERR,"ip address %s error %s",arg,gai_strerror(err));
+	else {
+		switch(res->ai_family) {
+			case PF_INET: {
+											struct sockaddr_in *in=(struct sockaddr_in *)res->ai_addr;
+											int addrh=ntohl(in->sin_addr.s_addr);
+											unsigned char i,addr[4];
+											for (i=0;i<4;i++,addrh>>=8)
+												addr[3-i]=addrh;
+											IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
+											lwip_add_route(IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
+										}
+										break;
+			case PF_INET6:{
+											struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
+											char i;
+											sockaddr2ip_6addr(&ipaddr,in->sin6_addr.s6_addr);
+											lwip_add_route(IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
+										}
+										break;
+			default:
+										printlog(LOG_ERR,"unsupported Address Family: %s",arg);
+		}
+		freeaddrinfo(res);
+	}
 }
 
-int readpassword(char *arg)
+static void readpassword(char *arg,int unused)
 {
 	passwd=strdup(arg);
 }
 
 struct cf {
 	char *tag;
-	int (*f)();
+	void (*f)();
+	int arg;
 } cft[]= {
-	{"ip4",readip4},
-	{"ip6",readip6},
-	{"defroute4",readdefroute4},
-	{"defroute6",readdefroute6},
-	{"password",readpassword},
-	{NULL,NULL}};
+	{"ip4",readip,PF_INET},
+	{"ip6",readip,PF_INET6},
+	{"ip",readip,0},
+	{"defroute4",readdefroute,PF_INET},
+	{"defroute6",readdefroute,PF_INET6},
+	{"defroute",readdefroute,0},
+	{"password",readpassword,0},
+	{NULL,NULL,0}};
 
 int readconffile(char *path,struct netif *nif)
 {
@@ -273,7 +339,7 @@ int readconffile(char *path,struct netif *nif)
 					if (*s == '=') s++;
 					for(;*s == ' ' || *s == '\t';s++)
 						;
-					scf->f(s,nif);
+					scf->f(s,nif,scf->arg);
 					break;
 				}
 			if (scf->tag == NULL) {
