@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <linux/un.h>
+#include <sys/un.h>
 #include <switch.h>
 #include <consmgmt.h>
 

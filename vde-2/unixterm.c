@@ -8,9 +8,11 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include<sys/poll.h>
-#include<sys/socket.h>
-#include <linux/un.h>
+#include <sys/poll.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+
+#include <vde.h>
 
 #define BUFSIZE 1024
 char buf[BUFSIZE];
@@ -25,7 +27,7 @@ int main(int argc,char *argv[])
 		{STDIN_FILENO,POLLIN | POLLHUP,0}};
 	static int fileout[]={STDOUT_FILENO,STDOUT_FILENO};
 	sun.sun_family=PF_UNIX;
-	snprintf(sun.sun_path,UNIX_PATH_MAX,"%s",argv[1]);
+	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",argv[1]);
 	fd=socket(PF_UNIX,SOCK_STREAM,0);
 	rv=connect(fd,(struct sockaddr *)(&sun),sizeof(sun));
 	pfd[1].fd=fileout[0]=fd;

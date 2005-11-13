@@ -272,12 +272,12 @@ if_start(void)
 	DEBUG_CALL("if_start");
 	
 	if (if_queued == 0)
-	   return; /* Nothing to do */
-	
- again:
-        /* check if we can really output */
-        if (!slirp_can_output())
-            return;
+		return; /* Nothing to do */
+
+again:
+	/* check if we can really output */
+	if (!slirp_can_output())
+		return;
 
 	/*
 	 * See which queue to get next packet from

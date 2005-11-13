@@ -1,5 +1,6 @@
 /* Copyright 2002 Renzo Davoli 
  * Licensed under the GPL
+ * Modified by Ludovico Gardenghi 2005
  */
 
 #include <config.h>
@@ -13,7 +14,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <linux/un.h>
+#include <sys/un.h>
 #include <sys/uio.h>
 #include <sys/poll.h>
 #include <sys/utsname.h>
@@ -31,7 +32,10 @@
 #include <arpa/inet.h>
 #endif
 
+#ifndef MIN
 #define MIN(X,Y) (((X)<(Y))?(X):(Y))
+#endif
+
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048
 #define MAXDESCR 128
@@ -361,13 +365,19 @@ static void setsighandlers()
 		{ SIGTERM, "SIGTERM", 0 },
 		{ SIGUSR1, "SIGUSR1", 1 },
 		{ SIGUSR2, "SIGUSR2", 1 },
-		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGPROF, "SIGPROF", 1 },
 		{ SIGVTALRM, "SIGVTALRM", 1 },
+#ifdef VDE_LINUX
+		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGSTKFLT, "SIGSTKFLT", 1 },
 		{ SIGIO, "SIGIO", 1 },
 		{ SIGPWR, "SIGPWR", 1 },
 		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
+#ifdef VDE_DARWIN
+		{ SIGXCPU, "SIGXCPU", 1 },
+		{ SIGXFSZ, "SIGXFSZ", 1 },
+#endif
 		{ 0, NULL, 0 }
 	};
 
@@ -430,7 +440,7 @@ int main(int argc, char **argv)
 				{"group",1,0,'g'},
 				{0, 0, 0, 0}
 			};
-			c = getopt_long_only (argc, argv, "hc:p:s:m:g:l",
+			c = GETOPT_LONG (argc, argv, "hc:p:s:m:g:l",
 					long_options, &option_index);
 			if (c == -1)
 				break;

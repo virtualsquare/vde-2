@@ -1,6 +1,7 @@
 /* Copyright 2005 Renzo Davoli - VDE-2
  * --pidfile/-p and cleanup management by Mattia Belletti (C) 2004.
  * Licensed under the GPLv2
+ * Modified by Ludovico Gardenghi 2005 (OSX tuntap support)
  */
 
 #include <config.h>
@@ -15,12 +16,18 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
-#include <net/if.h>
 #include <stdarg.h>
 #define _GNU_SOURCE
 #include <getopt.h>
 
+#ifdef VDE_LINUX
+#include <net/if.h>
 #include <linux/if_tun.h>
+#endif
+
+#ifdef VDE_DARWIN
+#define TAP_PREFIX "/dev/"
+#endif
 
 #include <port.h>
 #include <switch.h>
@@ -89,6 +96,11 @@ static void usage(void)
 	printf(
 			"(opts from tuntap module)\n"
 			"  -t, --tap TAP              Enable routing through TAP tap interface\n"
+#ifdef VDE_DARWIN
+			"                             TAP can be an absolute file name or a relative\n"
+			"                             one (and will be prefixed with %s). The TAP\n"
+			"                             device must already exist.\n", TAP_PREFIX
+#endif
 			);
 }
 
@@ -129,6 +141,7 @@ static int parseopt(int c, char *optarg)
 	return outc;
 }
 
+#ifdef VDE_LINUX
 int open_tap(char *dev)
 {
 	struct ifreq ifr;
@@ -149,6 +162,37 @@ int open_tap(char *dev)
 	}
 	return(fd);
 }
+#endif
+
+#ifdef VDE_DARWIN
+int open_tap(char *dev)
+{
+	int fd;
+	int prefixlen = strlen(TAP_PREFIX);
+	char *path = NULL;
+	if (*dev == '/')
+		fd=open(dev, O_RDWR);
+	else
+	{
+		path = malloc(strlen(dev) + prefixlen + 1);
+		if (path != NULL)
+		{ 
+			snprintf(path, strlen(dev) + prefixlen + 1, "%s%s", TAP_PREFIX, dev);
+			fd=open(path, O_RDWR);
+			free(path);
+		}
+		else
+			fd = -1;
+	}
+	
+	if (fd < 0)
+	{
+		printlog(LOG_ERR,"Failed to open tap device %s: %s", (*dev == '/') ? dev : path, strerror(errno));
+		return(-1);
+	}
+	return fd;
+}
+#endif
 
 static int newport(int fd, int portno)
 {

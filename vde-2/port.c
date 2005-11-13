@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <string.h>
 #include <syslog.h>
 #include <sys/socket.h>
 #include <sys/un.h>

@@ -2,6 +2,7 @@
  * Licensed under the GPL
  * --pidfile/-p and cleanup management by Mattia Belletti.
  * some code remains from uml_switch Copyright 2001, 2002 Jeff Dike and others
+ * Modified by Ludovico Gardenghi 2005
  */
 
 #include <unistd.h>
@@ -13,8 +14,9 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
+#ifndef HAVE_BROKEN_POLL
 #include <sys/poll.h>
-
+#endif
 #include <switch.h>
 #include <config.h>
 #include <qtimer.h>
@@ -26,6 +28,13 @@
 #include <consmgmt.h>
 #include <sys/time.h>
 #include <time.h>
+
+#include <vde.h>
+
+#ifdef HAVE_BROKEN_POLL
+#include "poll2select.h"
+#define poll poll2select
+#endif
 
 static struct swmodule *swmh;
 
@@ -259,7 +268,7 @@ static void Usage(void) {
 			p->usage();
 	printf(
 			"\n"
-			"Report bugs to PACKAGE_BUGREPORT\n"
+			"Report bugs to "PACKAGE_BUGREPORT "\n"
 			);
 	exit(1);
 }
@@ -394,7 +403,7 @@ static void parse_args(int argc, char **argv)
 		int option_index = 0;
 		int c;
 		while (1) {
-			c = getopt_long_only (argc, argv, optstring,
+			c = GETOPT_LONG (argc, argv, optstring,
 					long_options, &option_index);
 			if (c == -1)
 				break;
@@ -453,13 +462,19 @@ static void setsighandlers()
 		{ SIGTERM, "SIGTERM", 0 },
 		{ SIGUSR1, "SIGUSR1", 1 },
 		{ SIGUSR2, "SIGUSR2", 1 },
-		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGPROF, "SIGPROF", 1 },
 		{ SIGVTALRM, "SIGVTALRM", 1 },
+#ifdef VDE_LINUX
+		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGSTKFLT, "SIGSTKFLT", 1 },
 		{ SIGIO, "SIGIO", 1 },
 		{ SIGPWR, "SIGPWR", 1 },
 		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
+#ifdef VDE_DARWIN
+		{ SIGXCPU, "SIGXCPU", 1 },
+		{ SIGXFSZ, "SIGXFSZ", 1 },
+#endif
 		{ 0, NULL, 0 }
 	};
 

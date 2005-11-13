@@ -398,7 +398,7 @@ udp_emu(so, m)
 	struct mbuf *m;
 {
 	struct sockaddr_in addr;
-        int addrlen = sizeof(addr);
+        socklen_t addrlen = sizeof(addr);
 #ifdef EMULATE_TALK
 	CTL_MSG_OLD *omsg;
 	CTL_MSG *nmsg;
@@ -623,7 +623,7 @@ udp_listen(port, laddr, lport, flags)
 {
 	struct sockaddr_in addr;
 	struct socket *so;
-	int addrlen = sizeof(struct sockaddr_in), opt = 1;
+	socklen_t addrlen = sizeof(struct sockaddr_in), opt = 1;
 	
 	if ((so = socreate()) == NULL) {
 		free(so);

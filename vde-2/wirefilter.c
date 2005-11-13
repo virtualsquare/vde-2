@@ -1,5 +1,6 @@
 /* WIREFILTER (C) 2005 Renzo Davoli
  * Licensed under the GPLv2
+ * Modified by Ludovico Gardenghi 2005
  *
  * This filter can be used for testing network protcols. 
  * It is possible to loose, delay or reorder packets.
@@ -23,8 +24,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
-#include <linux/un.h>
+#include <sys/un.h>
 #include <config.h>
+
+#include <vde.h>
 
 #define NPIPES 2
 #define MAXCONN 3
@@ -335,13 +338,19 @@ static void setsighandlers()
 		{ SIGTERM, "SIGTERM", 0 },
 		{ SIGUSR1, "SIGUSR1", 1 },
 		{ SIGUSR2, "SIGUSR2", 1 },
-		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGPROF, "SIGPROF", 1 },
 		{ SIGVTALRM, "SIGVTALRM", 1 },
+#ifdef VDE_LINUX
+		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGSTKFLT, "SIGSTKFLT", 1 },
 		{ SIGIO, "SIGIO", 1 },
 		{ SIGPWR, "SIGPWR", 1 },
 		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
+#ifdef VDE_DARWIN
+		{ SIGXCPU, "SIGXCPU", 1 },
+		{ SIGXFSZ, "SIGXFSZ", 1 },
+#endif
 		{ 0, NULL, 0 }
 	};
 
@@ -373,7 +382,7 @@ static int openmgmt(char *mgmt)
 		exit(1);
 	}
 	sun.sun_family = PF_UNIX;
-	snprintf(sun.sun_path,UNIX_PATH_MAX,"%s",mgmt);
+	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",mgmt);
 	if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		fprintf(stderr,"%s: mgmt bind %s",progname,strerror(errno));
 		exit(1);
@@ -574,7 +583,7 @@ int main(int argc,char *argv[])
 
 	while(1) {
 		int c;
-		c = getopt_long_only (argc, argv, "hnl:d:M:",
+		c = GETOPT_LONG (argc, argv, "hnl:d:M:",
 				long_options, &option_index);
 		if (c<0)
 			break;

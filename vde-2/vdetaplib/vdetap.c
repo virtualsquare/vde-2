@@ -118,7 +118,8 @@ main(int argc,char *argv[])
 {
 	int fd,fddata;
 	struct sockaddr_un dataout,datain;
-	int datainsize,result,nx;
+	socklen_t datainsize;
+	int result,nx;
 	register int i;
 	/*printf("argc = %d\n",argc);
 	for (i=0;i<argc;i++)
