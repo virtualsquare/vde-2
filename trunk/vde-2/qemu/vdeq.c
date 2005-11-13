@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <unistd.h>
+#include <string.h>
 #include <stdint.h>
 #include <libgen.h>
 #include <sys/ioctl.h>
@@ -156,7 +157,7 @@ int main(int argc, char **argv)
   int *fddata;
   char *argsock,**sockname;
   struct sockaddr_un *dataout,datain;
-  int datainsize;
+  socklen_t datainsize;
   int result;
   int *connected_fd;
   register ssize_t nx;

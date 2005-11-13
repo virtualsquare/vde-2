@@ -17,7 +17,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
-#include <linux/un.h>
+#include <sys/un.h>
 #include <net/if.h>
 #include <stdarg.h>
 #define _GNU_SOURCE
@@ -210,7 +210,8 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 		}
 	} else  {/* mgmt ctl */
 		struct sockaddr addr;
-		int len, new;
+		int new;
+		socklen_t len;
 
 		len = sizeof(addr);
 		new = accept(fd, &addr, &len);
@@ -374,7 +375,7 @@ static void init(void)
 			return;
 		}
 		sun.sun_family = PF_UNIX;
-		snprintf(sun.sun_path,UNIX_PATH_MAX,"%s",mgmt_socket);
+		snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",mgmt_socket);
 		if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 			if((errno == EADDRINUSE) && still_used(&sun)) return;
 			else if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){

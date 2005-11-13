@@ -1,5 +1,6 @@
 /* BITARRAY (C) 2005 Renzo Davoli
  * Licensed under the GPLv2
+ * Modified by Ludovico Gardenghi 2005
  *
  * A bitarray is (a pointer to) an array of memory words, can be used as a set.
  * +--------------------------------+--------------------------------+----
@@ -62,19 +63,22 @@
 #ifndef _BITARRAY_H
 #define _BITARRAY_H
 #include <stdlib.h>
-#include <bits/wordsize.h>
+#include <limits.h>
 
-#if __WORDSIZE == 32           /* 32 bits */
+
+#if __LONG_MAX__ == 2147483647L                     /* 32 bits */
+# define __VDEWORDSIZE 32
 # define __LOG_WORDSIZE (5)
 # define __WORDSIZEMASK 0x1f
-#elif __WORDSIZE == 64           /* 64 bits */
+#elif __LONG_MAX__ == 9223372036854775807L          /* 64 bits */
+# define __VDEWORDSIZE 64
 # define __LOG_WORDSIZE (6)
 # define __WORDSIZEMASK 0x3f
 #else
 # error sorry this program has been tested only on 32 or 64 bit machines
 #endif
 
-#define __WORDSIZE_1 (__WORDSIZE-1)
+#define __WORDSIZE_1 (__VDEWORDSIZE-1)
 #define __WORDSIZEROUND(VX) ((VX + __WORDSIZE_1) >> __LOG_WORDSIZE)
 
 typedef unsigned long bitarrayelem;
@@ -110,8 +114,8 @@ typedef bitarrayelem *bitarray;
 	 register bitarrayelem __v; \
 	 int max=__WORDSIZEROUND(N); \
 	 for (__i=0; __i< max; __i++) \
-	 for (__v=(X)[__i],__j=0; __j < __WORDSIZE; __v >>=1, __j++) \
-	 if (__v & 1) (F)(__i*__WORDSIZE+__j,(ARG)); \
+	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
+	 if (__v & 1) (F)(__i*__VDEWORDSIZE+__j,(ARG)); \
 	 0; })
 
 #define BA_FORALL(X,N,EXPR,K) \
@@ -119,8 +123,8 @@ typedef bitarrayelem *bitarray;
 	 register bitarrayelem __v; \
 	 int max=__WORDSIZEROUND(N); \
 	 for (__i=0; __i< max; __i++) \
-	 for (__v=(X)[__i],__j=0; __j < __WORDSIZE; __v >>=1, __j++) \
-	 if (__v & 1) {(K)=__i*__WORDSIZE+__j;(EXPR);} \
+	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
+	 if (__v & 1) {(K)=__i*__VDEWORDSIZE+__j;(EXPR);} \
 	 0; })
 
 #define BA_CARD(X,N) \
@@ -128,7 +132,7 @@ typedef bitarrayelem *bitarray;
 	 register bitarrayelem __v; \
 	 int max=__WORDSIZEROUND(N); \
 	 for (__i=0; __i< max; __i++) \
-	 for (__v=(X)[__i],__j=0; __j < __WORDSIZE; __v >>=1, __j++) \
+	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
 	 if (__v & 1) __n++; \
 	 __n; })
 
@@ -211,8 +215,8 @@ typedef bitarrayelem *bitarray;
 	 register bitarrayelem __v; \
 	 register int __n=(X)[__WORDSIZEROUND(N)]; \
 	 for (__i=0; __n > 0; __i++) \
-	 for (__v=(X)[__i],__j=0; __j < __WORDSIZE; __v >>=1, __j++) \
-	 if (__v & 1) (F)(__i*__WORDSIZE+__j,(ARG)),__n--; \
+	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
+	 if (__v & 1) (F)(__i*__VDEWORDSIZE+__j,(ARG)),__n--; \
 	 0; })
 
 #define BAC_FORALL(X,N,EXPR,K) \
@@ -220,8 +224,8 @@ typedef bitarrayelem *bitarray;
 	 register bitarrayelem __v; \
 	 register int __n=(X)[__WORDSIZEROUND(N)]; \
 	 for (__i=0; __n > 0; __i++) \
-	 for (__v=(X)[__i],__j=0; __j < __WORDSIZE; __v >>=1, __j++) \
-	 if (__v & 1) (K)=__i*__WORDSIZE+__j,(EXPR),__n--; \
+	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
+	 if (__v & 1) (K)=__i*__VDEWORDSIZE+__j,(EXPR),__n--; \
 	 0; })
 
 #define BAC_CARD(X,N) ((X)[__WORDSIZEROUND(N)])

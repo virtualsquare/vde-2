@@ -42,7 +42,7 @@ AC_FUNC_REALLOC
 AC_FUNC_SELECT_ARGTYPES
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([atexit dup2 gethostbyname gethostname gettimeofday inet_ntoa memmove memset putenv select setenv socket strchr strdup strerror strstr uname inet_aton sprintf readv random srandom index bcmp drand48 memmove gethostid revoke fchmod])
+AC_CHECK_FUNCS([atexit dup2 gethostbyname gethostname gettimeofday inet_ntoa memmove memset putenv select setenv socket strchr strdup strerror strstr uname inet_aton sprintf readv random srandom index bcmp drand48 memmove gethostid revoke fchmod getopt_long_only])
 
 # All other nice checks I have to make for recostructing missing parts of
 # slirp's config.h file
@@ -51,6 +51,20 @@ AC_CHECK_SIZEOF(short)
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(char *)
 
+# Define VDE_LINUX or VDE_DARWIN
+case "$build_os" in
+	linux*)
+		AC_DEFINE([VDE_LINUX], 1, [If defined, this is a Linux system])
+		;;
+	darwin*)
+		AC_DEFINE([VDE_DARWIN], 1, [If defined, this is a Darwin system])
+		;;
+	*)
+		AC_MSG_ERROR([Unsupported architecture: $build_os. At the moment, only
+Linux and Darwin are supported. Contributions are appreciated! :-)])
+		;;
+esac
+
 # Check of tuntap device
 AC_ARG_ENABLE([tuntap],
     AS_HELP_STRING([--disable-tuntap],
@@ -58,17 +72,55 @@ AC_ARG_ENABLE([tuntap],
     [if test $enableval != "no" ; then add_tuntap_support=yes ; else add_tuntap_support=no ; fi],
     [add_tuntap_support=yes])
 
-AM_CONDITIONAL(WANT_TUNTAP, test "$add_tuntap_support" = yes)
+# Check for tuntap support for Linux and OSX
 if test "$add_tuntap_support" = yes ; then
-  AC_CHECK_HEADER([linux/if_tun.h],
-      [AC_DEFINE([TUNTAP], 1, [If defined, tuntap support is compiled in])],
-      [AC_MSG_ERROR([Tuntap support seem to be not enabled on your kernel])])
+	case "$build_os" in
+		linux*)
+			AC_CHECK_HEADER([linux/if_tun.h],
+				[AC_DEFINE([TUNTAP], 1, [If defined, tuntap support is compiled in])],
+				[AC_MSG_ERROR([Tuntap support seem to be not enabled on your kernel])])
+			can_make_libvdetap=yes
+			;;
+		darwin*)
+			# I don't use AC_CHECK_FILES because I need test -e and not test -r
+			for i in /dev/tap0 /Library/Extensions/tap.kext /System/Library/Extensions/tap.kext ; do
+				AC_MSG_CHECKING([for $i])
+				if test -e "$i" ; then
+					AC_MSG_RESULT([yes])
+					definename="`echo "$i" | tr "a-z*" "A-ZP" | tr -c "0-9A-Z" "_"`"
+					AC_DEFINE_UNQUOTED([HAVE_$definename])
+					eval HAVE_$definename=yes
+				else
+					AC_MSG_RESULT([no])
+				fi
+			done
+			
+			if test "$HAVE__DEV_TAP0_" ; then
+				AC_DEFINE([TUNTAP], 1, [If defined, tuntap support is compiled in])
+				if ! test "$HAVE__LIBRARY_EXTENSIONS_TAP_KEXT_" -o "$HAVE__SYSTEM_LIBRARY_EXTENSIONS_TAP_KEXT_" ; then
+					AC_MSG_WARN([/dev/tap0 exists, but the kext cannot be found. Let's hope your
+configuration does work...])
+				fi
+				AC_MSG_CHECKING([for broken poll() support in Tiger])
+				if expr "$build_os" : "darwin8\..*" > /dev/null; then
+					AC_MSG_RESULT([yes, emulating with select()])
+					AC_DEFINE([HAVE_BROKEN_POLL], 1, [If defined, use poll2select])
+					have_broken_poll=yes
+				else
+					AC_MSG_RESULT([no])
+				fi
+			else
+				AC_MSG_ERROR([You do not have tuntap support. You can get it here:
+http://www-user.rhrk.uni-kl.de/~nissler/tuntap/])
+			fi
+			;;
+	esac
 fi
 
-#AC_CONFIG_FILES([doc/Makefile
-#                 qemu/Makefile
-#                 slirpvde/Makefile
-#                 vdetaplib/Makefile])
+AM_CONDITIONAL(WANT_TUNTAP, test "$add_tuntap_support" = yes)
+AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
+AM_CONDITIONAL(HAVE_BROKEN_POLL, test "$have_broken_poll" = yes)
+
 AC_CONFIG_FILES([Makefile]
                 [doc/Makefile]
                 [qemu/Makefile]

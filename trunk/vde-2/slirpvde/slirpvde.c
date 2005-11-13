@@ -1,11 +1,13 @@
 /* Copyright 2003 Renzo Davoli 
  * Licensed under the GPL
+ * Modified by Ludovico Gardenghi 2005
  */
 
 #include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <string.h>
 #include <errno.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -161,13 +163,19 @@ static void setsighandlers()
 		{ SIGTERM, "SIGTERM", 0 },
 		{ SIGUSR1, "SIGUSR1", 1 },
 		{ SIGUSR2, "SIGUSR2", 1 },
-		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGPROF, "SIGPROF", 1 },
 		{ SIGVTALRM, "SIGVTALRM", 1 },
+#ifdef VDE_LINUX
+		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGSTKFLT, "SIGSTKFLT", 1 },
 		{ SIGIO, "SIGIO", 1 },
 		{ SIGPWR, "SIGPWR", 1 },
 		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
+#ifdef VDE_DARWIN
+		{ SIGXCPU, "SIGXCPU", 1 },
+		{ SIGXFSZ, "SIGXFSZ", 1 },
+#endif
 		{ 0, NULL, 0 }
 	};
 
@@ -245,7 +253,7 @@ int main(int argc, char **argv)
 {
   char *sockname=NULL;
   struct sockaddr_un datain;
-  int datainsize;
+  socklen_t datainsize;
   int result,nfds;
   int port=0;
   int connected_fd;
@@ -259,7 +267,7 @@ int main(int argc, char **argv)
 
   filename=basename(argv[0]);
 
-  while ((opt=getopt_long_only(argc,argv,"s:n:p:g:m:d",slirpvdeopts,&longindx)) > 0) {
+  while ((opt=GETOPT_LONG(argc,argv,"s:n:p:g:m:d",slirpvdeopts,&longindx)) > 0) {
 		switch (opt) {
 			case 's' : sockname=optarg;
 								 break;

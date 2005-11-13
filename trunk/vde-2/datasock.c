@@ -1,6 +1,7 @@
 /* Copyright 2005 Renzo Davoli - VDE-2
  * --pidfile/-p and cleanup management by Mattia Belletti (C) 2004.
  * Licensed under the GPLv2
+ * Modified by Ludovico Gardenghi 2005
  */
 
 #include <config.h>
@@ -18,20 +19,19 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <linux/un.h>
+#include <sys/un.h>
 #include <net/if.h>
 #include <stdarg.h>
 #define _GNU_SOURCE
 #include <getopt.h>
 
-#include <linux/if_tun.h>
+//#include <linux/if_tun.h>
 
 #include <port.h>
 #include <switch.h>
 #include <vde.h>
 #include <sockutils.h>
 #include <consmgmt.h>
-
 
 static struct swmodule swmi;
 static struct mod_support modfun;
@@ -44,6 +44,7 @@ static char *ctl_socket;
 
 #define MODULENAME "unix prog"
 
+#define DATA_BUF_SIZE 131072
 #define SWITCH_MAGIC 0xfeedface
 #define REQBUFLEN 256
 
@@ -77,7 +78,6 @@ union request {
 static void send_datasock(int fd, int ctl_fd, void *packet, int len, void *data, int port)
 {
 	int n;
-
 	struct sockaddr *dst=(struct sockaddr *)data;
 
 	n = sendto(fd, packet, len, 0, dst, sizeof(struct sockaddr_un));
@@ -96,6 +96,11 @@ static int newport(int fd, int portno)
 {
 	int data_fd;
 	struct sockaddr_un sun;
+#ifdef VDE_DARWIN
+	int sockbufsize = DATA_BUF_SIZE;
+	int optsize = sizeof(sockbufsize);
+#endif
+	
 	if((data_fd = socket(PF_UNIX, SOCK_DGRAM, 0)) < 0){
 		printlog(LOG_ERR,"socket: %s",strerror(errno));
 		return -1;
@@ -104,8 +109,18 @@ static int newport(int fd, int portno)
 		printlog(LOG_ERR,"Setting O_NONBLOCK on data fd %s",strerror(errno));
 		return -1;
 	}
+
+#ifdef VDE_DARWIN
+	if(setsockopt(data_fd, SOL_SOCKET, SO_SNDBUF, &sockbufsize, optsize) < 0)
+		printlog(LOG_WARNING, "Warning: setting send buffer size on data fd %d to %d failed, expect packet loss: %s",
+				data_fd, sockbufsize, strerror(errno));
+	if(setsockopt(data_fd, SOL_SOCKET, SO_RCVBUF, &sockbufsize, optsize) < 0)
+		printlog(LOG_WARNING, "Warning: setting send buffer size on data fd %d to %d failed, expect packet loss: %s",
+				data_fd, sockbufsize, strerror(errno));
+#endif
+	
 	sun.sun_family = AF_UNIX;
-	snprintf(sun.sun_path,UNIX_PATH_MAX,"%s/%03d",ctl_socket,portno);
+	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/%03d",ctl_socket,portno);
 	if ((unlink(sun.sun_path) < 0 && errno != ENOENT) ||
 			bind(data_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		printlog(LOG_ERR,"Binding to data socket %s",strerror(errno));
@@ -169,7 +184,7 @@ static int new_port_v1_v3(int fd, int type_port,
 				return -1;
 			}
 			sun_in.sun_family = AF_UNIX;
-			snprintf(sun_in.sun_path,UNIX_PATH_MAX,"%s/%03d",ctl_socket,port);
+			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d",ctl_socket,port);
 			if (sun_out->sun_path[0] != 0) { //not for unnamed sockets
 				if ((cluid=checksockperm(sun_out->sun_path,sun_in.sun_path)) < 0) {
 					printlog(LOG_WARNING,"Data_out socket permission: %s",strerror(errno));
@@ -203,7 +218,8 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 	if (type == data_type) {
 		struct bipacket packet;
 		struct sockaddr sock;
-		int len, socklen = sizeof(sock);
+		int len;
+		socklen_t socklen = sizeof(sock);
 
 		len=recvfrom(fd, &(packet.p), sizeof(struct packet),0, &sock, &socklen);
 		if(len < 0){
@@ -256,7 +272,8 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 	}
 	else /*if (type == ctl_type)*/ {
 		struct sockaddr addr;
-		int len, new;
+		socklen_t len;
+		int new;
 
 		len = sizeof(addr);
 		new = accept(fd, &addr, &len);
@@ -276,17 +293,17 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 
 static void cleanup(unsigned char type,int fd,int arg)
 {
-	char path[UNIX_PATH_MAX];
+	struct sockaddr_un clun;
 	if (fd < 0) {
-		snprintf(path,UNIX_PATH_MAX,"%s/ctl",ctl_socket);
-		if(unlink(path) < 0)
+		snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/ctl",ctl_socket);
+		if(unlink(clun.sun_path) < 0)
 			printlog(LOG_WARNING,"Couldn't remove ctl socket '%s' : %s", ctl_socket, strerror(errno));
 		else if(rmdir(ctl_socket) < 0)
 			printlog(LOG_WARNING,"Couldn't remove ctl dir '%s' : %s", ctl_socket, strerror(errno));
 	} else {
 		if (type == data_type && arg>=0) {
-			snprintf(path,UNIX_PATH_MAX,"%s/%03d",ctl_socket,arg);
-			unlink(path);
+			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d",ctl_socket,arg);
+			unlink(clun.sun_path);
 		}
 		close(fd);
 	}
@@ -352,7 +369,7 @@ static void init(void)
 		return;
 	}
 	sun.sun_family = AF_UNIX;
-	snprintf(sun.sun_path,UNIX_PATH_MAX,"%s/ctl",ctl_socket);
+	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		if((errno == EADDRINUSE) && still_used(&sun)) return;
 		else if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
