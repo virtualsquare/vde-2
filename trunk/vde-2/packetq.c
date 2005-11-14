@@ -70,12 +70,12 @@ void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *
 	}
 }
 
-static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t)
+static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t,fd_set *fds)
 {
 	if (h != NULL) {
-		int sendrv;
-		h->times--;
-		if ((sendrv=h->sender(h->fd,h->fd_ctl,h->packet,h->len,h->data,h->port)) == 0   /*send OK*/
+		int sendrv=!(FD_ISSET(h->fd,fds));
+		if(sendrv) h->times--;
+		if ((sendrv && (sendrv=h->sender(h->fd,h->fd_ctl,h->packet,h->len,h->data,h->port)) == 0)   /*send OK*/
 				|| h->times==0) { /*or max number of attempts reached*/
 			struct packetqq *next;
 			if (sendrv != 0) {
@@ -87,9 +87,10 @@ static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t)
 			next=h->next;
 			free(h->packet);
 			free(h);
-			return packetq_scantry(next,t);
+			return packetq_scantry(next,t,fds);
 		} else {
-			h->next=packetq_scantry(h->next,t);
+			FD_SET(h->fd,fds);
+			h->next=packetq_scantry(h->next,t,fds);
 			if (h->next == NULL) *t=h;
 			return h;
 		}
@@ -99,13 +100,15 @@ static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t)
 
 void packetq_try(void)
 {
-	struct timeval this_try;
 	if (pqh != NULL) {
+		struct timeval this_try;
 		gettimeofday(&this_try,NULL);
 		packetq_timeout=TIMEOUT - ((this_try.tv_sec-last_try.tv_sec) * 1000 + 
 			(this_try.tv_usec-last_try.tv_usec) / 1000);
 		if (packetq_timeout <= 0) {
-			pqh=packetq_scantry(pqh,&pqt);	
+			fd_set fds;
+			FD_ZERO(&fds);
+			pqh=packetq_scantry(pqh,&pqt,&fds);	
 			if (pqh != NULL) {
 				gettimeofday(&last_try,NULL);
 				packetq_timeout=TIMEOUT;

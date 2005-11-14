@@ -14,6 +14,11 @@
 
 #define DO_SYSLOG
 #define VDE_IP_LOG
-//#define VDE_PQ
+
+/*
+ * Enable the new packet queueing. Experimental but recommended
+ * (expecially with Darwin and other BSDs)
+ */
+#define VDE_PQ
 
 #endif
