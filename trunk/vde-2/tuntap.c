@@ -48,14 +48,22 @@ struct init_tap {
 
 struct init_tap *hinit_tap=NULL;
 
-static void send_tap(int fd, int ctl_fd, void *packet, int len, void *unused, int port)
+static int send_tap(int fd, int ctl_fd, void *packet, int len, void *unused, int port)
 {
 	int n;
 
-	n = write(ctl_fd, packet, len);
-	if(n != len){
+	n = len - write(ctl_fd, packet, len);
+	if(n){
+		int rv=errno;
+#ifndef VDE_PQ
 		if(errno != EAGAIN) printlog(LOG_WARNING,"send_tap port %d: %s",port,strerror(errno));
+#endif
+		if (n > len)
+			return -rv;
+		else
+			return n;
 	}
+	return 0;
 }
 
 static void closeport(int fd, int portno)

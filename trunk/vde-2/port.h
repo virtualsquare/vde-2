@@ -37,7 +37,7 @@ struct bipacket {
 
 struct mod_support {
 	char *modname;
-	void (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
+	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
 	int (*newport)(int fd_ctl,int portno);
 	void (*delep)(int fd, void* data, void *descr);
 	void (*delport)(int fd,int portno);

@@ -23,6 +23,10 @@
 #include <consmgmt.h>
 #include <bitarray.h>
 #include <fstp.h>
+#include <vde.h>
+#ifdef VDE_PQ
+#include <packetq.h>
+#endif
 
 static int pflag=0;
 static int numports;
@@ -60,7 +64,7 @@ struct port {
 	struct endpoint *ep;
 	int flag;
 	/* sender is already inside ep, but it needs one more memaccess */
-	void (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
+	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
 	struct mod_support *ms;
 	int vlanuntag;
 #ifdef FSTP
@@ -230,6 +234,9 @@ int close_ep(int portno, int fd_ctl)
 			int rv=rec_close_ep(&(port->ep),fd_ctl);
 			if (port->ep == NULL) {
 				hash_delete_port(portno);
+#ifdef VDE_PQ
+				packetq_delfd(port->fd_data);
+#endif
 				if (portv[portno]->ms->delport)
 					portv[portno]->ms->delport(port->fd_data,portno);
 				port->fd_data=-1;
@@ -266,6 +273,16 @@ int portflag(int op,int f)
 
 /*********************** sending macro used by Core ******************/
 
+#ifdef VDE_PQ
+#define SEND_PACKET_PORT(PORT,PACKET,LEN) \
+	({ \
+	 struct port *Port=(PORT); \
+	 struct endpoint *ep; \
+	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
+	 if (Port->ms->sender(Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port)) \
+	 	packetq_add(Port->ms->sender,Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
+	 })
+#else
 #define SEND_PACKET_PORT(PORT,PACKET,LEN) \
 	({ \
 	 struct port *Port=(PORT); \
@@ -273,6 +290,7 @@ int portflag(int op,int f)
 	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
 	 Port->ms->sender(Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
 	 })
+#endif
 
 #ifdef FSTP
 

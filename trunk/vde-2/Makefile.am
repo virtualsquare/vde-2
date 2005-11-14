@@ -29,6 +29,8 @@ vde_switch_SOURCES = \
 	consmgmt.h \
 	fstp.c \
 	fstp.h \
+	packetq.c \
+	packetq.h \
 	bitarray.h
 dpipe_SOURCES = dpipe.c
 vde_plug_SOURCES = vde_plug.c vde.h

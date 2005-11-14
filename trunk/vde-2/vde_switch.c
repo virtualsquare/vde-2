@@ -30,6 +30,9 @@
 #include <time.h>
 
 #include <vde.h>
+#ifdef VDE_PQ
+#include <packetq.h>
+#endif
 
 #ifdef HAVE_BROKEN_POLL
 #include "poll2select.h"
@@ -206,12 +209,16 @@ static void main_loop()
 	time_t now;
 	register int n,i;
 	while(1) {
+#ifdef VDE_PQ
+		n=poll(fds,nfds,packetq_timeout);
+#else
 		n=poll(fds,nfds,-1);
+#endif
 		now=qtime();
 		if(n < 0){ 
 			if(errno != EINTR)
 				printlog(LOG_WARNING,"poll %s",strerror(errno));
-		} else
+		} else {
 			for(i = 0; /*i < nfds &&*/ n>0; i++){
 				if(fds[i].revents != 0) {
 					register int prenfds=nfds;
@@ -219,8 +226,9 @@ static void main_loop()
 					fdpp[i]->timestamp=now;
 					TYPE2MGR(fdpp[i]->type)->handle_input(fdpp[i]->type,fds[i].fd,fds[i].revents,&(fdpp[i]->arg));
 					if (nfds!=prenfds) /* the current fd has been deleted */
-						break; /* PERFORMANCE it is faster to return to poll */
+						break; /* PERFORMANCE it is faster returning to poll */
 				}	
+/* optimization: most used descriptors migrate to the head of the poll array */
 #ifdef OPTPOLL
 				else
 				{
@@ -236,6 +244,11 @@ static void main_loop()
 				}
 #endif
 			}
+#ifdef VDE_PQ
+			if (packetq_timeout > 0)
+				packetq_try();
+#endif
+		}
 	}
 }
 
