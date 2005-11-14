@@ -19,6 +19,7 @@
 #include <stdarg.h>
 #define _GNU_SOURCE
 #include <getopt.h>
+#include <vde.h>
 
 #ifdef VDE_LINUX
 #include <net/if.h>
