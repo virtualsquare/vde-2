@@ -75,15 +75,23 @@ union request {
 	struct request_v3 v3;
 };
 
-static void send_datasock(int fd, int ctl_fd, void *packet, int len, void *data, int port)
+static int send_datasock(int fd, int ctl_fd, void *packet, int len, void *data, int port)
 {
 	int n;
 	struct sockaddr *dst=(struct sockaddr *)data;
 
-	n = sendto(fd, packet, len, 0, dst, sizeof(struct sockaddr_un));
-	if(n != len){
+	n = len - sendto(fd, packet, len, 0, dst, sizeof(struct sockaddr_un));
+	if(n){
+		int rv=errno;
+#ifndef VDE_PQ
 		if(errno != EAGAIN) printlog(LOG_WARNING,"send_sockaddr port %d: %s",port,strerror(errno));
+#endif
+		if (n>len)
+			return -rv;
+		else
+			return n;
 	}
+	return 0;
 }
 
 static void closeport(int fd, int portno)

@@ -12,3 +12,8 @@ then:
 $ make
 and if you want:
 $ make install
+
+
+MACOS 10.3:
+these extra tools must be installed first:
+autoconf-2.59,automake-1.9,libtool-1.5.20
