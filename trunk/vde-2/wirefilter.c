@@ -262,6 +262,8 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 			times++;
 	}
 	while (times>0) {
+		int banddelay=0;
+
 		/* SPEED */
 		if (speed[dir]+speedplus[dir] > 0) {
 			double speedval=speed[dir];
@@ -270,9 +272,10 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 				if (speedval<=0) return;
 			}
 			if (speed>0) {
-				unsigned int commtime=4*(((unsigned)size)*2000000/((unsigned int)speedval));
+				unsigned int commtime=((unsigned)size)*1000000/((unsigned int)speedval);
 				struct timeval tv;
 				gettimeofday(&tv,NULL);
+				banddelay=commtime/1000;
 				if (timercmp(&tv,&nextspeed[dir], > ))
 					nextspeed[dir]=tv;
 				nextspeed[dir].tv_usec += commtime;
@@ -282,7 +285,6 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 		}
 
 		/* BANDWIDTH */
-		int banddelay=0;
 		if (band[dir]+bandplus[dir] > 0) {
 			double bandval=band[dir];
 			if (bandplus[dir]) {
@@ -290,7 +292,7 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 				if (bandval<=0) return;
 			}
 			if (band>0) {
-				unsigned int commtime=4*(((unsigned)size)*2000000/((unsigned int)bandval));
+				unsigned int commtime=((unsigned)size)*1000000/((unsigned int)bandval);
 				struct timeval tv;
 				gettimeofday(&tv,NULL);
 				if (timercmp(&tv,&nextband[dir], > )) {
@@ -327,46 +329,46 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 
 static void splitpacket(const unsigned char *buf,int size,int dir)
 {
-	static unsigned char fragment[BUFSIZE];
-	static unsigned char *fragp;
-	static unsigned int rnx,remaining;
+	static unsigned char fragment[BUFSIZE][2];
+	static unsigned char *fragp[2];
+	static unsigned int rnx[2],remaining[2];
 
-	//fprintf(stderr,"%s: splitpacket rnx=%d remaining=%d size=%d\n",myname,rnx,remaining,size);
+	//fprintf(stderr,"%s: splitpacket rnx=%d remaining=%d size=%d\n",progname,rnx[dir],remaining[dir],size);
 	if (size==0) return;
-	if (rnx>0) {
-		register int amount=MIN(remaining,size);
-		//fprintf(stderr,"%s: fragment amount %d\n",myname,amount);
-		memcpy(fragp,buf,amount);
-		remaining-=amount;
-		fragp+=amount;
+	if (rnx[dir]>0) {
+		register int amount=MIN(remaining[dir],size);
+		//fprintf(stderr,"%s: fragment amount %d\n",progname,amount);
+		memcpy(fragp[dir],buf,amount);
+		remaining[dir]-=amount;
+		fragp[dir]+=amount;
 		buf+=amount;
 		size-=amount;
-		if (remaining==0) {
-			//fprintf(stderr,"%s: delivered defrag %d\n",myname,rnx);
-			handle_packet(dir,fragment,rnx+2);
-			rnx=0;
+		if (remaining[dir]==0) {
+			//fprintf(stderr,"%s: delivered defrag %d\n",progname,rnx[dir]);
+			handle_packet(dir,fragment[dir],rnx[dir]+2);
+			rnx[dir]=0;
 		}
 	}
 	while (size > 0) {
-		rnx=(buf[0]<<8)+buf[1];
-		//fprintf(stderr,"%s: packet %d size %d %x %x dir %d\n",progname,rnx,size-2,buf[0],buf[1],dir);
-		if (rnx>1521) {
-			fprintf(stderr,"%s: Packet length error size %d rnx %d\n",progname,size,rnx);
-			rnx=0;
+		rnx[dir]=(buf[0]<<8)+buf[1];
+		//fprintf(stderr,"%s: packet %d size %d %x %x dir %d\n",progname,rnx[dir],size-2,buf[0],buf[1],dir);
+		if (rnx[dir]>1521) {
+			fprintf(stderr,"%s: Packet length error size %d rnx %d\n",progname,size,rnx[dir]);
+			rnx[dir]=0;
 			return;
 		}
-		if (rnx+2 > size) {
-			//fprintf(stderr,"%s: begin defrag %d\n",myname,rnx);
-			fragp=fragment;
-			memcpy(fragp,buf,size);
-			remaining=rnx+2-size;
-			fragp+=size;
+		if (rnx[dir]+2 > size) {
+			//fprintf(stderr,"%s: begin defrag %d\n",progname,rnx[dir]);
+			fragp[dir]=fragment[dir];
+			memcpy(fragp[dir],buf,size);
+			remaining[dir]=rnx[dir]+2-size;
+			fragp[dir]+=size;
 			size=0;
 		} else {
-			handle_packet(dir,buf,rnx+2);
-			buf+=rnx+2;
-			size-=rnx+2;
-			rnx=0;
+			handle_packet(dir,buf,rnx[dir]+2);
+			buf+=rnx[dir]+2;
+			size-=rnx[dir]+2;
+			rnx[dir]=0;
 		}
 	}
 }
@@ -394,19 +396,19 @@ static int check_open_fifos(struct pollfd *pfd,int *outfd)
 	struct stat stfd[NPIPES];
 	if (fstat(STDIN_FILENO,&stfd[STDIN_FILENO]) < 0) {
 		fprintf(stderr,"%s: Error on stdin: %s\n",progname,strerror(errno));
-		exit(1);
+		return -1;
 	}
 	if (fstat(STDOUT_FILENO,&stfd[STDOUT_FILENO]) < 0) {
 		fprintf(stderr,"%s: Error on stdout: %s\n",progname,strerror(errno));
-		exit(1);
+		return -1;
 	}
 	if (!S_ISFIFO(stfd[STDIN_FILENO].st_mode)) {
 		fprintf(stderr,"%s: Error on stdin: %s\n",progname,"it is not a pipe");
-		exit(1);
+		return -1;
 	}
 	if (!S_ISFIFO(stfd[STDOUT_FILENO].st_mode)) {
 		fprintf(stderr,"%s: Error on stdin: %s\n",progname,"it is not a pipe");
-		exit(1);
+		return -1;
 	}
 	if (fstat(STDIN_ALTFILENO,&stfd[0]) < 0) {
 		ndirs=1;
@@ -417,15 +419,15 @@ static int check_open_fifos(struct pollfd *pfd,int *outfd)
 	} else {
 		if (fstat(outfd[1],&stfd[1]) < 0) {
 			fprintf(stderr,"%s: Error on secondary out: %s\n",progname,strerror(errno));
-			exit(1);
+			return -1;
 		}
 		if (!S_ISFIFO(stfd[0].st_mode)) {
 			fprintf(stderr,"%s: Error on secondary in: %s\n",progname,"it is not a pipe");
-			exit(1);
+			return -1;
 		}
 		if (!S_ISFIFO(stfd[1].st_mode)) {
 			fprintf(stderr,"%s: Error on secondary out: %s\n",progname,"it is not a pipe");
-			exit(1);
+			return -1;
 		}
 		ndirs=2;
 		pfd[LR].fd=STDIN_FILENO;
@@ -760,11 +762,11 @@ void usage(void)
 		"\t--loss|-l loss_percentage\n"
 		"\t--delay|-d delay_ms\n"
 		"\t--dup|-D dup_percentage\n"
-		"\t--band|-b bandwidth\n"
-		"\t--speed|-s interface_speed\n"
+		"\t--band|-b bandwidth(bytes/s)\n"
+		"\t--speed|-s interface_speed(bytes/s)\n"
 		"\t--capacity|-c delay_channel_capacity\n"
 		"\t--noise|-n noise_bits/megabye\n"
-		"\t--mtu|-m\n mtu_size"
+		"\t--mtu|-m mtu_size\n"
 		"\t--nofifo|-N\n"
 		"\t--mgmt|-M management_socket\n"
 		"\t--mgmtmode management_permission(octal)\n"
@@ -798,6 +800,8 @@ int main(int argc,char *argv[])
 	atexit(cleanup);
 
 	ndirs=check_open_fifos(pfd,outfd);
+	if (ndirs < 0)
+		usage();
 
 	while(1) {
 		int c;
