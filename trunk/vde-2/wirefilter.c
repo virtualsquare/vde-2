@@ -43,40 +43,70 @@ int mgmtmode=0700;
 #define RL 1
 double loss[2],lossplus[2];
 double delay[2],delayplus[2];
+double ddup[2],ddupplus[2];
+double band[2],bandplus[2];
+double speed[2],speedplus[2];
+double capacity[2],capacityplus[2];
+double noise[2],noiseplus[2];
+double mtu[2],mtuplus[2];
+struct timeval nextband[2];
+struct timeval nextspeed[2];
 int nofifo;
 int ndirs;
+int bufsize[2];
 
 #define BUFSIZE 2048
 #define MAXCMD 128
 #define MGMTMODEARG 129
-
-void usage(void)
-{
-	fprintf(stderr,"Usage: %s [-l loss_percentage] [-d delay] [-n] [-M mgmt]\n",progname);
-	exit (1);
-}
+#define KILO (1<<10)
+#define MEGA (1<<20)
+#define GIGA (1<<30)
 
 static void readdualvalue(char *s,double *val,double *valplus)
 {
 	double v=0.0;
 	double vplus=0.0;
 	int n;
+	int mult;
+	n=strlen(s)-1;
+	while ((s[n] == ' ' || s[n] == '\n' || s[n] == '\t') && n>0)
+	{
+		s[n]=0;
+		n--;
+	}
+	switch (s[n]) {
+		case 'k':
+		case 'K':
+			mult=KILO;
+			break;
+		case 'm':
+		case 'M':
+			mult=MEGA;
+			break;
+		case 'g':
+		case 'G':
+			mult=GIGA;
+			break;
+		default:
+			mult=1;
+			break;
+	}
 	if ((n=sscanf(s,"%lf+%lf",&v,&vplus)) > 0) {
-		val[LR]=val[RL]=v;
-		valplus[LR]=valplus[RL]=vplus;
+		val[LR]=val[RL]=v*mult;
+		valplus[LR]=valplus[RL]=vplus*mult;
 	} else if ((n=sscanf(s,"LR%lf+%lf",&v,&vplus)) > 0) {
-		val[LR]=v;
-		valplus[LR]=vplus;
+		val[LR]=v*mult;
+		valplus[LR]=vplus*mult;
 	} else if ((n=sscanf(s,"RL%lf+%lf",&v,&vplus)) > 0) {
-		val[RL]=v;
-		valplus[RL]=vplus;
+		val[RL]=v*mult;
+		valplus[RL]=vplus*mult;
 	}
 }
 
 struct packpq {
 	unsigned long long when;
 	int dir;
-	char *buf;
+	unsigned char *buf;
 	int size;
 };
 
@@ -99,6 +129,30 @@ static int nextms()
 	return -1;
 }
 
+int writepacket(int dir,const unsigned char *buf,int size)
+{
+	/* NOISE */
+	if (noise[dir]+noiseplus[dir] > 0) {
+		double noiseval=noise[dir];
+		int nobit=0;
+		if (noiseplus) noiseval+=((drand48()*2.0)-1.0)*noiseplus[dir];
+		while ((drand48()*8*MEGA) < (size-2)*8*noiseval)
+			nobit++;
+		if (nobit>0) {
+			unsigned char noisedpacket[BUFSIZE];
+			memcpy(noisedpacket,buf,size);
+			while(nobit>0) {
+				int flippedbit=(drand48()*size*8);
+				noisedpacket[(flippedbit >> 3) + 2] ^= 1<<(flippedbit & 0x7);
+				nobit--;
+			}
+			return write(outfd[dir],noisedpacket,size);
+		} else
+			return write(outfd[dir],buf,size);
+	} else
+		return write(outfd[dir],buf,size);
+}
+
 /* packet queues are priority queues implemented on a heap.
  * enqueue time = dequeue time = O(log n) max&mean
  */
@@ -111,7 +165,8 @@ static void packet_dequeue()
 	while (npq>0 && pqh[1]->when <= now) {
 		struct packpq *old=pqh[npq--];
 		int k=1;
-		write(outfd[pqh[1]->dir],pqh[1]->buf,pqh[1]->size);
+		bufsize[pqh[1]->dir] -= pqh[1]->size;
+		writepacket(pqh[1]->dir,pqh[1]->buf,pqh[1]->size);
 		free(pqh[1]->buf);
 		free(pqh[1]);
 		while (k<= npq>>1)
@@ -131,9 +186,20 @@ static void packet_dequeue()
 static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 {
 	struct timeval v;
+
+	/* CAPACITY */
+	if (capacity[dir]+capacityplus[dir] > 0) {
+		double capval=capacity[dir];
+		if (capacityplus[dir])
+			capval+=((drand48()*2.0)-1.0)*capacityplus[dir];
+		if ((bufsize[dir]+size) > capval)
+			return;
+	}
+	/* */
+
 	struct packpq *new=malloc(sizeof(struct packpq));
 	if (new==NULL) {
-		fprintf(stderr,"Usage: %s malloc elem %s\n",progname,strerror(errno));
+		fprintf(stderr,"%s: malloc elem %s\n",progname,strerror(errno));
 		exit (1);
 	}
 	gettimeofday(&v,NULL);
@@ -143,15 +209,16 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	new->dir=dir;
 	new->buf=malloc(size);
 	if (new->buf==NULL) {
-		fprintf(stderr,"Usage: %s malloc elem buf %s\n",progname,strerror(errno));
+		fprintf(stderr,"%s: malloc elem buf %s\n",progname,strerror(errno));
 		exit (1);
 	}
 	memcpy(new->buf,buf,size);
 	new->size=size;
+	bufsize[dir]+=size;
 	if (pqh==NULL) {
 		pqh=malloc(PQCHUNK*sizeof(struct packpq *));
 		if (pqh==NULL) {
-			fprintf(stderr,"Usage: %s malloc %s\n",progname,strerror(errno));
+			fprintf(stderr,"%s: malloc %s\n",progname,strerror(errno));
 			exit (1);
 		}
 		pqh[0]=&sentinel; maxpq=PQCHUNK;
@@ -159,7 +226,7 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	if (npq >= maxpq) {
 		pqh=realloc(pqh,(maxpq=maxpq+PQCHUNK) * sizeof(struct packpq *));
 		if (pqh==NULL) {
-			fprintf(stderr,"Usage: %s malloc %s\n",progname,strerror(errno));
+			fprintf(stderr,"%s: malloc %s\n",progname,strerror(errno));
 			exit (1);
 		}
 	}
@@ -174,6 +241,10 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 
 void handle_packet(int dir,const unsigned char *buf,int size)
 {
+	/* MTU */
+	if (mtu[dir] > 0 && size > mtu[dir])
+		return;
+
 	/* LOSS */
 	if (loss[dir]-lossplus[dir] >= 100.0)
 		return;
@@ -183,15 +254,73 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 			return;
 	}
 
-	/* DELAY */
-	if (delay[dir]+delayplus[dir] > 0) {
-		double delval=(delay[dir]+((drand48()*2.0)-1.0)*delayplus[dir]);
-		if (delval > 0) {
-			packet_enqueue(dir,buf,size,(int) delval); 
-		} else
-			write(outfd[dir],buf,size);
-	} else
-		write(outfd[dir],buf,size);
+	/* DUP */
+	int times=1;
+	if (ddup[dir]+ddupplus[dir] > 0) {
+		double dupval=(ddup[dir]+((drand48()*2.0)-1.0)*ddupplus[dir])/100;
+		while (drand48() < dupval)
+			times++;
+	}
+	while (times>0) {
+		/* SPEED */
+		if (speed[dir]+speedplus[dir] > 0) {
+			double speedval=speed[dir];
+			if (speedplus[dir]) {
+				speedval+=((drand48()*2.0)-1.0)*speedplus[dir];
+				if (speedval<=0) return;
+			}
+			if (speed>0) {
+				unsigned int commtime=4*(((unsigned)size)*2000000/((unsigned int)speedval));
+				struct timeval tv;
+				gettimeofday(&tv,NULL);
+				if (timercmp(&tv,&nextspeed[dir], > ))
+					nextspeed[dir]=tv;
+				nextspeed[dir].tv_usec += commtime;
+				nextspeed[dir].tv_sec += nextspeed[dir].tv_usec / 1000000;
+				nextspeed[dir].tv_usec %= 1000000;
+			}
+		}
+
+		/* BANDWIDTH */
+		int banddelay=0;
+		if (band[dir]+bandplus[dir] > 0) {
+			double bandval=band[dir];
+			if (bandplus[dir]) {
+				bandval+=((drand48()*2.0)-1.0)*bandplus[dir];
+				if (bandval<=0) return;
+			}
+			if (band>0) {
+				unsigned int commtime=4*(((unsigned)size)*2000000/((unsigned int)bandval));
+				struct timeval tv;
+				gettimeofday(&tv,NULL);
+				if (timercmp(&tv,&nextband[dir], > )) {
+					nextband[dir]=tv;
+					banddelay=commtime/1000;
+				} else {
+					timersub(&nextband[dir],&tv,&tv);
+					banddelay=tv.tv_sec*1000 + (tv.tv_usec + commtime)/1000;
+				}
+				nextband[dir].tv_usec += commtime;
+				nextband[dir].tv_sec += nextband[dir].tv_usec / 1000000;
+				nextband[dir].tv_usec %= 1000000;
+			} else
+				banddelay=-1;
+		}
+
+		/* DELAY */
+		if (banddelay >= 0) {
+			if (banddelay > 0 || delay[dir]+delayplus[dir] > 0) {
+				double delval=(delay[dir]+((drand48()*2.0)-1.0)*delayplus[dir]);
+				delval=(delval >= 0)?delval+banddelay:banddelay;
+				if (delval > 0) {
+					packet_enqueue(dir,buf,size,(int) delval); 
+				} else
+					writepacket(dir,buf,size);
+			} else
+				writepacket(dir,buf,size);
+		}
+		times--;
+	}
 }
 
 #define MIN(X,Y) (((X)<(Y))?(X):(Y))
@@ -434,33 +563,6 @@ static void printoutc(int fd, const char *format, ...)
 	write(fd,outbuf,strlen(outbuf));
 }
 
-static int help(int fd,char *s)
-{
-	printoutc(fd, "help:      print a summary of mgmt commands");
-	printoutc(fd, "showinfo:  show status and parameter values");
-	printoutc(fd, "loss:      set loss percentage");
-	printoutc(fd, "delay:     set delay");
-	printoutc(fd, "fifo:      set channel fifoness");
-	printoutc(fd, "shutdown:  shut the channel down");
-	printoutc(fd, "logout:    log out from this mgmt session");
-	return 0;
-}
-
-static int showinfo(int fd,char *s)
-{
-	printoutc(fd, "WireFilter: %sdirectional",(ndirs==2)?"bi":"mono");
-	if (ndirs==2) {
-		printoutc(fd, "Loss  L->R %g+%g   R->L %g+%g",loss[LR],lossplus[LR],loss[RL],lossplus[RL]);
-		printoutc(fd, "Delay L->R %g+%g   R->L %g+%g",delay[LR],delayplus[LR],delay[RL],delayplus[RL]);
-	} else {
-		printoutc(fd, "Loss  %g+%g",loss[0],lossplus[0]);
-		printoutc(fd, "Delay %g+%g",delay[0],delayplus[0]);
-	}
-	printoutc(fd,"Fifoness %s",(nofifo == 0)?"TRUE":"FALSE");
-	printoutc(fd,"Waiting packets in delay queues %d",npq);
-	return 0;
-}
-
 static int setdelay(int fd,char *s)
 {
 	readdualvalue(s,delay,delayplus);
@@ -470,6 +572,42 @@ static int setdelay(int fd,char *s)
 static int setloss(int fd,char *s)
 {
 	readdualvalue(s,loss,lossplus);
+	return 0;
+}
+
+static int setddup(int fd,char *s)
+{
+	readdualvalue(s,ddup,ddupplus);
+	return 0;
+}
+
+static int setband(int fd,char *s)
+{
+	readdualvalue(s,band,bandplus);
+	return 0;
+}
+
+static int setnoise(int fd,char *s)
+{
+	readdualvalue(s,noise,noiseplus);
+	return 0;
+}
+
+static int setmtu(int fd,char *s)
+{
+	readdualvalue(s,mtu,mtuplus);
+	return 0;
+}
+
+static int setspeed(int fd,char *s)
+{
+	readdualvalue(s,speed,speedplus);
+	return 0;
+}
+
+static int setcapacity(int fd,char *s)
+{
+	readdualvalue(s,capacity,capacityplus);
 	return 0;
 }
 
@@ -493,6 +631,54 @@ static int doshutdown(int fd,char *s)
 	exit(0);
 }
 
+
+static int help(int fd,char *s)
+{
+	printoutc(fd, "help:      print a summary of mgmt commands");
+	printoutc(fd, "showinfo:  show status and parameter values");
+	printoutc(fd, "loss:      set loss percentage");
+	printoutc(fd, "delay:     set delay ms");
+	printoutc(fd, "dup:       set dup packet percentage");
+	printoutc(fd, "bandwidth: set channel bandwidth bytes/sec");
+	printoutc(fd, "speed:     set interface speed bytes/sec");
+	printoutc(fd, "noise:     set noise factor bits/Mbyte");
+	printoutc(fd, "mtu:       set channel MTU (bytes)");
+	printoutc(fd, "capacity:  set channel capacity (bytes)");
+	printoutc(fd, "fifo:      set channel fifoness");
+	printoutc(fd, "shutdown:  shut the channel down");
+	printoutc(fd, "logout:    log out from this mgmt session");
+	return 0;
+}
+
+static int showinfo(int fd,char *s)
+{
+	printoutc(fd, "WireFilter: %sdirectional",(ndirs==2)?"bi":"mono");
+	if (ndirs==2) {
+		printoutc(fd, "Loss  L->R %g+%g   R->L %g+%g",loss[LR],lossplus[LR],loss[RL],lossplus[RL]);
+		printoutc(fd, "Delay L->R %g+%g   R->L %g+%g",delay[LR],delayplus[LR],delay[RL],delayplus[RL]);
+		printoutc(fd, "Dup   L->R %g+%g   R->L %g+%g",ddup[LR],ddupplus[LR],ddup[RL],ddupplus[RL]);
+		printoutc(fd, "Bandw L->R %g+%g   R->L %g+%g",band[LR],bandplus[LR],band[RL],bandplus[RL]);
+		printoutc(fd, "Speed L->R %g+%g   R->L %g+%g",speed[LR],speedplus[LR],speed[RL],speedplus[RL]);
+		printoutc(fd, "Noise L->R %g+%g   R->L %g+%g",noise[LR],noiseplus[LR],noise[RL],noiseplus[RL]);
+		printoutc(fd, "MTU   L->R %g      R->L %g   ",mtu[LR],mtu[RL]);
+		printoutc(fd, "Cap.  L->R %g+%g   R->L %g+%g",capacity[LR],capacityplus[LR],capacity[RL],capacityplus[RL]);
+		printoutc(fd, "Current Delay Queue size:   L->R %d      R->L %d   ",bufsize[LR],bufsize[RL]);
+	} else {
+		printoutc(fd, "Loss  %g+%g",loss[0],lossplus[0]);
+		printoutc(fd, "Delay %g+%g",delay[0],delayplus[0]);
+		printoutc(fd, "Dup   %g+%g",ddup[0],ddupplus[0]);
+		printoutc(fd, "Bandw %g+%g",band[0],bandplus[0]);
+		printoutc(fd, "Speed %g+%g",speed[0],speedplus[0]);
+		printoutc(fd, "Noise %g+%g",noise[0],noiseplus[0]);
+		printoutc(fd, "MTU   %g",mtu[0]);
+		printoutc(fd, "Cap.  %g+%g",capacity[0],capacityplus[0]);
+		printoutc(fd, "Current Delay Queue size:   %d",bufsize[0]);
+	}
+	printoutc(fd,"Fifoness %s",(nofifo == 0)?"TRUE":"FALSE");
+	printoutc(fd,"Waiting packets in delay queues %d",npq);
+	return 0;
+}
+
 static struct comlist {
 	char *tag;
 	int (*fun)(int fd,char *arg);
@@ -501,6 +687,13 @@ static struct comlist {
 	{"showinfo",showinfo},
 	{"delay",setdelay},
 	{"loss",setloss},
+	{"dup",setddup},
+	{"bandwidth",setband},
+	{"band",setband},
+	{"speed",setspeed},
+	{"capacity",setcapacity},
+	{"noise",setnoise},
+	{"mtu",setmtu},
 	{"fifo",setfifo},
 	{"logout",logout},
 	{"shutdown",doshutdown}
@@ -560,6 +753,25 @@ static int delmgmtconn(int i,struct pollfd *pfd,int nfds)
 	return nfds;
 }
 
+void usage(void)
+{
+	fprintf(stderr,"Usage: %s OPTIONS\n"
+		"\t--help|-h\n"
+		"\t--loss|-l loss_percentage\n"
+		"\t--delay|-d delay_ms\n"
+		"\t--dup|-D dup_percentage\n"
+		"\t--band|-b bandwidth\n"
+		"\t--speed|-s interface_speed\n"
+		"\t--capacity|-c delay_channel_capacity\n"
+		"\t--noise|-n noise_bits/megabye\n"
+		"\t--mtu|-m\n mtu_size"
+		"\t--nofifo|-N\n"
+		"\t--mgmt|-M management_socket\n"
+		"\t--mgmtmode management_permission(octal)\n"
+			,progname);
+	exit (1);
+}
+
 int main(int argc,char *argv[])
 {
 	int n;
@@ -570,7 +782,13 @@ int main(int argc,char *argv[])
 		{"help",0 , 0, 'h'},
 		{"loss", 1, 0, 'l'},
 		{"delay",1 , 0, 'd'},
-		{"nofifo",0 , 0, 'n'},
+		{"dup",1 , 0, 'D'},
+		{"band",1 , 0, 'b'},
+		{"speed",1 , 0, 's'},
+		{"capacity",1 , 0, 'c'},
+		{"noise",1 , 0, 'n'},
+		{"mtu",1 , 0, 'm'},
+		{"nofifo",0 , 0, 'N'},
 		{"mgmt", 1, 0, 'M'},
 		{"mgmtmode", 1, 0, MGMTMODEARG}
 	};
@@ -583,7 +801,7 @@ int main(int argc,char *argv[])
 
 	while(1) {
 		int c;
-		c = GETOPT_LONG (argc, argv, "hnl:d:M:",
+		c = GETOPT_LONG (argc, argv, "hnl:d:M:D:m:b:s:c:",
 				long_options, &option_index);
 		if (c<0)
 			break;
@@ -597,10 +815,28 @@ int main(int argc,char *argv[])
 			case 'l':
 				readdualvalue(optarg,loss,lossplus);
 				break;
+			case 'D':
+				readdualvalue(optarg,ddup,ddupplus);
+				break;
+			case 'b':
+				readdualvalue(optarg,band,bandplus);
+				break;
+			case 'm':
+				readdualvalue(optarg,mtu,mtuplus);
+				break;
+			case 'n':
+				readdualvalue(optarg,noise,noiseplus);
+				break;
+			case 's':
+				readdualvalue(optarg,speed,speedplus);
+				break;
+			case 'c':
+				readdualvalue(optarg,capacity,capacityplus);
+				break;
 			case 'M':
 				mgmt=strdup(optarg);
 				break;
-			case 'n':
+			case 'N':
 				nofifo=1;
 				break;
 			case MGMTMODEARG:
@@ -632,7 +868,38 @@ int main(int argc,char *argv[])
 
 	initrand();
 	while(1) {
-		n=poll(pfd,npfd,nextms());
+		int delay=nextms();
+		pfd[0].events |= POLLIN;
+		if (speed[LR] > 0) {
+			struct timeval tv;
+			int speeddelay;
+			gettimeofday(&tv,NULL);
+			if (timercmp(&tv, &nextspeed[LR], <)) {
+				timersub(&nextspeed[LR],&tv,&tv);
+				speeddelay=tv.tv_sec*1000 + tv.tv_usec/1000;
+				if (speeddelay > 0) {
+					pfd[0].events &= ~POLLIN;
+					if (speeddelay < delay || delay < 0) delay=speeddelay;
+				}
+			}
+		}
+		if (ndirs > 1) {
+			pfd[1].events |= POLLIN;
+			if (speed[RL] > 0) {
+				struct timeval tv;
+				int speeddelay;
+				if (timercmp(&tv, &nextspeed[RL], <)) {
+					gettimeofday(&tv,NULL);
+					timersub(&nextspeed[RL],&tv,&tv);
+					speeddelay=tv.tv_sec*1000 + tv.tv_usec/1000;
+					if (speeddelay > 0) {
+						pfd[1].events &= ~POLLIN;
+						if (speeddelay < delay || delay < 0) delay=speeddelay;
+					}
+				}
+			}
+		}
+		n=poll(pfd,npfd,delay);
 		if (pfd[0].revents & POLLHUP || (ndirs>1 && pfd[1].revents & POLLHUP))
 			exit(0);
 		if (pfd[0].revents & POLLIN) {
