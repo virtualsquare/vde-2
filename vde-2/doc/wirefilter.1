@@ -20,23 +20,60 @@
 .\" Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
 .\" USA.
 
-.TH WIREFILTER 1 "September 15, 2005" "Virtual Distributed Ethernet"
+.TH WIREFILTER 1 "November 15, 2005" "Virtual Distributed Ethernet"
 .SH NAME
 wirefilter \- Wire packet filter for Virtual Distributed Ethernet
 .SH SYNOPSIS
-.B wirefilter 
-[ 
-.B \-d   
-.I delay  
-] 
+.B wirefilter
+OPTIONS
+
+
 [ 
 .B \-l   
 .I loss  
 ] 
+
+[ 
+.B \-d   
+.I delay  
+] 
+
+[ 
+.B \-D   
+.I dup
+] 
+
+[ 
+.B \-b   
+.I bandwidth
+] 
+
+[ 
+.B \-s   
+.I interface_speed
+] 
+
+[ 
+.B \-c   
+.I channel_capacity
+] 
+
+[ 
+.B \-n   
+.I noise_factor
+] 
+
+[ 
+.B \-m   
+.I mtu_size
+] 
+
 [ 
 .B \-M   
 .I mgmt socket  
 ] 
+
+[-N]
 .br
 .SH DESCRIPTION
 A
@@ -52,7 +89,7 @@ respectively). This cable looses 10% of the packets in each direction.
 
 .SH OPTIONS
 .TP
-.B \-l "\fIloss\fP" 
+.B \A-l "\fIloss\fP"
 percentage of loss as a floating point number. It is possible to specify
 different loss percentage for the two channels: LR20.5 means 20.5% of packet
 flowing left to right are lost, RL10 means 10% from right to left.
@@ -65,8 +102,33 @@ When the delay is specified as two numbers with a + in between, the first is the
 delay and the second is a random variation. 1000+500 means that the delay can be 
 randomly chosen between half second and 1.5 seconds.
 .TP
-.B \-n 
-nofifo. with -n packets can be reordered.
+.B \-D "\fIdup\fP"
+percentage of dup packet. It has the same syntax of -l. Do not use dup factor 100% 
+because it means that each packet is sent infinite times. 
+.TP
+.B \-b "\fIbandwidth\fP"
+Channel bandwidth in Bytes/sec. It has the same syntax of -d. It is also possible to
+use suffixes K,M,G to abbreviate 2^10, 2^20, 2^30.
+128K means 128KBytes/sec. 128+64K means 64i to 196KBytes/sec.
+Sender is not prevented from sending packets, delivery is delayed to limit the bandwidth
+to the desired value. (Like a bottleneck along the path)
+.TP
+.B \-s "\fIspeed\fP"
+Interface speed in Bytes/sec. It has the same syntax of -b. Input is blocked for
+the tramission time of the packet, thus the sender is prevented from sending too fast.
+.TP
+.B \-c "\fIcapacity\fP"
+Channel capacity (in Bytes): maximum size of the packet queue. Exceeding packets 
+are discarded. 
+.TP
+.B \-n "\fInoise factor\fP"
+Number of bits damaged/one megabyte. 
+.TP
+.B \-m "\fImtu size\fP"
+Packets longer than mtu_size are discarded.
+.TP
+.B \-N 
+nofifo. with -N packets can be reordered.
 .TP
 .B \-M "\fImgmt socket\fP" 
 the unix socket where the parameters (loss percentage, delay etc) can be checked and
