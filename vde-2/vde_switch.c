@@ -42,7 +42,7 @@
 static struct swmodule *swmh;
 
 char *prog;
-char switchmac[ETH_ALEN];
+unsigned char switchmac[ETH_ALEN];
 unsigned int priority=DEFAULT_PRIORITY;
 
 static int hash_size=INIT_HASH_SIZE;
