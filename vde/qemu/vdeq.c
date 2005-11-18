@@ -1,4 +1,5 @@
 /* Copyright 2003 Renzo Davoli 
+ * TNX: 2005.11.18 new syntax mgmt patch by Iain McFarlane <imcfarla@tiscali.co.uk>
  * Licensed under the GPL
  */
 
@@ -131,9 +132,19 @@ int main(int argc, char **argv)
   pair *sp;
   register int i;
   int nb_nics;
+  int oldsyntax=0;
 
   vdeqname=basename(argv[0]);
-  if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) {
+	/* OLD SYNTAX MGMT */
+	if (strncmp(vdeqname,"vdeo",4) == 0) {
+		oldsyntax=1;
+		if (strcmp(vdeqname,"vdeoq") != 0) {
+			filename=vdeqname+4;
+			args=1;
+		}
+	}
+	else 
+		if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) {
 	  filename=vdeqname+3;
 	  args=1;
   }
@@ -156,13 +167,15 @@ int main(int argc, char **argv)
   } else if (argc > args+1 && 
 		  (strcmp(argv[args],"-vdesock")==0) ||
 		  (strcmp(argv[args],"-sock")==0) ||
+		  (strcmp(argv[args],"--sock")==0) ||
 		  (strcmp(argv[args],"-unix")==0) ||
 		  (strcmp(argv[args],"-s")==0)
 	    ){
 	  argsock=argv[args+1];
 	  args+=2;
   } else
-	  argsock=strdup(VDESTDSOCK);
+	  //argsock=strdup(VDESTDSOCK);
+	  argsock=VDESTDSOCK;
 
   nb_nics=countnics(argsock);
   if ((sp= (pair *) malloc(nb_nics * 2 * sizeof (int)))<0) {
@@ -200,26 +213,36 @@ int main(int argc, char **argv)
   printf("as %s\n",argsock);
 	    for (i=0; i<nb_nics; i++)
 		    printf("%d -> %s\n",i,sockname[i]); */
-  newargc=argc+3+(2*nb_nics)-args;
+  newargc=argc+1+(2*oldsyntax)+(2*nb_nics)-args;
   if ((newargv=(char **) malloc ((newargc+1)* sizeof(char *))) <0) {
 	  perror("malloc");
 	  exit(1);
   }
 
   newargv[0]=filename;
-  for (i=0; i<nb_nics; i++) {
-	char numfd[10];
-	sprintf(numfd,"%d",sp[i][0]);
-  	newargv[2*i+1]="-tun-fd";
-  	newargv[2*i+2]=strdup(numfd);
-  }
-	{
-		char nnics[10];
-		sprintf(nnics,"%d",nb_nics);
-		newargv[2*nb_nics+1]="-nics";
-		newargv[2*nb_nics+2]=strdup(nnics);
+	if (oldsyntax) {
+		for (i=0; i<nb_nics; i++) {
+			char numfd[10];
+			sprintf(numfd,"%d",sp[i][0]);
+			newargv[2*i+1]="-tun-fd";
+			newargv[2*i+2]=strdup(numfd);
+		}
+		{
+			char nnics[10];
+			sprintf(nnics,"%d",nb_nics);
+			newargv[2*nb_nics+1]="-nics";
+			newargv[2*nb_nics+2]=strdup(nnics);
+		}
+		for (i=(2*nb_nics)+3;args<argc;i++,args++) newargv[i]=argv[args];
+	} else {
+		for (i=0; i<nb_nics; i++) {
+			char numfd[30];
+			sprintf(numfd,"tap,vlan=0,fd=%d",sp[i][0]);
+			newargv[2*i+1]="-net";
+			newargv[2*i+2]=strdup(numfd);
+		}
+		for (i=(2*nb_nics)+1;args<argc;i++,args++) newargv[i]=argv[args];
 	}
-  for (i=(2*nb_nics)+3;args<argc;i++,args++) newargv[i]=argv[args];
 
   newargv[i]=0;
 

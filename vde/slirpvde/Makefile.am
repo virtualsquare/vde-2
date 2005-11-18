@@ -40,6 +40,6 @@ slirpvde_SOURCES = \
 		   bootp.h \
 		   slirpvde.c
 
-INCLUDES = -DVDE -D"u_int=unsigned int"
+INCLUDES = -DVDE 
 
 EXTRA_DIST = README
