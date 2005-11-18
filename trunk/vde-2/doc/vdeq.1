@@ -1,4 +1,4 @@
-.\" Copyright (c) 2004 Renzo Davoli
+.\" Copyright (c) 2004-2005 Renzo Davoli
 .\"
 .\" This is free documentation; you can redistribute it and/or
 .\" modify it under the terms of the GNU General Public License as
@@ -20,7 +20,7 @@
 .\" Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
 .\" USA.
 
-.TH VDEQ 1 "February 23, 2004" "Virtual Distributed Ethernet"
+.TH VDEQ 1 "November 18, 2005" "Virtual Distributed Ethernet"
 .SH NAME
 vdeq \- Virtual Distributed Ethernet wrapper for QEMU virtual machines
 .SH SYNOPSIS
@@ -105,6 +105,11 @@ to the first ne2k interface and so on.
 .TP
 .B -h, -help, --help
 print a Usage help.
+.SH NOTE
+Qemu has changed its syntax for networking (cvs Nov.15 2005).
+As a temporary solution use vdeoq and vdeoqemu instead of vdeq and vdeqemu
+if you are running a qemu with the old syntax.
+.br
 .SH SEE ALSO
 .BR vde_switch (1),
 .BR vde_plug (1),

@@ -58,7 +58,7 @@ void remove_fd(int fd);
 #define DEFAULT_COST 20000000 /* 1Mbit line */
 
 extern char *prog;
-extern char switchmac[];
+extern unsigned char switchmac[];
 extern unsigned int  priority;
 
 #define NUMOFVLAN 4095

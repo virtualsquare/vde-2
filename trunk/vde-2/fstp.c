@@ -43,9 +43,9 @@ static int numports;
 			BA_CHECK(fsttab[(VLAN)]->rcvhist[1],(PORT)))
 static int rcvhistindex;
 struct vlst {
-	char root[SWITCHID_LEN];
+	unsigned char root[SWITCHID_LEN];
 	char rootcost[4];
-	char dessw[SWITCHID_LEN];
+	unsigned char dessw[SWITCHID_LEN];
 	char port[2];
 	int rootport;
 	int bonusport;
