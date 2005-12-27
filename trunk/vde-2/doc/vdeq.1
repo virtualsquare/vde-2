@@ -24,6 +24,19 @@
 .SH NAME
 vdeq \- Virtual Distributed Ethernet wrapper for QEMU virtual machines
 .SH SYNOPSIS
+.B vdeq
+.B qemu
+.I ... qemu options ...
+.B -net vde[,vlan=n][,sock=socketpath][,port=n]
+.I ... other qemu options ...
+.br
+.B vde\fP{\fIqemu_name\fP}
+.I ... qemu options ...
+.B -net vde[,vlan=n][,sock=socketpath][,port=n]
+.I ... other qemu options ...
+.br
+
+.SH OLD SYNOPSIS
 .B vdeq 
 .B qemu
 [
@@ -79,6 +92,30 @@ vdeqemu -b c -hda=sampledisk
 .RE
 starts qemu as above.
 
+The new syntax is consistent with the new Qemu 0.8.0 network parameters.
+Using vdeq is possible to specify a vde interface in the same way as
+user,tap or socket interfaces.
+The \fBsock=\fP parameter can be used to use a specific socket.
+Please note that what qemu names as vlan is not related to the
+802.1q VLAN managed by the vde_switch.
+\fBport=\fP can be used to specify the port of the switch,
+otherwise the first allocatable port is assigned.
+The following command run a qemu VM with two ethernet interface
+connected to the standard switch and
+to the switch with local socket "/tmp/my.ctl", port 10, respectively
+.RS
+.br
+.B
+vde qemu -net nic,vlan=0 -net nic,vlan=1 -net vde,vlan=0 -net vde,vlan=1,sock=/tmp/my.ctl,port=10
+.RE
+.RS
+.br
+.B
+vdeqemu -net nic,vlan=0 -net nic,vlan=1 -net vde,vlan=0 -net vde,vlan=1,sock=/tmp/my.ctl,port=10
+.RE
+
+The old syntax can be used with Qemu 0.8.0 but all the vde interfaces are assigned to
+vlan 0.
 .RS
 .br
 .B 
@@ -89,8 +126,8 @@ vdeq qemu -sock /tmp/vde.ctl,/tmp/my.ctl -b c -hda=sampledisk
 .B 
 vdeqemu -sock /tmp/vde.ctl,/tmp/my.ctl -b c -hda=sampledisk
 .RE
-both start qemu with two ethernet interface connected to the standard switch and
-to the switch with local socket "/tmp/my.ctl" respectively 
+both start qemu with \fBone\fP ethernet interface connected both to the standard switch and
+to the switch with local socket "/tmp/my.ctl".
 
 .SH OPTIONS
 .TP
