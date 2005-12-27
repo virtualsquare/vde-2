@@ -269,7 +269,6 @@ int main(int argc, char **argv)
 	{
 		int netflag;
 		int vdeint;
-		printf ("NEW SYNTAX HERE FOR %d interfaces\n",nb_nics);
 		newargv=argv;
 		newargc=argc;
 		for (i=0,netflag=0,vdeint=0;i<argc;i++) {
@@ -327,7 +326,6 @@ int main(int argc, char **argv)
 				newargv[2*nb_nics+1]="-nics";
 				newargv[2*nb_nics+2]=strdup(nnics);
 			}
-			for (i=(2*nb_nics)+3;args<argc;i++,args++) newargv[i]=argv[args];
 		} else {
 			for (i=0; i<nb_nics; i++) {
 				char numfd[30];
@@ -337,8 +335,8 @@ int main(int argc, char **argv)
 			}
 			newargv[2*nb_nics+1]="-net";
 			newargv[2*nb_nics+2]="nic";
-			for (i=(2*nb_nics)+3;args<argc;i++,args++) newargv[i]=argv[args];
 		}
+		for (i=(2*nb_nics)+3;args<argc;i++,args++) newargv[i]=argv[args];
 
 		newargv[i]=0;
 	}
