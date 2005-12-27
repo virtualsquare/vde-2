@@ -40,12 +40,11 @@ static struct passwd *callerpwd;
 
 static char** inpath;
 
-static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int intno)
+static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int intno, int port)
 {
   int pid = getpid();
   struct request_v3 req;
   int fdctl;
-	int port=0;
   struct sockaddr_un sock;
 
   if((fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
@@ -135,15 +134,37 @@ static int countnics(const char *s)
 	return nics;
 }
 
+static int countnewnics(int argc,char *argv[])
+{
+	register int nics=0;
+	register int netflag=0;
+	while (argc > 0) {
+		if (strcmp(argv[0],"-net")==0)
+			netflag=1;
+		else {
+			if (netflag && (strncmp(argv[0],"vde",3)==0))
+				nics++;
+			netflag=0;
+		}
+		argv++;
+		argc--;
+	}
+	return nics;
+}
+
 static void usage() 
 {
 	if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) 
 		fprintf(stderr,"Usage: %s [-h]\n"
+				"\t %s ...qemu options... -net vde[,vlan=n][,sock=sock] ... \n"
+				"Old syntax:\n"
 				"\t %s  [-sock sock1 [,sock2...]] qemu_options\n"
-				"\t (%s executes a qemu machine named %s)\n", vdeqname,vdeqname,vdeqname,filename);
+				"\t (%s executes a qemu machine named %s)\n", vdeqname,vdeqname,vdeqname,vdeqname,filename);
 	else 
 		fprintf(stderr,"Usage: %s [-h]\n"
-				"\t %s qemu_executable [-sock sock1 [,sock2...]] qemu_options\n", vdeqname, vdeqname);
+				"\t %s qemu_executable ...qemu options... -net vde[,vlan=n][,sock=sock] ... \n"
+				"Old syntax:\n"
+				"\t %s qemu_executable [-sock sock1 [,sock2...]] qemu_options\n", vdeqname,vdeqname, vdeqname);
 	exit(0);
 }
 
@@ -153,10 +174,51 @@ static void leave()
 	exit(0);
 }
 
+static char *parsevdearg(char *arg,char **sock,int *pport, int fd)
+{
+	char newarg[128];
+	int vlan=0;
+	*sock=VDESTDSOCK;
+	while (*arg==',') arg++;
+	if (strncmp(arg,"vlan=",5)==0) {
+		vlan=atoi(arg+5);
+		while (*arg != 0 && *arg != ',')
+			arg++;
+	}
+	while (*arg==',') arg++;
+	if (strncmp(arg,"sock=",5)==0) {
+		arg+=5;
+		if (*arg=='\"') {
+			arg++;
+			*sock=arg;
+			while (*arg != 0 && *arg != '\"')
+				arg++;
+		} else {
+			*sock=arg;
+			while (*arg != 0 && *arg != ',')
+				arg++;
+		}
+		if (*arg != 0) {
+			*arg=0; arg++;
+		}
+	}
+	while (*arg==',') arg++;
+	if (strncmp(arg,"port=",5)==0) {
+		*pport=atoi(arg+5);
+		while (*arg != 0 && *arg != ',')
+			arg++;
+	}
+	while (*arg==',') arg++;
+
+	snprintf(newarg,128,"tap,vlan=%d,fd=%d%s%s",vlan,fd,(*arg == 0)?"":",",arg);
+	return strdup(newarg);
+}
+
 int main(int argc, char **argv)
 {
   int *fddata;
   char *argsock,**sockname;
+	int *ports;
   struct sockaddr_un *dataout,datain;
   socklen_t datainsize;
   int result;
@@ -170,6 +232,7 @@ int main(int argc, char **argv)
   register int i;
   int nb_nics;
 	int oldsyntax=0;
+	int newsyntax=0;
 
   vdeqname=basename(argv[0]);
 	callerpwd=getpwuid(getuid());
@@ -191,6 +254,11 @@ int main(int argc, char **argv)
   } else {
 	  usage();
   }
+	if (!oldsyntax) {
+		nb_nics=countnewnics(argc-args,argv+args);
+		if (nb_nics > 0)
+			newsyntax=1;
+	}
   if ((argc > args && (
 			  strcmp(argv[args],"-h")==0 ||
 			  strcmp(argv[args],"-help")==0 ||
@@ -210,9 +278,18 @@ int main(int argc, char **argv)
 	  argsock=argv[args+1];
 	  args+=2;
   } else
-	  argsock=strdup(VDESTDSOCK);
+	  argsock=NULL;
 
-  nb_nics=countnics(argsock);
+	if (!newsyntax) {
+		if (argsock == NULL)
+			nb_nics=1;
+		else
+			nb_nics=countnics(argsock);
+		if (!oldsyntax && nb_nics > 1)
+			fprintf(stderr,
+					"Warning: all the vde connections will be connected to one net interface\n"
+					"         to configure several interface use the new syntax -net vde\n");
+	}
   if ((sp= (pair *) malloc(nb_nics * 2 * sizeof (int)))<0) {
 	  perror("malloc nics");
 	  exit(1);
@@ -234,57 +311,88 @@ int main(int argc, char **argv)
 	  perror("malloc sockname");
 	  exit(1);
   }
-
-  {
-	  register char *s=argsock;
-	  register char oldch;
-	  i=0;
-	  do {
-		sockname[i++]=s;
-		while (*s != ',' && *s != '\0')
-			s++;
-		oldch=*s;
-		*s=0;
-		s++;
-	  } while (oldch != 0);
-  }
-
-/*  printf("-- %s --\n",numfd);
-  printf("as %s\n",argsock);
-	    for (i=0; i<nb_nics; i++)
-		    printf("%d -> %s\n",i,sockname[i]); */
-  newargc=argc+1+(2*oldsyntax)+(2*nb_nics)-args;
-  if ((newargv=(char **) malloc ((newargc+1)* sizeof(char *))) <0) {
-	  perror("malloc");
+  if ((ports= (int *) malloc(sizeof(int) * nb_nics))<0) {
+	  perror("malloc ports");
 	  exit(1);
   }
 
-  newargv[0]=filename;
-	if (oldsyntax) {
-		for (i=0; i<nb_nics; i++) {
-			char numfd[10];
-			sprintf(numfd,"%d",sp[i][0]);
-			newargv[2*i+1]="-tun-fd";
-			newargv[2*i+2]=strdup(numfd);
+	if (newsyntax)
+	{
+		int netflag;
+		int vdeint;
+		newargv=argv;
+		newargc=argc;
+		for (i=0,netflag=0,vdeint=0;i<argc;i++) {
+			if (strcmp(argv[i],"-net")==0)
+				netflag=1;
+			else {
+				if (netflag && strncmp(argv[i],"vde",3) == 0)
+				{
+					argv[i]=parsevdearg(argv[i]+3,&sockname[vdeint],&ports[vdeint],sp[vdeint][0]);
+					vdeint++;
+				}
+				netflag=0;
+			}
 		}
+	} else
+  {
+		if (argsock==NULL)
+			sockname[0]=VDESTDSOCK;
+		else
 		{
-			char nnics[10];
-			sprintf(nnics,"%d",nb_nics);
-			newargv[2*nb_nics+1]="-nics";
-			newargv[2*nb_nics+2]=strdup(nnics);
+			register char *s=argsock;
+			register char oldch;
+			i=0;
+			do {
+				sockname[i++]=s;
+				while (*s != ',' && *s != '\0')
+					s++;
+				oldch=*s;
+				*s=0;
+				s++;
+			} while (oldch != 0);
+		}
+
+		/*  printf("-- %s --\n",numfd);
+				printf("as %s\n",argsock);
+				for (i=0; i<nb_nics; i++)
+				printf("%d -> %s\n",i,sockname[i]); */
+		newargc=argc+3+(2*nb_nics)-args;
+		if ((newargv=(char **) malloc ((newargc+1)* sizeof(char *))) <0) {
+			perror("malloc");
+			exit(1);
+		}
+
+		newargv[0]=filename;
+		if (oldsyntax) {
+			for (i=0; i<nb_nics; i++) {
+				char numfd[10];
+				ports[i]=0;
+				sprintf(numfd,"%d",sp[i][0]);
+				newargv[2*i+1]="-tun-fd";
+				newargv[2*i+2]=strdup(numfd);
+			}
+			{
+				char nnics[10];
+				sprintf(nnics,"%d",nb_nics);
+				newargv[2*nb_nics+1]="-nics";
+				newargv[2*nb_nics+2]=strdup(nnics);
+			}
+		} else {
+			for (i=0; i<nb_nics; i++) {
+				char numfd[30];
+				ports[i]=0;
+				sprintf(numfd,"tap,vlan=0,fd=%d",sp[i][0]);
+				newargv[2*i+1]="-net";
+				newargv[2*i+2]=strdup(numfd);
+			}
+			newargv[2*nb_nics+1]="-net";
+			newargv[2*nb_nics+2]="nic";
 		}
 		for (i=(2*nb_nics)+3;args<argc;i++,args++) newargv[i]=argv[args];
-	} else {
-		for (i=0; i<nb_nics; i++) {
-			char numfd[30];
-			sprintf(numfd,"tap,vlan=0,fd=%d",sp[i][0]);
-			newargv[2*i+1]="-net";
-			newargv[2*i+2]=strdup(numfd);
-		}
-		for (i=(2*nb_nics)+1;args<argc;i++,args++) newargv[i]=argv[args];
-	}
 
-  newargv[i]=0;
+		newargv[i]=0;
+	}
 
   if ((fddata= (int *) malloc(sizeof(int) * nb_nics))<0) {
 	  perror("malloc fddata");
@@ -308,7 +416,7 @@ int main(int argc, char **argv)
 		  perror("socket");
 		  exit(1);
 	  }
-	  connected_fd[i]=send_fd(sockname[i], fddata[i], &(dataout[i]), i);
+	  connected_fd[i]=send_fd(sockname[i], fddata[i], &(dataout[i]), i, ports[i]);
 	  pollv[2*i+1].fd=fddata[i];
 	  pollv[2*i].fd=sp[i][1];
 	  pollv[2*i].events= pollv[2*i+1].events=POLLIN|POLLHUP;
