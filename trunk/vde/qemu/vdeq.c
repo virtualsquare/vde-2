@@ -138,6 +138,46 @@ static void leave()
 }
 
 
+static int checkver(char *prog)
+{ 
+	char *newargv[3];
+	int fd[2];
+	int f,len,version=0;
+	char buf[257];
+	newargv[0]=prog;
+	newargv[1]="-h";
+	newargv[2]=0;
+	buf[256]=0;
+	pipe(fd);
+	if ((f=fork()) > 0) {
+		int status;
+		close(fd[1]);
+		len=read(fd[0],buf,256);
+		if (len>0) {
+			int i;
+			for(i=0;i<len && version==0;i++) {
+				if(strncmp(buf+i,"version ",8)==0) {
+					int v1,v2,v3;
+					sscanf(buf+i+8,"%d.%d.%d",&v1,&v2,&v3);
+					version=(v1 << 16) + (v2 << 8) + v3;
+				}
+			}
+		}
+		waitpid(f,&status,0);
+		close(fd[0]);
+	}
+	else if (f==0) {
+		close(fd[0]);
+		dup2(fd[1],1);
+		dup2(fd[1],2);
+		close(fd[1]);
+		if (execvp(prog,newargv) < 0) {
+			exit(1);
+		}
+	} 
+	return version;
+}   
+
 static char *parsevdearg(char *arg,char **sock,int fd)
 {
 	char newarg[128];
@@ -190,6 +230,7 @@ int main(int argc, char **argv)
   int nb_nics;
   int oldsyntax=0;
   int newsyntax=0;
+	int ver;
 
   vdeqname=basename(argv[0]);
 	/* OLD SYNTAX MGMT */
@@ -211,6 +252,8 @@ int main(int argc, char **argv)
   } else {
 	  usage();
   }
+	if ((ver=checkver(filename)) < 0x800)
+		oldsyntax=1;
 	if (!oldsyntax) {
 		nb_nics=countnewnics(argc-args,argv+args);
 		if (nb_nics > 0)

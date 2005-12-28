@@ -8,8 +8,9 @@ EXTRA_DIST = README
 install-exec-hook:
 	rm -f $(DESTDIR)$(bindir)/vdeqemu
 	$(LN_S) $(DESTDIR)$(bindir)/vdeq $(DESTDIR)$(bindir)/vdeqemu
-	$(LN_S) $(DESTDIR)$(bindir)/vdeq $(DESTDIR)$(bindir)/vdeo
-	$(LN_S) $(DESTDIR)$(bindir)/vdeq $(DESTDIR)$(bindir)/vdeoqemu
+	rm -f $(DESTDIR)$(bindir)/vdeo
+	rm -f $(DESTDIR)$(bindir)/vdeoqemu
+
 
 uninstall-local:
 	rm -f $(bindir)/vdeqemu
