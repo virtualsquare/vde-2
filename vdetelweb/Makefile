@@ -1,4 +1,4 @@
-LOADLIBES=/usr/local/lib/liblwip.so -lpthread
+LOADLIBES=-ldl -lpthread
 BINDIR=/usr/local/bin
 
 all: vdetelweb

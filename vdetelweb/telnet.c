@@ -37,8 +37,8 @@
 #include  <arpa/telnet.h>
 #include  <string.h>
 #include <getopt.h>
-#include <lwipv6.h>
 #include "vdetelweb.h"
+#include <lwipv6.h>
 
 #define TELNET_TCP_PORT 23
 #define TELNET_LOGIN 0x0
@@ -230,7 +230,8 @@ int telnetdata(int fn,int fd,int vdefd)
 			} else if(buf[i] == 0x7f) {
 				if(st->bufindex > 0) {
 					(st->bufindex)--;
-					lwip_write(fd,"\010 \010",3);
+					if (st->echo && st->status<TELNET_PASSWD)
+						lwip_write(fd,"\010 \010",3);
 				}
 			} else {
 				if (st->echo && st->status<TELNET_PASSWD)

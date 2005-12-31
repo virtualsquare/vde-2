@@ -38,8 +38,8 @@
 #include  <arpa/inet.h>
 #include  <string.h>
 #include <getopt.h>
-#include <lwipv6.h>
 #include "vdetelweb.h"
+#include <lwipv6.h>
 
 #define WEB_TCP_PORT 80
 #define WEB_IDENTIFY 0x0
