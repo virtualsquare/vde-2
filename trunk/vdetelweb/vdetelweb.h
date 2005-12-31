@@ -1,6 +1,7 @@
 #ifndef _VDETELWEB_H
 #define _VDETELWEB_H
 #define BUFSIZE 1024
+#define LWIPV6DL
 extern void *status[];
 
 extern char *banner;

@@ -38,8 +38,8 @@
 #include  <arpa/inet.h>
 #include  <string.h>
 #include <getopt.h>
-#include <lwipv6.h>
 #include "vdetelweb.h"
+#include <lwipv6.h>
 
 int daemonize;
 int telnet;
@@ -457,13 +457,14 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 	setsighandlers();
+	if (daemonize && daemon(0, 1)) {
+		printlog(LOG_ERR,"daemon: %s",strerror(errno));
+		exit(1);
+	}
+  LOADLWIPV6DL;
 	vdefd=openvdem(mgmt,argv[0],&nif,nodename);
 	if (readconffile(conffile,nif) < 0) {
 		printlog(LOG_ERR,"configuration file not found");
-		exit(1);
-	}
-	if (daemonize && daemon(0, 1)) {
-		printlog(LOG_ERR,"daemon: %s",strerror(errno));
 		exit(1);
 	}
 	if (telnet)
