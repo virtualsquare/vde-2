@@ -4,6 +4,8 @@
  *   vdetelweb.c: main
  *   
  *   Copyright 2005 Renzo Davoli University of Bologna - Italy
+ *   --pidfile/-p and cleanup management by Mattia Belletti (C) 2004
+ *                            (copied from vde_switch code).
  *   
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -28,6 +30,7 @@
 #include <syslog.h>
 #include  <errno.h>
 #include <netdb.h>
+#include <libgen.h>
 #include  <sys/types.h>
 #include  <sys/socket.h>
 #include  <sys/select.h>
@@ -38,6 +41,8 @@
 #include  <arpa/inet.h>
 #include  <string.h>
 #include <getopt.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "vdetelweb.h"
 #include <lwipv6.h>
 
@@ -50,6 +55,8 @@ char *progname;
 char *prompt;
 int logok;
 char *passwd;
+static char *pidfile = NULL;
+static char pidfile_path[_POSIX_PATH_MAX];
 
 #define MAXFD 16
 int npfd=0;
@@ -79,13 +86,16 @@ void printlog(int priority, const char *format, ...)
 
 static void cleanup(void)
 {
+	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
+		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
+	}
 }
 
 static void sig_handler(int sig)
 {
 	cleanup();
 	signal(sig, SIG_DFL);
-	exit(0);
+	kill(getpid(), sig);
 }
 
 static void setsighandlers()
@@ -119,8 +129,8 @@ static void setsighandlers()
 }
 
 static void usage(char *progname) {
-	fprintf (stderr,"Usage: %s [-w] [-t] [-d] [-n nodename] mgmt_socket\n"
-			"       %s [--web] [--telnet] [--daemon] [--nodename nodename] mgmt_socket\n",progname,progname);
+	fprintf (stderr,"Usage: %s [-w] [-t] [-d] [-n nodename] [-p pidfile] mgmt_socket\n"
+			"       %s [--web] [--telnet] [--daemon] [--nodename nodename] [--pidfile pidfile] mgmt_socket\n",progname,progname);
 	exit(-1);
 }
 
@@ -394,6 +404,36 @@ int setfds(fd_set *rds, fd_set *exc)
 	return max+1;
 }
 
+static void save_pidfile()
+{
+	if(pidfile[0] != '/')
+		strncat(pidfile_path, pidfile, PATH_MAX - strlen(pidfile_path));
+	else
+		strcpy(pidfile_path, pidfile);
+
+	int fd = open(pidfile_path,
+			O_WRONLY | O_CREAT | O_EXCL,
+			S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	FILE *f;
+
+	if(fd == -1) {
+		printlog(LOG_ERR, "Error in pidfile creation: %s", strerror(errno));
+		exit(1);
+	}
+
+	if((f = fdopen(fd, "w")) == NULL) {
+		printlog(LOG_ERR, "Error in FILE* construction: %s", strerror(errno));
+		exit(1);
+	}
+
+	if(fprintf(f, "%ld\n", (long int)getpid()) <= 0) {
+		printlog(LOG_ERR, "Error in writing pidfile");
+		exit(1);
+	}
+
+	fclose(f);
+}
+
 int main(int argc, char *argv[])
 {
 	struct netif *nif;
@@ -414,6 +454,7 @@ int main(int argc, char *argv[])
 				{"help",0,0,'h'},
 				{"rcfile",1,0,'f'},
 				{"nodename",1,0,'n'},
+				{"pidfile", 1, 0, 'p'},
 				{0, 0, 0, 0}
 			};
 			c = getopt_long_only (argc, argv, "hdwtM:f:n:",
@@ -440,6 +481,9 @@ int main(int argc, char *argv[])
 				case 'd':
 					daemonize=1;
 					break;
+				case 'p':
+					pidfile=strdup(optarg);
+					break;
 				case 'h':
 					usage(argv[0]); //implies exit
 					break;
@@ -456,11 +500,30 @@ int main(int argc, char *argv[])
 		printlog(LOG_ERR,"at least one service option (-t -w) must be specified");
 		exit(-1);
 	}
+	atexit(cleanup);
 	setsighandlers();
+	if (daemonize) {
+		openlog(basename(argv[0]), LOG_PID, 0);
+		logok=1;
+		syslog(LOG_INFO,"VDETELWEB started");
+	}
+
+	/* saves current path in pidfile_path, because otherwise with daemonize() we
+	 * forget it */
+	if(getcwd(pidfile_path, PATH_MAX-1) == NULL) {
+		printlog(LOG_ERR, "getcwd: %s", strerror(errno));
+		exit(1);
+	}
+	strcat(pidfile_path, "/");
+
 	if (daemonize && daemon(0, 1)) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
 		exit(1);
 	}
+	/* once here, we're sure we're the true process which will continue as a
+	 * server: save PID file if needed */
+	if(pidfile) save_pidfile();
+
   LOADLWIPV6DL;
 	vdefd=openvdem(mgmt,argv[0],&nif,nodename);
 	if (readconffile(conffile,nif) < 0) {
