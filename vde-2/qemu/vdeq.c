@@ -38,6 +38,7 @@ struct request_v3 {
 
 static struct passwd *callerpwd;
 
+static int nb_nics;
 static char** inpath;
 
 static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int intno, int port)
@@ -87,11 +88,11 @@ static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int int
 
 	/* First choice, return socket from the switch close to the control dir*/
 	memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-	sprintf(req.sock.sun_path, "%s.%05d-%02d", name, pid, 0);
+	sprintf(req.sock.sun_path, "%s.%05d-%02d", name, pid, intno);
 	if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
 		/* if it is not possible -> /tmp */
 		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, 0);
+		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, intno);
 		if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0) {
 			perror("bind");
 			exit(1);
@@ -152,7 +153,7 @@ static int countnewnics(int argc,char *argv[])
 	return nics;
 }
 
-static void usage() 
+static void usage(void) 
 {
 	if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) 
 		fprintf(stderr,"Usage: %s [-h]\n"
@@ -168,9 +169,19 @@ static void usage()
 	exit(0);
 }
 
-static void leave()
+static void cleanup()
+{
+	register int i;
+	for (i=0; i<nb_nics; i++) {
+		if (inpath[i] != NULL)
+			unlink(inpath[i]);
+	}
+}
+
+static void leave(void)
 {
 	fprintf(stderr,"qemu exited: %s quits\n", vdeqname);
+	cleanup();
 	exit(0);
 }
 
@@ -270,7 +281,6 @@ int main(int argc, char **argv)
   typedef int pair[2];
   pair *sp;
   register int i;
-  int nb_nics;
 	int oldsyntax=0;
 	int newsyntax=0;
 	int ver;
@@ -497,9 +507,6 @@ int main(int argc, char **argv)
 	  }
 	  execvp(filename,newargv);
   }  
-	for (i=0; i<nb_nics; i++) {
-		if (inpath[i] != NULL)
-			unlink(inpath[i]);
-	}
+	cleanup();
   return(0);
 }
