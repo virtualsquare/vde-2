@@ -185,4 +185,6 @@ Copyright 2003/2004/2005 Renzo Davoli
 Acknowlegments:
 Thanks to Marco Giordani, Leonardo Macchia for their useful help for debugging.
 Imported code by Danny Gasparovsky, Fabrice Ballard.
+Thanks to Giuseppe Della Bianca <bepi@adria.it> for many bug reports, and
+patch proposals.
 Code organization, bugfixes, autotool support Mattia Belletti.
