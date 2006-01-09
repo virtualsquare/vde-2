@@ -475,7 +475,7 @@ struct ip_part_header
 	unsigned char ip_tip[4];
 };
 
-static void client_eth_register(const unsigned char *eth_addr, const unsigned char *ip_addr) 
+void client_eth_register(const unsigned char *eth_addr, const unsigned char *ip_addr) 
 {
 	int host=ip_addr[3];
 	if (memcmp(ip_addr, &special_addr, 3) == 0 && host != 0 && host != 0xff)
