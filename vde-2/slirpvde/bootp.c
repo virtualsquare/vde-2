@@ -210,6 +210,7 @@ static void bootp_reply(struct bootp_t *bp)
     memcpy(rbp->bp_hwaddr, bp->bp_hwaddr, 6);
 
     rbp->bp_yiaddr = daddr.sin_addr; /* IP address */
+    rbp->bp_siaddr = saddr.sin_addr; /* IP address */
 
     q = rbp->bp_vend;
     memcpy(q, rfc1533_cookie, 4);
@@ -261,7 +262,9 @@ static void bootp_reply(struct bootp_t *bp)
     }
     *q++ = RFC1533_END;
     
-    m->m_len = sizeof(struct bootp_t);
+    //m->m_len = sizeof(struct bootp_t);
+    m->m_len = q - (uint8_t *) (m->m_data);
+		client_eth_register(client_ethaddr,&daddr.sin_addr);
     udp_output2(NULL, m, &saddr, &daddr, IPTOS_LOWDELAY);
 }
 
