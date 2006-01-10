@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <libgen.h>
+#include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -155,18 +156,20 @@ static int countnewnics(int argc,char *argv[])
 
 static void usage(void) 
 {
-	if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) 
+	if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) {
 		fprintf(stderr,"Usage: %s [-h]\n"
 				"\t %s ...qemu options... -net vde[,vlan=n][,sock=sock] ... \n"
 				"Old syntax:\n"
 				"\t %s  [-sock sock1 [,sock2...]] qemu_options\n"
-				"\t (%s executes a qemu machine named %s)\n", vdeqname,vdeqname,vdeqname,vdeqname,filename);
-	else 
+				"\t (%s executes a qemu machine named %s, \n\t  output of \"%s -h\" follows)\n\n", vdeqname,vdeqname,vdeqname,vdeqname,filename,filename);
+		execlp(filename,filename,"-h",(char *) 0);
+	} else {
 		fprintf(stderr,"Usage: %s [-h]\n"
 				"\t %s qemu_executable ...qemu options... -net vde[,vlan=n][,sock=sock] ... \n"
 				"Old syntax:\n"
 				"\t %s qemu_executable [-sock sock1 [,sock2...]] qemu_options\n", vdeqname,vdeqname, vdeqname);
-	exit(0);
+		exit(0);
+	}
 }
 
 static void cleanup()
@@ -178,7 +181,52 @@ static void cleanup()
 	}
 }
 
-static void leave(void)
+static void sig_handler(int sig)
+{
+	fprintf(stderr,"%s: Caught signal %d, cleaning up and exiting\n", vdeqname, sig);
+	cleanup();
+	signal(sig, SIG_DFL);
+	kill(getpid(), sig);
+}
+
+static void setsighandlers()
+{
+	/* setting signal handlers.
+	 * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
+	 * ignores all the others signals which could cause termination. */
+	struct { int sig; const char *name; int ignore; } signals[] = {
+		{ SIGHUP, "SIGHUP", 0 },
+		{ SIGINT, "SIGINT", 0 },
+		{ SIGPIPE, "SIGPIPE", 1 },
+		{ SIGALRM, "SIGALRM", 1 },
+		{ SIGTERM, "SIGTERM", 0 },
+		{ SIGUSR1, "SIGUSR1", 1 },
+		{ SIGUSR2, "SIGUSR2", 1 },
+		{ SIGPROF, "SIGPROF", 1 },
+		{ SIGVTALRM, "SIGVTALRM", 1 },
+#ifdef VDE_LINUX
+		{ SIGPOLL, "SIGPOLL", 1 },
+		{ SIGSTKFLT, "SIGSTKFLT", 1 },
+		{ SIGIO, "SIGIO", 1 },
+		{ SIGPWR, "SIGPWR", 1 },
+		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
+#ifdef VDE_DARWIN
+		{ SIGXCPU, "SIGXCPU", 1 },
+		{ SIGXFSZ, "SIGXFSZ", 1 },
+#endif
+		{ 0, NULL, 0 }
+	};
+
+	int i;
+	for(i = 0; signals[i].sig != 0; i++)
+		if(signal(signals[i].sig,
+					signals[i].ignore ? SIG_IGN : sig_handler) < 0)
+			fprintlog(stderr,"Setting handler for %s: %s\n", signals[i].name,
+					strerror(errno));
+}
+
+static void leave(int sig)
 {
 	fprintf(stderr,"qemu exited: %s quits\n", vdeqname);
 	cleanup();
@@ -275,12 +323,11 @@ int main(int argc, char **argv)
   int result;
   int *connected_fd;
   register ssize_t nx;
-  int args;
   int newargc;
   char **newargv;
   typedef int pair[2];
   pair *sp;
-  register int i;
+  register int i,j;
 	int oldsyntax=0;
 	int newsyntax=0;
 	int ver;
@@ -292,44 +339,44 @@ int main(int argc, char **argv)
 		oldsyntax=1;
 		if (strcmp(vdeqname,"vdeoq") != 0) {
 			filename=vdeqname+4;
-			args=1;
 		}
 	}
 	else if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) {
 		filename=vdeqname+3;
-		args=1;
 	}
 	else if (argc > 1) {
 	  filename=argv[1];
-	  args=2;
+		argc--;
+		argv++;
   } else {
 	  usage();
   }
 	if ((ver=checkver(filename)) < 0x800) 
 		oldsyntax=1;
 	if (!oldsyntax) {
-		nb_nics=countnewnics(argc-args,argv+args);
+		nb_nics=countnewnics(argc-1,argv+1);
 		if (nb_nics > 0)
 			newsyntax=1;
 	}
-  if ((argc > args && (
-			  strcmp(argv[args],"-h")==0 ||
-			  strcmp(argv[args],"-help")==0 ||
-			  strcmp(argv[args],"--help")==0
+  if ((argc > 1 && (
+			  strcmp(argv[1],"-h")==0 ||
+			  strcmp(argv[1],"-help")==0 ||
+			  strcmp(argv[1],"--help")==0
 			  )) || (
 			  strcmp(filename,"-h")==0 ||
 			  strcmp(filename,"-help")==0 ||
 			  strcmp(filename,"--help")==0
 		  )) {
 	  usage();
-  } else if (argc > args+1 && (
-		  (strcmp(argv[args],"-vdesock")==0) ||
-		  (strcmp(argv[args],"-sock")==0) ||
-		  (strcmp(argv[args],"-unix")==0) ||
-		  (strcmp(argv[args],"-s")==0))
+  } else if (argc > 2 && (
+		  (strcmp(argv[1],"-vdesock")==0) ||
+		  (strcmp(argv[1],"-sock")==0) ||
+		  (strcmp(argv[1],"-unix")==0) ||
+		  (strcmp(argv[1],"-s")==0))
 	    ){
-	  argsock=argv[args+1];
-	  args+=2;
+	  argsock=argv[2];
+	  argv+=2;
+	  argc-=2;
   } else
 	  argsock=NULL;
 
@@ -375,7 +422,7 @@ int main(int argc, char **argv)
 		int vdeint;
 		newargv=argv;
 		newargc=argc;
-		for (i=0,netflag=0,vdeint=0;i<argc;i++) {
+		for (i=1,netflag=0,vdeint=0;i<argc;i++) {
 			if (strcmp(argv[i],"-net")==0)
 				netflag=1;
 			else {
@@ -410,7 +457,7 @@ int main(int argc, char **argv)
 				printf("as %s\n",argsock);
 				for (i=0; i<nb_nics; i++)
 				printf("%d -> %s\n",i,sockname[i]); */
-		newargc=argc+3+(2*nb_nics)-args;
+		newargc=argc+2+(2*nb_nics);
 		if ((newargv=(char **) malloc ((newargc+1)* sizeof(char *))) <0) {
 			perror("malloc");
 			exit(1);
@@ -442,7 +489,7 @@ int main(int argc, char **argv)
 			newargv[2*nb_nics+1]="-net";
 			newargv[2*nb_nics+2]="nic";
 		}
-		for (i=(2*nb_nics)+3;args<argc;i++,args++) newargv[i]=argv[args];
+		for (i=(2*nb_nics)+3,j=1;j<argc;i++,j++) newargv[i]=argv[j];
 
 		newargv[i]=0;
 	}
@@ -461,9 +508,10 @@ int main(int argc, char **argv)
   }
 
   if ((pollv= (struct pollfd *) malloc(sizeof(struct pollfd) * 2 * nb_nics))<0) {
-	  perror("malloc fddata");
+		perror("malloc fddata");
 	  exit(1);
   }
+	setsighandlers();
   for (i=0; i<nb_nics; i++) {
 	  if((fddata[i] = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0){
 		  perror("socket");
