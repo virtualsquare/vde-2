@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(vde, [1.5.10], renzo@cs.unibo.it)
+AC_INIT(vde, [1.5.11], renzo@cs.unibo.it)
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([vde.h])
 AC_CONFIG_HEADER([config.h])
