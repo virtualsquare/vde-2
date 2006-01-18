@@ -2,6 +2,7 @@
  * --pidfile/-p and cleanup management by Mattia Belletti (C) 2004.
  * Licensed under the GPLv2
  * Modified by Ludovico Gardenghi 2005
+ * -g option (group management) by Daniel P. Berrange
  */
 
 #include <config.h>
@@ -22,6 +23,7 @@
 #include <sys/un.h>
 #include <net/if.h>
 #include <stdarg.h>
+#include <grp.h>
 #define _GNU_SOURCE
 #include <getopt.h>
 
@@ -41,6 +43,7 @@ static unsigned int data_type;
 static int mode = 0700;
 
 static char *ctl_socket;
+static gid_t grp_owner = -1;
 
 #define MODULENAME "unix prog"
 
@@ -136,6 +139,11 @@ static int newport(int fd, int portno)
 		return -1;
 	}
 	chmod(sun.sun_path,mode);
+	if(chown(sun.sun_path,-1,grp_owner) < 0) {
+		printlog(LOG_ERR, "chown: %s", strerror(errno));
+		close_ep(portno-1,fd);
+		return -1;
+	}
 
 	add_fd(data_fd,data_type,portno);
 
@@ -322,6 +330,7 @@ static struct option long_options[] = {
 	{"vdesock", 1, 0, 's'},
 	{"unix", 1, 0, 's'},
 	{"mod", 1, 0, 'm'},
+	{"group", 1, 0, 'g'},
 };
 
 #define Nlong_options (sizeof(long_options)/sizeof(struct option));
@@ -334,18 +343,27 @@ static void usage(void)
 			"  -s, --vdesock SOCK         Same as --sock SOCK\n"
 			"  -s, --unix SOCK            Same as --sock SOCK\n"
 			"  -m, --mod MODE             Standard access mode for comm sockets (octal)\n"
+			"  -g, --group GROUP          Group owner for comm sockets\n"
 			);
 }
 
 static int parseopt(int c, char *optarg)
 {
 	int outc=0;
+	struct group *grp;
 	switch (c) {
 		case 's':
 			ctl_socket=strdup(optarg);
 			break;
 		case 'm':
 			sscanf(optarg,"%o",&mode);
+			break;
+		case 'g':
+			if (!(grp = getgrnam(optarg))) {
+				fprintf(stderr, "No such group '%s'\n", optarg);
+				exit(1);
+			}
+			grp_owner=grp->gr_gid;
 			break;
 		default:
 			outc=c;
@@ -386,6 +404,10 @@ static void init(void)
 		}
 	}
 	chmod(sun.sun_path,mode);
+	if(chown(sun.sun_path,-1,grp_owner) < 0) {
+		printlog(LOG_ERR, "chown: %s", strerror(errno));
+		return;
+	}
 	if(listen(connect_fd, 15) < 0){
 		printlog(LOG_ERR,"listen: %s",strerror(errno));
 		return;

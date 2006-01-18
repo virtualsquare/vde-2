@@ -191,4 +191,6 @@ Thanks to Marco Giordani, Leonardo Macchia for their useful help for debugging.
 Imported code by Danny Gasparovsky, Fabrice Ballard.
 Thanks to Giuseppe Della Bianca <bepi@adria.it> for many bug reports, and
 patch proposals.
+Thanks to Daniel P. Barrange <berrange at redhat dot com> for several patches
+and the management of group ownership.
 Code organization, bugfixes, autotool support Mattia Belletti.

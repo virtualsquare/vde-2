@@ -36,7 +36,7 @@ static struct swmodule swmi;
 static int logok=0;
 static char *rcfile;
 static char *pidfile = NULL;
-static char pidfile_path[_POSIX_PATH_MAX];
+static char pidfile_path[PATH_MAX];
 static int daemonize = 0;
 static unsigned int console_type=-1;
 static unsigned int mgmt_ctl=-1;
