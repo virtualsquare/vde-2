@@ -243,7 +243,10 @@ static int checkver(char *prog)
 	newargv[1]="-h";
 	newargv[2]=0;
 	buf[256]=0;
-	pipe(fd);
+	if (pipe(fd) < 0) {
+	  perror("pipe");
+	  exit(1);
+	}
 	if ((f=fork()) > 0) {
 		int status;
 		close(fd[1]);
@@ -411,7 +414,7 @@ int main(int argc, char **argv)
 	  perror("malloc sockname");
 	  exit(1);
   }
-  if ((ports= (int *) malloc(sizeof(int) * nb_nics))<0) {
+  if ((ports= (int *) calloc(nb_nics, sizeof(int)))<0) {
 	  perror("malloc ports");
 	  exit(1);
   }
@@ -467,7 +470,6 @@ int main(int argc, char **argv)
 		if (oldsyntax) {
 			for (i=0; i<nb_nics; i++) {
 				char numfd[10];
-				ports[i]=0;
 				sprintf(numfd,"%d",sp[i][0]);
 				newargv[2*i+1]="-tun-fd";
 				newargv[2*i+2]=strdup(numfd);
@@ -481,7 +483,6 @@ int main(int argc, char **argv)
 		} else {
 			for (i=0; i<nb_nics; i++) {
 				char numfd[30];
-				ports[i]=0;
 				sprintf(numfd,"tap,vlan=0,fd=%d",sp[i][0]);
 				newargv[2*i+1]="-net";
 				newargv[2*i+2]=strdup(numfd);
@@ -529,23 +530,38 @@ int main(int argc, char **argv)
 	  for (i=0; i<nb_nics; i++) 
 		  close(sp[i][0]);
 	  for(;;) {
-		  result=poll(pollv,2*nb_nics,-1);
-		  for (i=0; i<nb_nics; i++) {
-			  if (pollv[2*i].revents & POLLHUP || pollv[2*i+1].revents & POLLHUP)
-				  break;
-			  if (pollv[2*i].revents & POLLIN) {
-				  nx=read(sp[i][1],bufin,sizeof(bufin));
-				  //fprintf(stderr,"RX from qemu %d\n",nx);
-				  //send(connected_fd,bufin,nx,0);
-				  sendto(fddata[i],bufin,nx,0,(struct sockaddr *) &(dataout[i]), sizeof(struct sockaddr_un));
-			  }
-			  if (pollv[2*i+1].revents & POLLIN) {
-				  datainsize=sizeof(datain);
-				  nx=recvfrom(fddata[i],bufin,BUFSIZE,0,(struct sockaddr *) &datain, &datainsize);
-				  //fprintf(stderr,"TX to qemu %d\n",nx);
-				  write(sp[i][1],bufin,nx);
-			  }
-		  }
+	    if ((result=poll(pollv,2*nb_nics,-1)) < 0) {
+	      perror("poll");
+	      exit(1);
+	    }
+	    for (i=0; i<nb_nics; i++) {
+	      if (pollv[2*i].revents & POLLHUP || pollv[2*i+1].revents & POLLHUP)
+		break;
+	      if (pollv[2*i].revents & POLLIN) {
+		if ((nx=read(sp[i][1],bufin,sizeof(bufin))) < 0) {
+		  perror("read");
+		  exit(1);
+		}
+		//fprintf(stderr,"RX from qemu %d\n",nx);
+		//send(connected_fd,bufin,nx,0);
+		if (sendto(fddata[i],bufin,nx,0,(struct sockaddr *) &(dataout[i]), sizeof(struct sockaddr_un)) < 0) {
+		  perror("sendto");
+		  exit(1);
+		}
+	      }
+	      if (pollv[2*i+1].revents & POLLIN) {
+		datainsize=sizeof(datain);
+		if ((nx=recvfrom(fddata[i],bufin,BUFSIZE,0,(struct sockaddr *) &datain, &datainsize)) < 0) {
+		  perror("recvfrom");
+		  exit(1);
+		}
+		//fprintf(stderr,"TX to qemu %d\n",nx);
+		if (write(sp[i][1],bufin,nx) < 0) {
+		  perror("write");
+		  exit(1);
+		}
+	      }
+	    }
 	  }
   } else {
 	  for (i=0; i<nb_nics; i++) {

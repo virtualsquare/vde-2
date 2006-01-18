@@ -37,6 +37,10 @@ vde_switch \- Virtual Distributed Ethernet switch
 .I octal-mode  
 ]  
 [ 
+.BI \-group
+.I NAME
+]  
+[ 
 .BI \-tap 
 .I interface  
 ] 
@@ -87,6 +91,10 @@ The default value is "/tmp/vde.ctl"
 .B \-mod "\fIoctalmode\fP"
 specify the directory when comm socket are created.
 The default value is "/tmp/vde.ctl"
+.TP
+.B \-group "\fINAME\fP"
+specify the group owner for the comm socket.
+The default value is the current user's primary group
 .TP
 .B \-tap "\fIinterface\fP" 
 connect the specified tuntap interface to this vde_switch (needs root privileges)
