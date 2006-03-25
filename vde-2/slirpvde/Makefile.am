@@ -42,4 +42,7 @@ slirpvde_SOURCES = \
 
 INCLUDES = -DVDE 
 
+# workaround for gcc 4.0.3
+CFLAGS = -g -O1
+
 EXTRA_DIST = README
