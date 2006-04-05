@@ -299,12 +299,13 @@ tcp_input(m, iphlen, inso)
 	 */
 	ip=mtod(m, struct ip *);
 	save_ip = *ip; 
-	save_ip.ip_len+= iphlen;
 
 	/*
 	 * Checksum extended TCP header and data.
 	 */
-	tlen = ((struct ip *)ti)->ip_len;
+	//tlen = ((struct ip *)ti)->ip_len;
+	// use save_ip instead of ti to be avoid gcc aliasing optimization problems
+	tlen=save_ip.ip_len;
 	ti->ti_next = ti->ti_prev = 0;
 	ti->ti_x1 = 0;
 	ti->ti_len = htons((u_int16_t)tlen);
@@ -316,6 +317,8 @@ tcp_input(m, iphlen, inso)
 	  tcpstat.tcps_rcvbadsum++;
 	  goto drop;
 	}
+
+	save_ip.ip_len+= iphlen;
 
 	/*
 	 * Check that TCP offset makes sense,
