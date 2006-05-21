@@ -17,5 +17,6 @@ void packetq_try(void);
 
 void packetq_delfd(int fd);
 
+int packetq_count();
 #endif
 #endif
