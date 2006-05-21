@@ -23,11 +23,13 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 
+#include <vde.h>
 #include <port.h>
 #include <switch.h>
 #include <sockutils.h>
 #include <consmgmt.h>
 #include <qtimer.h>
+#include <packetq.h>
 
 #define MAXCMD 128
 
@@ -413,6 +415,7 @@ static int showinfo(int fd)
 			qtime());
 	if (mgmt_socket)
 		printoutc(fd,"mgmt %s perm 0%03o",mgmt_socket,mgmt_mode);
+	printoutc(fd,"unsent_pktq_len %d",packetq_count());
 	return 0;
 }
 
