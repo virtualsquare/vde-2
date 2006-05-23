@@ -81,7 +81,7 @@ static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t,f
 		int sendrv=!(FD_ISSET(h->fd,fds));
 		h->times--;
 		if ((sendrv && (sendrv=h->sender(h->fd,h->fd_ctl,h->packet,h->len,h->data,h->port)) == 0)   /*send OK*/
-				|| h->times==0) { /*or max number of attempts reached*/
+				|| h->times<=0) { /*or max number of attempts reached*/
 			struct packetqq *next;
 #if 0
 			/* this error code is unreachable! (sendrv==0 here) */
@@ -130,7 +130,6 @@ void packetq_try(void)
 static struct packetqq *packetq_scandelfd(int fd,struct packetqq *h,struct packetqq **t)
 {
 	if (h != NULL) {
-		h->times--;
 		if (fd == h->fd) {
 			struct packetqq *next=h->next;
 			countq--;
