@@ -197,7 +197,7 @@ void remove_fd(int fd)
 		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->arg);
 		if (ISPRIO(fdpp[i]->type)) nprio--;
 		memmove(&fds[i], &fds[i + 1], (maxfds - i - 1) * sizeof(struct pollfd));
-		memmove(&fdpp[i], &fdpp[i + 1], (maxfds - i - 1) * sizeof(struct pollfd *));
+		memmove(&fdpp[i], &fdpp[i + 1], (maxfds - i - 1) * sizeof(struct pollplus *));
 		free(old);
 		nfds--;
 	}
