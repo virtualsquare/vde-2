@@ -513,6 +513,7 @@ tcp_connect(inso)
 		so->so_state = SS_NOFDREF; /* Don't select it yet, even though we have an FD */
 					   /* if it's not FACCEPTONCE, it's already NOFDREF */
 	}
+	fprintf(stderr,"S=%d\n",s);
 	so->s = s;
 	
 	so->so_iptos = tcp_tos(so);
@@ -983,8 +984,8 @@ do_prompt:
 			}
 			return 0;
 		}
-#endif		
-        case EMU_FTP: /* ftp */
+#endif
+	 case EMU_FTP: /* ftp */
 		*(m->m_data+m->m_len) = 0; /* NULL terminate for strstr */
 		if ((bptr = (char *)strstr(m->m_data, "ORT")) != NULL) {
 			/*

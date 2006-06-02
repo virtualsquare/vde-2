@@ -37,6 +37,7 @@ static char *pidfile = NULL;
 static char pidfile_path[_POSIX_PATH_MAX];
 int logok=0;
 char *prog;
+extern FILE *lfd;
 
 void printlog(int priority, const char *format, ...)
 {
@@ -282,6 +283,133 @@ void slirp_output(const uint8_t *pkt, int pkt_len)
 	sendto(fddata,pkt,pkt_len,0,(struct sockaddr *) &dataout, sizeof(struct sockaddr_un));
 }
 
+struct redirx {
+	u_int32_t inaddr;
+	int start_port;
+	int display;
+	int screen;
+	struct redirx *next;
+};
+
+struct redirtcp {
+	u_int32_t inaddr;
+	int port;
+	int lport;
+	struct redirtcp *next;
+};
+
+static struct redirtcp *parse_redir_tcp(struct redirtcp *head, char *buff)
+{
+	u_int32_t inaddr=0;
+	int port=0;
+	int lport=0;
+	char *ipaddrstr=NULL;
+	char *portstr=NULL;
+	struct redirtcp *new;
+			
+	if ((ipaddrstr = strchr(buff, ':'))) {
+		*ipaddrstr++ = 0;
+		if (*ipaddrstr == 0) {
+			fprintf(stderr,"redir TCP syntax error\n");
+			return head;
+		}
+	}
+	if ((portstr = strchr(ipaddrstr, ':'))) {
+		*portstr++ = 0;
+		if (*portstr == 0) {
+			fprintf(stderr,"redir TCP syntax error\n");
+			return head;
+		}
+	}
+
+	sscanf(buff,"%d",&lport);
+	sscanf(portstr,"%d",&port);
+	if (ipaddrstr) 
+		inaddr = inet_addr(ipaddrstr);
+
+	if (!inaddr) {
+		lprint(stderr,"TCP redirection error: an IP address must be specified\r\n");
+		return head;
+	}
+
+	if ((new=malloc(sizeof(struct redirtcp)))==NULL)
+		return head;
+	else {
+		new->inaddr=inaddr;
+		new->port=port;
+		new->lport=lport;
+		new->next=head;
+		return new;
+	}
+}
+
+static struct redirx *parse_redir_x(struct redirx *head, char *buff)
+{
+	char *ptr=NULL;
+	u_int32_t inaddr = 0;
+	int display=0;
+	int screen=0;
+	int start_port = 0;
+	struct redirx *new;
+	if ((ptr = strchr(buff, ':'))) {
+		*ptr++ = 0;
+		if (*ptr == 0) {
+			fprintf(stderr,"X-redirection syntax error\n");
+			return head;
+		}
+	}
+	if (buff[0]) {
+		inaddr = inet_addr(buff);
+		if (inaddr == 0xffffffff) {
+			lprint(stderr,"Error: X-redirection bad address\r\n");
+			return head;
+		}
+	}
+	if (ptr) {
+		if (strchr(ptr, '.')) {
+			if (sscanf(ptr, "%d.%d", &display, &screen) != 2)
+				return head;
+		} else {
+			if (sscanf(ptr, "%d", &display) != 1)
+				return head;
+		}
+	}
+
+	if (!inaddr) {
+		lprint(stderr,"Error: X-redirection an IP address must be specified\r\n");
+		return head;
+	}
+
+	if ((new=malloc(sizeof(struct redirx)))==NULL)
+		return head;
+	else {
+		new->inaddr=inaddr;
+		new->display=display;
+		new->screen=screen;
+		new->start_port=start_port;
+		new->next=head;
+		return new;
+	}
+}
+
+static void do_redir_tcp(struct redirtcp *head)
+{
+	if (head) {
+		do_redir_tcp(head->next);
+		redir_tcp(head->inaddr,head->port,head->lport);
+		free(head);
+	}
+}
+
+static void do_redir_x(struct redirx *head)
+{
+	if (head) {
+		do_redir_x(head->next);
+		redir_x(head->inaddr,head->start_port,head->display,head->screen);
+		free(head);
+	}
+}
+
 void usage(char *name) {
 	fprintf(stderr,"Usage: %s [-socket vdesock] [-dhcp] [-daemon] [-network netaddr] \n\t%s [-s vdesock] [-D] [-d] [-n netaddr]\n",name,name);
 	exit(-1);
@@ -315,10 +443,12 @@ int main(int argc, char **argv)
 	char *group=NULL;
 	int mode=0700;
 	int daemonize=0;
+	struct redirtcp *rtcp=NULL;
+	struct redirx *rx=NULL;
 
   prog=basename(argv[0]);
 
-  while ((opt=GETOPT_LONG(argc,argv,"s:n:p:g:m:dD",slirpvdeopts,&longindx)) > 0) {
+  while ((opt=GETOPT_LONG(argc,argv,"s:n:p:g:m:L:X:dD",slirpvdeopts,&longindx)) > 0) {
 		switch (opt) {
 			case 's' : sockname=optarg;
 								 break;
@@ -335,6 +465,10 @@ int main(int argc, char **argv)
 			case 'p':  pidfile=strdup(optarg);
 								 break;
 			case 'P' : port=atoi(optarg);
+								 break;
+			case 'L': rtcp=parse_redir_tcp(rtcp,optarg);
+								 break;
+			case 'X': rx=parse_redir_x(rx,optarg);
 								 break;
 			default  : usage(prog);
 								 break;
@@ -361,7 +495,11 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	connected_fd=send_fd(sockname, fddata, &dataout, port, group, mode);
+	lfd=stderr;
 	slirp_init(netw);
+
+	do_redir_tcp(rtcp);
+	do_redir_x(rx);
 
 	for(;;) {
 		FD_ZERO(&rs);

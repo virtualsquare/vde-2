@@ -69,8 +69,10 @@ extern struct emu_t *tcpemu;
 
 extern int x_port, x_server, x_display;
 
-int show_x _P((char *, struct socket *));
+int show_x _P((void));
 void redir_x _P((u_int32_t, int, int, int));
+void redir_tcp _P((u_int32_t, int, int));
+
 void getouraddr _P((void));
 inline  void slirp_insque  _P((void *, void *));
 inline  void slirp_remque  _P((void *));

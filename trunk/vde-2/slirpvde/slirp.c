@@ -66,6 +66,7 @@ static int get_dns_addr(struct in_addr *pdns_addr)
                 lprint("%s", inet_ntoa(tmp_addr));
         }
     }
+		lprint("\n");
     if (!found)
         return -1;
     return 0;
