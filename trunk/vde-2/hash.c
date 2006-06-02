@@ -23,6 +23,7 @@
 #include <consmgmt.h>
 #include <bitarray.h>
 
+#define MIN_PERSISTENCE 3
 #define HASH_INIT_BITS 7
 static int hash_bits;
 static int hash_mask;
@@ -77,6 +78,7 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 	struct hash_entry *e;
 	int k = calc_hash(extmac(esrc,src,vlan));
 	int oldport;
+	time_t now;
 	for(e = h[k]; e && memcmp(&e->dst, esrc, ETH_ALEN+2); e = e->next)
 		;
 	if(e == NULL) {
@@ -94,8 +96,12 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 		h[k] = e;
 	}
 	oldport=e->port;
-	e->port=port;
-	e->last_seen = qtime();
+	now=qtime();
+	if (oldport!=port) {
+		if ((now - e->last_seen) > MIN_PERSISTENCE)
+			e->port=port;
+	}
+	e->last_seen = now;
 	return oldport;
 }
 

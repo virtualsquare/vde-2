@@ -418,12 +418,11 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 	/* We don't like broadcast source addresses */
 	if(! ((IS_BROADCAST(packet->header.src)) || (pflag & HUB_TAG))) {
 
-		/* int last = */ find_in_hash_update(packet->header.src,vlan,port);
+		int last = find_in_hash_update(packet->header.src,vlan,port);
 		/* old value differs from actual input port */
-		/* if(last < 0 || (port != last)){
-			 if(last >= 0)
-			 printf(" old port %d", last);
-			 } */
+		if(last >=0 && (port != last)){
+			printlog(LOG_WARNING,"MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d",packet->header.src[0],packet->header.src[1],packet->header.src[2],packet->header.src[3],packet->header.src[4],packet->header.src[5],last,port);
+		}
 	}
 	/* static void send_dst(int port,struct packet *packet, int len) */
 	if(IS_BROADCAST(packet->header.dest) || (pflag & HUB_TAG) || 
