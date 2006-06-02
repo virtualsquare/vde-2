@@ -12,15 +12,12 @@
 u_int curtime, time_fasttimo, last_slowtimo, detach_time;
 u_int detach_wait = 600000;	/* 10 minutes */
 
-#if 0
 int x_port = -1;
 int x_display = 0;
 int x_screen = 0;
 
 int
-show_x(buff, inso)
-	char *buff;
-	struct socket *inso;
+show_x()
 {
 	if (x_port < 0) {
 		lprint("X Redir: X not being redirected.\r\n");
@@ -33,7 +30,7 @@ show_x(buff, inso)
 		   lprint("X Redir: Redirecting to display %d\r\n", x_display);
 	}
 	
-	return CFG_OK;
+	return 0;
 }
 
 
@@ -51,7 +48,7 @@ redir_x(inaddr, start_port, display, screen)
 	
 	if (x_port >= 0) {
 		lprint("X Redir: X already being redirected.\r\n");
-		show_x(0, 0);
+		show_x();
 	} else {
 		for (i = 6001 + (start_port-1); i <= 6100; i++) {
 			if (solisten(htons(i), inaddr, htons(6000 + display), 0)) {
@@ -59,14 +56,27 @@ redir_x(inaddr, start_port, display, screen)
 				x_port = i - 6000;
 				x_display = display;
 				x_screen = screen;
-				show_x(0, 0);
+				show_x();
 				return;
 			}
 		}
 		lprint("X Redir: Error: Couldn't redirect a port for X. Weird.\r\n");
 	}
 }
-#endif
+
+void redir_tcp(inaddr, port, lport)
+	u_int32_t inaddr;
+	int port;
+	int lport;
+{
+	struct socket *so;
+
+	if ((so=solisten(htons(lport), inaddr, htons(port), 0)) != NULL) {
+		lprint("Redirecting TCP port %d to %s:%d\r\n",
+				           ntohs(so->so_fport), inet_ntoa(so->so_laddr), port);
+	} else
+		lprint("Redirection failed: %s\r\n", strerror(errno));
+}
 
 #ifndef HAVE_INET_ATON
 int
