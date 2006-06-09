@@ -161,6 +161,14 @@ static void send_dst(struct port *port, struct packet *packet, int len,
   register int i;
 
   target = find_in_hash(packet->header.dest);
+	/*fprintf(stderr,"%02x:%02x:%02x:%02x:%02x:%02x -> %02x:%02x:%02x:%02x:%02x:%02x %p\n",
+			packet->header.src[0], packet->header.src[1], 
+			packet->header.src[2], packet->header.src[3], 
+			packet->header.src[4], packet->header.src[5],
+			packet->header.dest[0], packet->header.dest[1], 
+			packet->header.dest[2], packet->header.dest[3], 
+			packet->header.dest[4], packet->header.dest[5],
+			target);*/
   if((target == NULL) || IS_BROADCAST(packet->header.dest) || hub){
 #ifdef INFO
     if((target == NULL) && !IS_BROADCAST(packet->header.dest)){
@@ -202,6 +210,10 @@ static void send_dst(struct port *port, struct packet *packet, int len,
   }
 }
 
+#define BPDUADDR {0x01,0x80,0xc2,0x00,0x00,0x00}
+static unsigned char bpduaddrp[]=BPDUADDR;
+#define ISBPDU(P) (memcmp((P)->header.dest,bpduaddrp,ETH_ALEN)==0)
+
 /* we have received a packet of data; take the packet 'packet' of size 'len'
  * and send it to port 'p', acting as a hub if asked for. if p is NULL, then we
  * assume that data comes from no known source (this should not happen) */
@@ -214,8 +226,10 @@ static void handle_direct_data (struct port *p, int hub, struct packet *packet, 
 	  printlog(LOG_WARNING,"Unknown connection for packet, shouldn't happen.");
   }
 #endif
-
-  send_dst(p, packet, len, hub);  
+	/* throw away FSP packets: VDE1 is unable to manage FSP, run VDE2 instead
+	 * ;-) */
+	if (!ISBPDU(packet))
+		send_dst(p, packet, len, hub);  
 }
 
   
