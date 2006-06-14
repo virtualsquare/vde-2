@@ -23,7 +23,8 @@
 #include <consmgmt.h>
 #include <bitarray.h>
 
-#define MIN_PERSISTENCE 3
+#define MIN_PERSISTENCE_DFL 3
+static int min_persistence=MIN_PERSISTENCE_DFL;
 #define HASH_INIT_BITS 7
 static int hash_bits;
 static int hash_mask;
@@ -98,7 +99,7 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 	oldport=e->port;
 	now=qtime();
 	if (oldport!=port) {
-		if ((now - e->last_seen) > MIN_PERSISTENCE)
+		if ((now - e->last_seen) > min_persistence)
 			e->port=port;
 	}
 	e->last_seen = now;
@@ -281,6 +282,12 @@ int hash_set_gc_expire(int e)
 	return 0;
 }
 
+int hash_set_minper(int e)
+{
+	min_persistence=e;
+	return 0;
+}
+
 int hash_get_gc_interval()
 {
 	return gc_interval;
@@ -346,6 +353,7 @@ static int showinfo(int fd)
 	printoutc(fd,"Hash size %d",HASH_SIZE);
 	printoutc(fd,"GC interval %d secs",gc_interval);
 	printoutc(fd,"GC expire %d secs",gc_expire);
+	printoutc(fd,"Min persistence %d secs",min_persistence);
 	return 0;
 }
 
@@ -355,6 +363,7 @@ static struct comlist cl[]={
 	{"hash/setsize","N","change hash size",hash_resize,INTARG},
 	{"hash/setgcint","N","change garbage collector interval",hash_set_gc_interval,INTARG},
 	{"hash/setexpire","N","change hash entries expire time",hash_set_gc_expire,INTARG},
+	{"hash/setminper","N","minimum persistence time",hash_set_minper,INTARG},
 	{"hash/print","","print the hash table",print_hash,NOARG|WITHFD},
 	{"hash/find","MAC [VLAN]","MAC lookup",find_hash,STRARG|WITHFD},
 };
