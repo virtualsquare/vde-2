@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(vde, [2.0.3], renzo@cs.unibo.it)
+AC_INIT(vde, [2.1.0], renzo@cs.unibo.it)
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([vde.h])
 AC_CONFIG_HEADER([config.h])
@@ -15,7 +15,7 @@ AC_PROG_LN_S
 AC_PROG_LIBTOOL
 
 # Checks for libraries.
-AC_CHECK_LIB([dl], [dlopen])
+AC_CHECK_LIB([dl], [dlopen], [crypto])
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -126,6 +126,12 @@ AC_CONFIG_FILES([Makefile]
                 [qemu/Makefile]
                 [slirpvde/Makefile]
                 [vdetaplib/Makefile]
+                [libvdeplug/Makefile]
+                [vde_plug/Makefile]
+                [vde_cryptcab/Makefile]
                 [bochs/Makefile]
+                [dpipe/Makefile]
+                [unixterm/Makefile]
+                [wirefilter/Makefile]
                 [uml/Makefile])
 AC_OUTPUT

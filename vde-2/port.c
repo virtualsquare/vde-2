@@ -407,12 +407,13 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 	}
 
 #ifdef FSTP
-	if (ISBPDU(packet)) {
+	/* when it works as a HUB, MST packet must be forwarded */
+	if (ISBPDU(packet) && !(pflag & HUB_TAG)) {
 		fst_in_bpdu(port,packet,len,vlan,tagged);
 		return; /* BPDU packets are not forwarded */
 	}
-	/* The port is in blocked status, no packet received */
 #endif
+	/* The port is in blocked status, no packet received */
 	if (BA_CHECK(vlant[vlan].notlearning,port)) return; 
 
 	/* We don't like broadcast source addresses */
@@ -421,7 +422,7 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 		int last = find_in_hash_update(packet->header.src,vlan,port);
 		/* old value differs from actual input port */
 		if(last >=0 && (port != last)){
-			printlog(LOG_WARNING,"MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d",packet->header.src[0],packet->header.src[1],packet->header.src[2],packet->header.src[3],packet->header.src[4],packet->header.src[5],last,port);
+			printlog(LOG_INFO,"MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d",packet->header.src[0],packet->header.src[1],packet->header.src[2],packet->header.src[3],packet->header.src[4],packet->header.src[5],last,port);
 		}
 	}
 	/* static void send_dst(int port,struct packet *packet, int len) */

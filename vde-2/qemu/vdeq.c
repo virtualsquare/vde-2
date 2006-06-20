@@ -21,102 +21,15 @@
 #include <pwd.h>
 
 #include <vde.h>
+#include <libvdeplug/libvdeplug.h>
 
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048
 #define ETH_ALEN 6
 #define MAXDESCR 128
 
-enum request_type { REQ_NEW_CONTROL };
-
-struct request_v3 {
-  uint32_t magic;
-  uint32_t version;
-  enum request_type type;
-  struct sockaddr_un sock;
-	char description[MAXDESCR];
-};
-
-static struct passwd *callerpwd;
-
 static int nb_nics;
-static char** inpath;
-
-static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int intno, int port)
-{
-  int pid = getpid();
-  struct request_v3 req;
-  int fdctl;
-  struct sockaddr_un sock;
-
-  if((fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
-    perror("socket");
-    exit(1);
-  }
-
-	if (name == NULL)
-		name=VDESTDSOCK;
-	else {
-		char *split;
-		if(name[strlen(name)-1] == ']' && (split=rindex(name,'[')) != NULL) {
-			*split=0;
-			split++;
-			port=atoi(split);
-			if (*name==0) name=VDESTDSOCK;
-		}
-	}
-
-	sock.sun_family = AF_UNIX;
-	snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
-	if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-		if (name == VDESTDSOCK) {
-			name=VDETMPSOCK;
-			snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
-			if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-				snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name);
-				if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-					perror("connect");
-					exit(1);
-				}
-			}
-		}
-	}
-
-	req.magic=SWITCH_MAGIC;
-	req.version=3;
-	req.type=REQ_NEW_CONTROL+(port << 8);
-	req.sock.sun_family=AF_UNIX;
-
-	/* First choice, return socket from the switch close to the control dir*/
-	memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-	sprintf(req.sock.sun_path, "%s.%05d-%02d", name, pid, intno);
-	if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
-		/* if it is not possible -> /tmp */
-		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, intno);
-		if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0) {
-			perror("bind");
-			exit(1);
-		}
-	}
-
-	snprintf(req.description,MAXDESCR,"vdeqemu user=%s PID=%d SOCK=%s INT=%d",
-			callerpwd->pw_name,pid,req.sock.sun_path,intno);
-
-	inpath[intno]=strdup(req.sock.sun_path);
-
-  if (send(fdctl,&req,sizeof(req),0) < 0) {
-    perror("send");
-    exit(1);
-  }
-
-  if (recv(fdctl,datasock,sizeof(struct sockaddr_un),0)<0) {
-	  perror("recv");
-	  exit(1);
-  }
-
-  return fdctl;
-}
+VDECONN **conn;
 
 unsigned char bufin[BUFSIZE];
 
@@ -176,8 +89,8 @@ static void cleanup()
 {
 	register int i;
 	for (i=0; i<nb_nics; i++) {
-		if (inpath[i] != NULL)
-			unlink(inpath[i]);
+		if (conn[i] != NULL)
+			vde_close(conn[i]);
 	}
 }
 
@@ -281,6 +194,7 @@ static char *parsevdearg(char *arg,char **sock,int *pport, int fd)
 	char newarg[128];
 	int vlan=0;
 	*sock=VDESTDSOCK;
+	*pport=0;
 	while (*arg==',') arg++;
 	if (strncmp(arg,"vlan=",5)==0) {
 		vlan=atoi(arg+5);
@@ -318,13 +232,9 @@ static char *parsevdearg(char *arg,char **sock,int *pport, int fd)
 
 int main(int argc, char **argv)
 {
-  int *fddata;
   char *argsock,**sockname;
 	int *ports;
-  struct sockaddr_un *dataout,datain;
-  socklen_t datainsize;
   int result;
-  int *connected_fd;
   register ssize_t nx;
   int newargc;
   char **newargv;
@@ -336,7 +246,7 @@ int main(int argc, char **argv)
 	int ver;
 
   vdeqname=basename(argv[0]);
-	callerpwd=getpwuid(getuid());
+	//callerpwd=getpwuid(getuid());
 	/* OLD SYNTAX MGMT */
 	if (strncmp(vdeqname,"vdeo",4) == 0) {
 		oldsyntax=1;
@@ -393,15 +303,16 @@ int main(int argc, char **argv)
 					"Warning: all the vde connections will be connected to one net interface\n"
 					"         to configure several interface use the new syntax -net vde\n");
 	}
-  if ((sp= (pair *) malloc(nb_nics * 2 * sizeof (int)))<0) {
-	  perror("malloc nics");
+
+	if ((sp= (pair *) malloc(nb_nics * 2 * sizeof (int)))<0) {
+		perror("malloc nics");
+		exit(1);
+	}
+
+	if ((conn=(VDECONN **) calloc (nb_nics,sizeof(VDECONN *))) <0) {
+	  perror("calloc conn");
 	  exit(1);
   }
-  if ((inpath=(char **) malloc (nb_nics * sizeof(char *))) <0) {
-	  perror("malloc inpath");
-	  exit(1);
-  }
-	memset(inpath,0,(nb_nics * sizeof(char *)));
 
   for (i=0; i<nb_nics; i++) {
   	if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sp[i]) < 0){
@@ -410,10 +321,10 @@ int main(int argc, char **argv)
 		}
   }
 
-  if ((sockname= (char **) malloc(sizeof(char *) * nb_nics))<0) {
-	  perror("malloc sockname");
-	  exit(1);
-  }
+	if ((sockname= (char **) malloc(sizeof(char *) * nb_nics))<0) {
+		perror("malloc sockname");
+		exit(1);
+	}
   if ((ports= (int *) calloc(nb_nics, sizeof(int)))<0) {
 	  perror("malloc ports");
 	  exit(1);
@@ -495,31 +406,15 @@ int main(int argc, char **argv)
 		newargv[i]=0;
 	}
 
-  if ((fddata= (int *) malloc(sizeof(int) * nb_nics))<0) {
-	  perror("malloc fddata");
-	  exit(1);
-  }
-  if ((connected_fd= (int *) malloc(sizeof(int) * nb_nics))<0) {
-	  perror("malloc connected_fd");
-	  exit(1);
-  }
-  if ((dataout= (struct sockaddr_un *) malloc(sizeof(struct sockaddr_un) * nb_nics))<0) {
-	  perror("malloc dataout");
-	  exit(1);
-  }
-
   if ((pollv= (struct pollfd *) malloc(sizeof(struct pollfd) * 2 * nb_nics))<0) {
-		perror("malloc fddata");
+		perror("malloc pollfd");
 	  exit(1);
   }
 	setsighandlers();
   for (i=0; i<nb_nics; i++) {
-	  if((fddata[i] = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0){
-		  perror("socket");
-		  exit(1);
-	  }
-	  connected_fd[i]=send_fd(sockname[i], fddata[i], &(dataout[i]), i, ports[i]);
-	  pollv[2*i+1].fd=fddata[i];
+		struct vde_open_args vdearg={ports[i],NULL,0};
+		conn[i]=vde_open(sockname[i],"vdeqemu",&vdearg);
+	  pollv[2*i+1].fd=vde_datafd(conn[i]);
 	  pollv[2*i].fd=sp[i][1];
 	  pollv[2*i].events= pollv[2*i+1].events=POLLIN|POLLHUP;
   }
@@ -543,15 +438,13 @@ int main(int argc, char **argv)
 		  exit(1);
 		}
 		//fprintf(stderr,"RX from qemu %d\n",nx);
-		//send(connected_fd,bufin,nx,0);
-		if (sendto(fddata[i],bufin,nx,0,(struct sockaddr *) &(dataout[i]), sizeof(struct sockaddr_un)) < 0) {
+		if (vde_send(conn[i],bufin,nx,0) < 0) {
 		  perror("sendto");
 		  exit(1);
 		}
 	      }
 	      if (pollv[2*i+1].revents & POLLIN) {
-		datainsize=sizeof(datain);
-		if ((nx=recvfrom(fddata[i],bufin,BUFSIZE,0,(struct sockaddr *) &datain, &datainsize)) < 0) {
+		if ((nx=vde_recv(conn[i],bufin,BUFSIZE,0)) < 0) {
 		  perror("recvfrom");
 		  exit(1);
 		}
@@ -566,8 +459,8 @@ int main(int argc, char **argv)
   } else {
 	  for (i=0; i<nb_nics; i++) {
 		  close(sp[i][1]);
-		  close(fddata[i]);
-		  close(connected_fd[i]);
+		  close(vde_datafd(conn[i]));
+		  close(vde_ctlfd(conn[i]));
 	  }
 	  execvp(filename,newargv);
   }  

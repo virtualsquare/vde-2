@@ -40,8 +40,10 @@ slirpvde_SOURCES = \
 		   bootp.h \
 		   slirpvde.c
 
+slirpvde_LDADD = ../libvdeplug/libvdeplug.la
+
 INCLUDES = -DVDE 
 
-CFLAGS = -g -O2
+AM_CFLAGS = -g -O2
 
 EXTRA_DIST = README

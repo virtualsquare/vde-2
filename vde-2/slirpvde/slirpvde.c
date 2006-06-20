@@ -27,11 +27,13 @@
 #include <stdarg.h>
 #include <fcntl.h>
 #include <vde.h>
+#include <libvdeplug/libvdeplug.h>
 
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048
 #define ETH_ALEN 6
 
+VDECONN *conn;
 int dhcpmgmt=0;
 static char *pidfile = NULL;
 static char pidfile_path[_POSIX_PATH_MAX];
@@ -55,109 +57,6 @@ void printlog(int priority, const char *format, ...)
 	va_end (arg);
 }
 
-enum request_type { REQ_NEW_CONTROL };
-
-#define MAXDESCR 128
-
-struct request_v3 {
-  uint32_t magic;
-  uint32_t version;
-  enum request_type type;
-  struct sockaddr_un sock;
-	char description[MAXDESCR];
-};
-
-static struct sockaddr_un inpath;
-
-static int send_fd(char *name, int fddata, struct sockaddr_un *datasock, int port, char *g, int m)
-{
-  int pid = getpid();
-  struct request_v3 req;
-  int fdctl;
-	int gid;
-	struct group *gs;
-	struct passwd *callerpwd;
-
-  struct sockaddr_un sock;
-
-	callerpwd=getpwuid(getuid());
-  if((fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
-    perror("socket");
-    exit(1);
-  }
-
-	if (name == NULL)
-		name=VDESTDSOCK;
-	else {
-		char *split;
-		if(name[strlen(name)-1] == ']' && (split=rindex(name,'[')) != NULL) {
-			*split=0;
-			split++;
-			port=atoi(split);
-			if (*name==0) name=VDESTDSOCK;
-		}
-	}
-	
-	sock.sun_family = AF_UNIX;
-	snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
-	if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-		if (name == VDESTDSOCK) {
-			name=VDETMPSOCK;
-			snprintf(sock.sun_path, sizeof(sock.sun_path), "%s/ctl", name);
-			if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-				snprintf(sock.sun_path, sizeof(sock.sun_path), "%s", name);
-				if(connect(fdctl, (struct sockaddr *) &sock, sizeof(sock))){
-					perror("connect");
-					exit(1);
-				}
-			}
-		}
-	}
-
-	req.magic=SWITCH_MAGIC;
-	req.version=3;
-	req.type=REQ_NEW_CONTROL+(port << 8);
-	req.sock.sun_family=AF_UNIX;
-
-	/* First choice, return socket from the switch close to the control dir*/
-	memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-	sprintf(req.sock.sun_path, "%s.%05d-%02d", name, pid, 0);
-	if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
-		/* if it is not possible -> /tmp */
-		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, 0);
-		if(bind(fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0) {
-			perror("bind");
-			exit(1);
-		}
-	}
-						
-	snprintf(req.description,MAXDESCR,"slirpvde user=%s PID=%d SOCK=%s",
-			callerpwd->pw_name,pid,req.sock.sun_path);
-	memcpy(&inpath,&req.sock,sizeof(req.sock));
-
-	if (send(fdctl,&req,sizeof(req)-MAXDESCR+strlen(req.description),0) < 0) {
-		perror("send");
-		exit(1);
-	}
-
-	if (recv(fdctl,datasock,sizeof(struct sockaddr_un),0)<0) {
-		perror("recv");
-		exit(1);
-	}
-
-	if (g) {
-		if ((gs=getgrnam(g)) == NULL)
-			gid=atoi(g);
-		else 
-			gid=gs->gr_gid;
-		chown(inpath.sun_path,-1,gid);
-	}
-	if (m>=0)
-		chmod(inpath.sun_path,m);
-
-	return fdctl;
-}
 
 static void save_pidfile()
 {
@@ -194,7 +93,7 @@ static void cleanup(void)
 	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
 		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
 	}
-	unlink(inpath.sun_path);
+	vde_close(conn);
 }
 
 static void sig_handler(int sig)
@@ -247,8 +146,6 @@ int slirp_can_output(void)
 	return 1;
 }
 
-static int fddata;
-static struct sockaddr_un dataout;
 
 #if 0
 #define convery2ascii(x) ((x)>=' ' && (x) <= '~')?(x):'.'
@@ -280,7 +177,7 @@ void slirp_output(const uint8_t *pkt, int pkt_len)
 	/* slirp -> vde */
 	//fprintf(stderr,"RX from slirp %d\n",pkt_len);
 	//dumppkt(pkt,pkt_len);
-	sendto(fddata,pkt,pkt_len,0,(struct sockaddr *) &dataout, sizeof(struct sockaddr_un));
+	vde_send(conn,pkt,pkt_len,0);
 }
 
 struct redirx {
@@ -328,7 +225,7 @@ static struct redirtcp *parse_redir_tcp(struct redirtcp *head, char *buff)
 		inaddr = inet_addr(ipaddrstr);
 
 	if (!inaddr) {
-		lprint(stderr,"TCP redirection error: an IP address must be specified\r\n");
+		fprintf(stderr,"TCP redirection error: an IP address must be specified\r\n");
 		return head;
 	}
 
@@ -361,7 +258,7 @@ static struct redirx *parse_redir_x(struct redirx *head, char *buff)
 	if (buff[0]) {
 		inaddr = inet_addr(buff);
 		if (inaddr == 0xffffffff) {
-			lprint(stderr,"Error: X-redirection bad address\r\n");
+			fprintf(stderr,"Error: X-redirection bad address\r\n");
 			return head;
 		}
 	}
@@ -376,7 +273,7 @@ static struct redirx *parse_redir_x(struct redirx *head, char *buff)
 	}
 
 	if (!inaddr) {
-		lprint(stderr,"Error: X-redirection an IP address must be specified\r\n");
+		fprintf(stderr,"Error: X-redirection an IP address must be specified\r\n");
 		return head;
 	}
 
@@ -411,7 +308,12 @@ static void do_redir_x(struct redirx *head)
 }
 
 void usage(char *name) {
-	fprintf(stderr,"Usage: %s [-socket vdesock] [-dhcp] [-daemon] [-network netaddr] \n\t%s [-s vdesock] [-D] [-d] [-n netaddr]\n",name,name);
+	fprintf(stderr,
+			"Usage:\n"
+			" %s [-socket vdesock] [-dhcp] [-daemon] [-network netaddr] \n"
+			"\t [-L host_port:guest_addr:guest_port] [-X guest_addr[:display[.screen]]] \n"
+			" %s [-s vdesock] [-D] [-d] [-n netaddr]\n"
+			"\t [-L host_port:guest_addr:guest_port] [-X guest_addr[:display[.screen]]] \n" ,name,name);
 	exit(-1);
 }
 
@@ -433,18 +335,15 @@ int main(int argc, char **argv)
 {
   char *sockname=NULL;
   int result,nfds;
-  int port=0;
-  int connected_fd;
   register ssize_t nx;
   register int i;
   fd_set rs,ws,xs;
   int opt,longindx;
   char *netw=NULL;
-	char *group=NULL;
-	int mode=0700;
 	int daemonize=0;
 	struct redirtcp *rtcp=NULL;
 	struct redirx *rx=NULL;
+	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 
   prog=basename(argv[0]);
 
@@ -458,13 +357,13 @@ int main(int argc, char **argv)
 								 break;
 			case 'n' : netw=optarg;
 								 break;
-			case 'm' : sscanf(optarg,"%o",&mode);
+			case 'm' : sscanf(optarg,"%o",&(open_args.mode));
 								 break;
-			case 'g' : group=strdup(optarg);
+			case 'g' : open_args.group=strdup(optarg);
 								 break;
 			case 'p':  pidfile=strdup(optarg);
 								 break;
-			case 'P' : port=atoi(optarg);
+			case 'P' : open_args.port=atoi(optarg);
 								 break;
 			case 'L': rtcp=parse_redir_tcp(rtcp,optarg);
 								 break;
@@ -490,11 +389,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	if((fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0){
-		perror("socket");
-		exit(1);
-	}
-	connected_fd=send_fd(sockname, fddata, &dataout, port, group, mode);
+	conn=vde_open(sockname,"slirpvde:",&open_args);
 	lfd=stderr;
 	slirp_init(netw);
 
@@ -502,19 +397,22 @@ int main(int argc, char **argv)
 	do_redir_x(rx);
 
 	for(;;) {
+		int datafd,ctlfd;
 		FD_ZERO(&rs);
 		FD_ZERO(&ws);
 		FD_ZERO(&xs);
 		nfds= -1;
 		slirp_select_fill(&nfds,&rs,&ws,&xs);
-		FD_SET(fddata,&rs);
-		FD_SET(connected_fd,&rs);
-		if (fddata>nfds) nfds=fddata;
-		if (connected_fd>nfds) nfds=connected_fd;
+		datafd=vde_datafd(conn);
+		ctlfd=vde_ctlfd(conn);
+		FD_SET(datafd,&rs);
+		FD_SET(ctlfd,&rs);
+		if (datafd>nfds) nfds=datafd;
+		if (ctlfd>nfds) nfds=ctlfd;
 		result=select(nfds+1,&rs,&ws,&xs,NULL);
 		//printf("SELECT %d %d\n",nfds,result);
-		if (FD_ISSET(fddata,&rs)) {
-			nx=recv(fddata,bufin,BUFSIZE,0);
+		if (FD_ISSET(datafd,&rs)) {
+			nx=vde_recv(conn,bufin,BUFSIZE,0);
 		  //fprintf(stderr,"TX to slirp %d\n",nx);
 			result--;
 		  slirp_input(bufin,nx);
@@ -525,8 +423,8 @@ int main(int argc, char **argv)
 		  slirp_select_poll(&rs,&ws,&xs);
 		  //fprintf(stderr,"slirp poll exit\n");
 	  }
-		if (FD_ISSET(connected_fd,&rs)) {
-			if(read(connected_fd,bufin,BUFSIZE)==0)
+		if (FD_ISSET(ctlfd,&rs)) {
+			if(read(ctlfd,bufin,BUFSIZE)==0)
 				exit(0);
 		}
   }
