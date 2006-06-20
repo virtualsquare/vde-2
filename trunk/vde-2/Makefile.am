@@ -1,4 +1,4 @@
-SUBDIRS = qemu slirpvde bochs uml doc
+SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_cryptcab
 
 if WANT_TUNTAP
 if CAN_MAKE_LIBVDETAP
@@ -10,7 +10,7 @@ AUTOMAKE_OPTIONS = foreign
 
 EXTRA_DIST = LICENSE VERSION ChangeLog
 
-bin_PROGRAMS = vde_switch dpipe vde_plug unixterm wirefilter
+bin_PROGRAMS = vde_switch
 vde_switch_SOURCES = \
 	hash.c \
 	hash.h \
@@ -32,10 +32,6 @@ vde_switch_SOURCES = \
 	packetq.c \
 	packetq.h \
 	bitarray.h
-dpipe_SOURCES = dpipe.c
-vde_plug_SOURCES = vde_plug.c vde.h
-unixterm_SOURCES = unixterm.c
-wirefilter_SOURCES = wirefilter.c
 if WANT_TUNTAP
   vde_switch_SOURCES += tuntap.c tuntap.h
 endif
