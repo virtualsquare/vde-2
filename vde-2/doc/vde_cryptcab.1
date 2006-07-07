@@ -1,0 +1,120 @@
+.\" Copyright (c) 2006 Daniele Lacamera
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 2 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public
+.\" License along with this manual; if not, write to the Free
+.\" Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
+.\" USA.
+
+.TH VDE_CRYPTCAB 1 "February 23, 2004" "Virtual Distributed Ethernet"
+.SH NAME
+vde_cryptcab \- Virtual Distributed Ethernet encrypted cable manager
+.SH SYNOPSIS
+.B vde_cryptcab 
+[ 
+.B \-p   
+.I portnum  
+] 
+[ 
+.B \-s 
+.I socketpath  
+] 
+[ 
+.B \-c   
+.I  [remote_user@]host[:remote_portnum]  
+] 
+.br
+.SH DESCRIPTION
+A
+\fBvde_cryptcab\fP 
+is a distributed cable manager for VDE switches.
+It allows two VDE switches on two machines to communicate
+using a blowfish encrypted channel.
+
+When used in client mode (i.e., with -c option), it generates a random
+blowfish key, and uses
+.B scp (1)
+to transfer the key to the remote server.
+
+After a 4-way handshake phase to verify client credentials, server and 
+client will exchange VDE datagrams encapsulating them into cryptograms
+that are sent via udp to each remote host.
+
+On server side, one could run: 
+.RS
+.br
+.B vde_cryptcab -s /tmp/vde2.ctl -p 2100
+.RE
+To start a multi-peer cryptcab server, accepting udp datagrams on port
+2100, that connects each authenticated remote client to a different 
+port of the switch. In fact, a new instance of 
+.B vde_plug (1)
+is started and connected to the switch through local unix socket.
+
+The command
+.RS
+.br
+.B vde_cryptcab -s /tmp/vde2.ctl -c foo@remote.machine.org:2100
+.RE
+will connect a client to the remote server, running on udp port 2100.
+At this point,  on server side a verify for user "foo" credentials is required, 
+tipically it could be: host-based authentication, password challenge 
+or public key authentication. See
+.B ssh (1)
+for more details about it.
+
+If the two vde_switches run as daemon and they are connected to tap interfaces
+a level 2 encrypted tunnel is established.
+
+.SH OPTIONS
+.TP
+.B \-p "\fIportnum\fP" 
+It is possible to decide which local udp port to use.
+When this option is not specified, cryptocab will use default udp port number,
+7667.
+.TP
+.B \-c "\fI[remote_user@]host[:remote_portnum]\fP" 
+run vde_cryptcab in client mode, trying to connect to 
+.B host .
+Both 
+.B remote_user 
+and 
+.B remote_portnum 
+parameters are not required.
+If not specified, the same user running vde_cryptcab is used for
+authentication on server, and default udp port 7667 is used.
+.TP
+.B \-s "\fIsocketpath\fP"
+specify the UNIX socket to be used by local programs for joining the VDE.
+The default value is "/tmp/vde.ctl".
+.SH NOTICE
+Virtual Distributed Ethernet is not related in any way with
+www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
+i.e. the German "Association for Electrical, Electronic & Information
+Technologies").
+
+.SH SEE ALSO
+.BR vde_switch (1),
+.BR vdeq (1),
+.BR vde_plug (1),
+.BR scp (1),
+.BR ssh (1).
+.br
+.SH AUTHORS 
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>.
+
+vde_cryptcab is a VDE component by Daniele Lacamera <root@danielinux.net>
