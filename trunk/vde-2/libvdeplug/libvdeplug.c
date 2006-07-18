@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pwd.h>
 #include <grp.h>
 
@@ -172,6 +173,8 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 			gid=gs->gr_gid;
 		chown(conn->inpath.sun_path,-1,gid);
 	}
+
+	// mode_t is an unsigned, so this check should be useless
 	if (mode>=0)
 		chmod(conn->inpath.sun_path,mode);
 

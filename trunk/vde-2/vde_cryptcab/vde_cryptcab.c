@@ -8,6 +8,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
+#include "config.h"
 #include "blowfish.h"
 #include <stdio.h>
 #include <sys/types.h>
@@ -27,6 +28,24 @@ static char *remoteusr;
 static char *remotehost;
 static int localport;
 static int remoteport;
+
+
+#ifndef HAVE_STRNDUP
+/*
+ * This could be written in a more efficient way. No time to do it now.
+ */
+static char *strndup(const char *s, size_t n)
+{
+	size_t len = MIN(n, strlen(s));
+	char *new = (char *) malloc (len + 1);
+
+	if (new == NULL)
+		return NULL;
+
+	new[len] = '\0';
+	return (char *) memcpy (new, s, len);
+}
+#endif
 
 
 /*
