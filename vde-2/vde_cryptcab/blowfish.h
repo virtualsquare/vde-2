@@ -28,8 +28,16 @@
 #define MAXPKT 2000
 #define FILENAMESIZE 16
 
+#ifdef XOR
+  #undef XOR
+#endif
 #define XOR(a,b) a==b?0:1
+
 #define before_time(a,b) a.tv_sec==b.tv_sec?a.tv_usec<b.tv_usec:a.tv_sec<b.tv_sec
+
+#ifdef MIN
+  #undef MIN
+#endif
 #define MIN(a,b) a<b?a:b
 
 #define SRC_VDE 0
@@ -99,11 +107,11 @@ removepeer(struct peer *np);
 struct peer 
 *generate_key (struct peer*);
 
-int 
-encrypt (int,int);
+//int 
+//bf_encrypt (int,int);
 
-int
-decrypt (int,int);
+//int
+//bf_decrypt (int,int);
 
 int 
 blowfish_init(int);

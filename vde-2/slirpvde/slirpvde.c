@@ -29,6 +29,11 @@
 #include <vde.h>
 #include <libvdeplug/libvdeplug.h>
 
+#ifdef VDE_DARWIN
+#include <limits.h>
+#include <syslimits.h>
+#endif
+
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048
 #define ETH_ALEN 6
