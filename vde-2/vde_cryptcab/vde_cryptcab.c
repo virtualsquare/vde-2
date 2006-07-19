@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <signal.h>
+#include "vde.h"
 
 #define PORTNO 7667
 static char *plugname;
@@ -232,7 +233,7 @@ int main(int argc, char **argv)
 			  {"help",0,0,'h'},
 			  {0, 0, 0, 0}
 		  };
-		  c = getopt_long_only (argc, argv, "s:p:c:h",
+		  c = GETOPT_LONG (argc, argv, "s:p:c:h",
 				  long_options, &option_index);
 		  if (c == -1)
 			  break;
