@@ -1,6 +1,6 @@
 VDEv2.0 : Virtual Distributed Ethernet.
 
-(c) 2003/2004/2005 Renzo Davoli
+(c) 2003/2004/2005/2006 Renzo Davoli
 Long long time ago based on uml-router Copyright 2002 Yon Uriarte and Jeff Dike
 qemu-vde-HOWTO is (c) by Jim Brown
 Notice: Virtual Distributed Ethernet is not related in any way with
@@ -185,7 +185,7 @@ Please note also that the vde-switches do not manage (yet) the minimum spanning
 tree protocol thus a loop in the topology can lead to inconsistent MAC forward 
 tables and to network saturation.
 
-Copyright 2003/2004/2005 Renzo Davoli
+Copyright 2003/2004/2005/2006 Renzo Davoli
 Acknowlegments:
 Thanks to Marco Giordani, Leonardo Macchia for their useful help for debugging.
 Imported code by Danny Gasparovsky, Fabrice Ballard.
