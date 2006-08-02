@@ -1,5 +1,20 @@
-/* Copyright 2006 Renzo Davoli 
- * Licensed under the GPL
+/*
+ * libvdeplug - A library to connect to a VDE Switch.
+ * Copyright (C) 2006 Renzo Davoli, University of Bologna
+ *
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License, or (at
+ * your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
 #include "libvdeplug.h"
@@ -9,7 +24,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <pwd.h>
 #include <grp.h>
 
@@ -173,8 +187,6 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 			gid=gs->gr_gid;
 		chown(conn->inpath.sun_path,-1,gid);
 	}
-
-	// mode_t is an unsigned, so this check should be useless
 	if (mode>=0)
 		chmod(conn->inpath.sun_path,mode);
 
