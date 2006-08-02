@@ -6,6 +6,9 @@
  * 
  * see:
  * http://www.gnu.org/copyleft/gpl.html
+ 
+ * This program is released under the GPL with the additional exemption that
+ * compiling, linking, and/or using OpenSSL is allowed.
  */
 
 #include "config.h"
