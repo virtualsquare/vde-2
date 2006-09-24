@@ -9,6 +9,7 @@
 #include<string.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <fcntl.h>
 
 
 #if 0
@@ -48,6 +49,21 @@ void usage()
 	exit (-1);
 }
 
+static int alternate_stdin;
+static int alternate_stdout;
+static void alternate_fd()
+{
+	char numstr[10];
+	alternate_stdin=open("/dev/null",O_RDONLY);
+	alternate_stdout=open("/dev/null",O_RDONLY);
+	close(alternate_stdin);
+	close(alternate_stdout);
+	snprintf(numstr,10,"%d",alternate_stdin);
+	setenv("ALTERNATE_STDIN",numstr,1);
+	snprintf(numstr,10,"%d",alternate_stdout);
+	setenv("ALTERNATE_STDOUT",numstr,1);
+}
+
 int recmain(int argc, char *argv[],int olddirchar) 
 {
 	int split;
@@ -76,12 +92,12 @@ int recmain(int argc, char *argv[],int olddirchar)
 			switch (olddirchar) {
 				case 0:
 					close(p1[1]); close(p2[0]);
-					if (p1[0] != 3){
-						dup2(p1[0],3);
+					if (p1[0] != alternate_stdin){
+						dup2(p1[0],alternate_stdin);
 						close(p1[0]);
 					}
-					if (p1[0] != 4){
-						dup2(p2[1],4);
+					if (p1[0] != alternate_stdout){
+						dup2(p2[1],alternate_stdout);
 						close(p2[1]);
 					}
 					break;
@@ -138,6 +154,7 @@ int main(int argc, char *argv[])
 	argv++;
 	argc--;
 
+	alternate_fd();
 	split=splitindex(argc,argv,&dirchar);
 
 	if (argc < 3 || split == 0 || split >= argc-1) 

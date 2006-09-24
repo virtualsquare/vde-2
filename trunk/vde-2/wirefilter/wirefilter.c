@@ -31,8 +31,10 @@
 
 #define NPIPES 2
 #define MAXCONN 3
-#define STDIN_ALTFILENO 3
-#define STDOUT_ALTFILENO 4
+static int alternate_stdin;
+static int alternate_stdout;
+//#define STDIN_ALTFILENO 3
+//#define STDOUT_ALTFILENO 4
 #define NPFD NPIPES+MAXCONN+1
 struct pollfd pfd[NPFD];
 int outfd[NPIPES];
@@ -394,6 +396,14 @@ static int check_open_fifos(struct pollfd *pfd,int *outfd)
 {
 	int ndirs;
 	struct stat stfd[NPIPES];
+	char *env_in;
+	char *env_out;
+	env_in=getenv("ALTERNATE_STDIN");
+	env_out=getenv("ALTERNATE_STDOUT");
+	if (env_in != NULL)
+		alternate_stdin=atoi(env_in);
+	if (env_out != NULL)
+		alternate_stdout=atoi(env_out);
 	if (fstat(STDIN_FILENO,&stfd[STDIN_FILENO]) < 0) {
 		fprintf(stderr,"%s: Error on stdin: %s\n",progname,strerror(errno));
 		return -1;
@@ -410,7 +420,7 @@ static int check_open_fifos(struct pollfd *pfd,int *outfd)
 		fprintf(stderr,"%s: Error on stdin: %s\n",progname,"it is not a pipe");
 		return -1;
 	}
-	if (fstat(STDIN_ALTFILENO,&stfd[0]) < 0) {
+	if (env_in == NULL || fstat(alternate_stdin,&stfd[0]) < 0) {
 		ndirs=1;
 		pfd[0].fd=STDIN_FILENO;
 		pfd[0].events=POLLIN | POLLHUP;
@@ -433,8 +443,8 @@ static int check_open_fifos(struct pollfd *pfd,int *outfd)
 		pfd[LR].fd=STDIN_FILENO;
 		pfd[LR].events=POLLIN | POLLHUP;
 		pfd[LR].revents=0;
-		outfd[LR]=STDOUT_ALTFILENO;
-		pfd[RL].fd=STDIN_ALTFILENO;
+		outfd[LR]=alternate_stdout;
+		pfd[RL].fd=alternate_stdin;
 		pfd[RL].events=POLLIN | POLLHUP;
 		pfd[RL].revents=0;
 		outfd[RL]=STDOUT_FILENO;
