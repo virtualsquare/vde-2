@@ -20,7 +20,7 @@
 #include <linux/if_tun.h>
 
 #define TUNTAPPATH "/dev/net/tun"
-#define VDETAPEXEC "vdetap"
+#define VDETAPEXEC LIBEXECDIR "/vdetap"
 #define VDEALLTAP "VDEALLTAP"
 #define MAX 10
 
