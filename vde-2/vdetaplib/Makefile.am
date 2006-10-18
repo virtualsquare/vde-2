@@ -1,4 +1,4 @@
-lib_LTLIBRARIES = libvdetap.la
+pkglib_LTLIBRARIES = libvdetap.la
 libexec_PROGRAMS = vdetap
 
 libvdetap_la_SOURCES = libvdetap.c
