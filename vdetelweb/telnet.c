@@ -22,6 +22,8 @@
  *   $Id$
  *
  */
+
+#include <config.h>
 #include  <stdio.h>
 #include  <signal.h>
 #include <stdarg.h>

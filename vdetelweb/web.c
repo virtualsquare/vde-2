@@ -22,6 +22,7 @@
  *   $Id$
  *
  */
+#include <config.h>
 #include  <stdio.h>
 #define __USE_GNU
 #include  <signal.h>
