@@ -3,7 +3,7 @@
 
 AC_PREREQ(2.59)
 AC_INIT(vde2, [2.1.3], renzo@cs.unibo.it)
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([vde.h])
 AC_CONFIG_HEADER([config.h])
 
