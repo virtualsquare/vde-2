@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(vde2, [2.1.2], renzo@cs.unibo.it)
+AC_INIT(vde2, [2.1.3], renzo@cs.unibo.it)
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([vde.h])
 AC_CONFIG_HEADER([config.h])
@@ -15,7 +15,10 @@ AC_PROG_LN_S
 AC_PROG_LIBTOOL
 
 # Checks for libraries.
-AC_CHECK_LIB([dl], [dlopen], [crypto])
+AC_CHECK_LIB([dl], [dlopen])
+AC_CHECK_LIB([crypto], [EVP_EncryptInit],
+		[add_cryptcab_support=yes],
+		[add_cryptcab_support=no ; warn_cryptcab=yes])
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -64,6 +67,13 @@ case "$build_os" in
 Linux and Darwin are supported. Contributions are appreciated! :-)])
 		;;
 esac
+
+
+# Disable vde_cryptcab? (depends on ssl, maybe unwanted)
+AC_ARG_ENABLE([cryptcab],
+	AS_HELP_STRING([--disable-cryptcab],
+		[Disable libcrypto-dependend vde_cryptcab compilation]),
+	[if test $enableval = "no" ; then add_cryptcab_support=no ; warn_cryptcab=no ; fi])
 
 # Check of tuntap device
 AC_ARG_ENABLE([tuntap],
@@ -117,6 +127,7 @@ http://www-user.rhrk.uni-kl.de/~nissler/tuntap/])
 	esac
 fi
 
+AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
 AM_CONDITIONAL(WANT_TUNTAP, test "$add_tuntap_support" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
 AM_CONDITIONAL(HAVE_BROKEN_POLL, test "$have_broken_poll" = yes)
@@ -135,3 +146,10 @@ AC_CONFIG_FILES([Makefile]
                 [wirefilter/Makefile]
                 [uml/Makefile])
 AC_OUTPUT
+
+if test x$warn_cryptcab = "xyes"
+then
+	AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is not installed on
+your system. Please install it if you want CryptCab to be compiled and
+installed.])
+fi

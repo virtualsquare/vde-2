@@ -1,9 +1,13 @@
-SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_cryptcab
+SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug
 
 if WANT_TUNTAP
 if CAN_MAKE_LIBVDETAP
   SUBDIRS += vdetaplib
 endif
+endif
+
+if ENABLE_CRYPTCAB
+  SUBDIRS += vde_cryptcab
 endif
 
 AUTOMAKE_OPTIONS = foreign
