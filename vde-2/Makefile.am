@@ -12,7 +12,7 @@ endif
 
 AUTOMAKE_OPTIONS = foreign
 
-EXTRA_DIST = LICENSE VERSION ChangeLog
+EXTRA_DIST = LICENSE VERSION
 
 bin_PROGRAMS = vde_switch
 vde_switch_SOURCES = \
