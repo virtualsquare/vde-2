@@ -73,6 +73,10 @@
 #define ST_WAIT_AUTH 5
 #define ST_IDSENT 6
 
+#define SESSION_TIMEOUT 10
+#define time_now(x) gettimeofday(x,NULL)
+
+
 /*
  * This struct contains the other endpoint's informations.
  */
@@ -86,10 +90,14 @@ struct peer
 	char challenge[128];		/* 128B Challenge for 4WHS	*/
 	struct sockaddr_in in_a;	/* Current transport address	*/
 	struct sockaddr_in handover_a;	/* Handover transport address	*/
+	struct timeval expire;		/* Expiration timer		*/
 	unsigned char state;		/* Connection state		*/
 	VDECONN *plug;			/* Vde connection channel 	*/
 	
 };
+#define ip_address(X) X->in_a.sin_addr.s_addr
+#define after(a,b) (a.tv_sec == b.tv_sec ) ? (a.tv_usec > b.tv_usec) : (a.tv_sec > b.tv_sec)
+
 
 /*
  * Each datagram received from network or from vde_plug 
@@ -117,12 +125,6 @@ removepeer(struct peer *np);
 struct peer 
 *generate_key (struct peer*);
 
-//int 
-//bf_encrypt (int,int);
-
-//int
-//bf_decrypt (int,int);
-
 int 
 blowfish_init(int);
 
@@ -134,4 +136,8 @@ send_udp( char *data, size_t len, struct peer *p, unsigned char flags );
 
 void
 send_vde( const char *data, size_t len, struct peer *p);
+
+void 
+autocleaner(int signo);
+
 #endif

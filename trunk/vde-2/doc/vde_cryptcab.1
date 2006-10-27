@@ -101,11 +101,21 @@ authentication on server, and default udp port 7667 is used.
 .B \-s "\fIsocketpath\fP"
 specify the UNIX socket to be used by local programs for joining the VDE.
 The default value is "/tmp/vde.ctl".
+.SH KNOWN ISSUE
+Encapsulating IP packets into session+udp layer results in real datagrams larger
+than tap device mtu. Since vde_cryptcab gets confused by packet fragmentation, the 
+tap device mtu must be set to a smaller value than real interface mtu. Use 
+.BR ip (8) 
+or 
+.BR ifconfig (8) 
+to set up your tap device mtu.
+
+
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
 i.e. the German "Association for Electrical, Electronic & Information
-Technologies").
+Technologies"). 
 
 .SH SEE ALSO
 .BR vde_switch (1),

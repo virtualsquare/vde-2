@@ -62,6 +62,8 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 	static struct sockaddr_un dataout;
 	int port=0;
 	char *group=NULL;
+	int sockno=0;
+	int res;
 	mode_t mode=0;
 
 	if (open_args != NULL) {
@@ -133,12 +135,23 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 
 	/* First choice, store the return socket from the switch in the control dir*/
 	memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-	sprintf(req.sock.sun_path, "%s.%05d-%02d", sockname, pid, 0);
-	if(bind(conn->fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0){
+	do 
+	{
+		sprintf(req.sock.sun_path, "%s.%05d-%05d", sockname, pid, sockno++);
+		res=bind(conn->fddata, (struct sockaddr *) &req.sock, sizeof (req.sock));
+	}
+	while (res < 0 && errno == EADDRINUSE);
+	if (res < 0){
 		/* if it is not possible -> /tmp */
 		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
-		sprintf(req.sock.sun_path, "/tmp/vde.%05d-%02d", pid, 0);
-		if(bind(conn->fddata, (struct sockaddr *) &req.sock, sizeof(req.sock)) < 0) {
+		do 
+		{
+			sprintf(req.sock.sun_path, "%s.%05d-%05d", sockname, pid, sockno++);
+			res=bind(conn->fddata, (struct sockaddr *) &req.sock, sizeof (req.sock));
+		}
+		while (res < 0 && errno == EADDRINUSE);
+
+		if (res < 0){
 			int err=errno;
 			close(conn->fddata);
 			close(conn->fdctl);
