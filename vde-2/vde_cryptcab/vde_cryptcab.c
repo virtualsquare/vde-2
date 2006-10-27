@@ -32,6 +32,7 @@ static char *remoteusr;
 static char *remotehost;
 static int localport;
 static int remoteport;
+static int may_login=1;
 
 
 #ifndef HAVE_STRNDUP
@@ -70,7 +71,7 @@ static struct peer *generate_and_xmit(struct peer *ret){
 	int i,res;
 	struct hostent *target;
 
-	fprintf(stderr,"Generating new key..\n");
+	//fprintf(stderr,"Generating new key..\n");
 	ret=generate_key(ret);
 	/*fprintf(stderr,"Key:");
 	for(i=0;i<16;i++)
@@ -114,7 +115,7 @@ static struct peer *generate_and_xmit(struct peer *ret){
  */
 static void handover(struct peer *p)
 {
-	fprintf(stderr,"Doing handover.\n");
+	//fprintf(stderr,"Doing handover.\n");
 	vde_close(p->plug);
 	usleep(1000000);
 	p=(struct peer *)generate_and_xmit(p);
@@ -122,6 +123,7 @@ static void handover(struct peer *p)
 	p->next=NULL;
 	p->counter=0;
 	login(p);
+	may_login=0;
 }
 
 /*
@@ -204,6 +206,27 @@ static void Usage(void)
 	exit(1);
 }
 
+
+void client_maylogin(int signo)
+{
+	may_login=1;
+}
+
+static inline void try_to_login(struct peer *p)
+{
+
+	struct itimerval *old=NULL;
+	struct itimerval nxt={
+				.it_interval={.tv_sec=0, .tv_usec=0},
+				.it_value={.tv_sec=5, .tv_usec=0}
+	};
+	if(!may_login)
+		return;
+	login(p);
+	may_login=0;
+	setitimer(ITIMER_REAL, &nxt, old);
+}
+
 /*
  * Main.
  */
@@ -226,6 +249,7 @@ int main(int argc, char **argv)
 		  const char sepusr='@';
 		  const char sepport=':';
 		  char *pusr,*pport;
+		  struct itimerval old;
 
 		  static struct option long_options[] = {
 			  {"sock", 1, 0, 's'},
@@ -301,13 +325,20 @@ int main(int argc, char **argv)
 		        {perror("bind socket"); exit(3);}
 	
 	blowfish_init(wire);
+
 	if( (remotehost) && strlen(remotehost)>0 ) {
+		sigset(SIGALRM,client_maylogin);
 		p1=generate_and_xmit(NULL);
 		p1->state=ST_OPENING;
 		p1->next=NULL;
-		login(p1);
+		try_to_login(p1);
 		addpeer(p1);
+		vde_plug(p1);
+	} else {
+		sigset(SIGALRM,autocleaner);
+		kill(getpid(),SIGALRM);
 	}
+	
 	
 	for(;;){
 		pkt=blowfish_select(0);
@@ -317,6 +348,9 @@ int main(int argc, char **argv)
 			if(pkt->src==SRC_VDE){
 				if(p1 && (p1->state==ST_AUTH || p1->state==ST_SERVER)){
 					send_udp(pkt->data,pkt->len,p1,PKT_DATA);
+				}
+				if(p1 && (p1->state==ST_OPENING)){
+					try_to_login(p1);
 				}
 				continue;
 			}
@@ -352,7 +386,8 @@ int main(int argc, char **argv)
 							if(p1){
 							  memcpy(&p1->in_a,&pkt->orig->in_a, sizeof(struct sockaddr_in));
 							  bzero(&p1->handover_a,sizeof(struct sockaddr_in));
-							}	
+							}
+								
 						}
 						if(p1){
 							rcv_response(pkt, p1);
@@ -369,7 +404,7 @@ int main(int argc, char **argv)
 						if(p1 && p1->state==ST_WAIT_AUTH){
 							p1->state=ST_SERVER;
 							p1->counter=0;
-							vde_plug(p1);
+							//vde_plug(p1);
 						}
 						break;
 						
@@ -379,15 +414,15 @@ int main(int argc, char **argv)
 						break;
 						
 					case CMD_IDENTIFY:
-						fprintf(stderr,"ID received...");
+//						fprintf(stderr,"ID received...");
 						p1=(struct peer*)getpeerbyid(pkt);
 						if(p1){
-							fprintf(stderr,"Client is known. Sending handover.\n");
+//							fprintf(stderr,"Client is known. Sending handover.\n");
 							// case 0: client changed transport address
 							memcpy(&p1->handover_a,&pkt->orig->in_a, sizeof(struct sockaddr_in));
 							send_handover(p1);
 						}else{
-							fprintf(stderr,"Client is not known. Sending challenge.\n");
+							//fprintf(stderr,"Client is not known. Sending challenge.\n");
 							// case 1: server restarted
 							p1=malloc(sizeof(struct peer));
 							bzero(p1,sizeof(struct peer));

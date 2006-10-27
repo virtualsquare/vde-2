@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include <sys/poll.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>
@@ -34,6 +35,11 @@ static EVP_CIPHER_CTX ctx;
 static int nfd = -1;
 static struct peer *list=NULL;
 
+static struct itimerval TIMER = {
+	.it_interval={ .tv_sec=0, .tv_usec=0},
+	.it_value={ .tv_sec=SESSION_TIMEOUT/2, .tv_usec=0 }
+};
+
 /*
  * Add a peer to the main list.
  * Client will have a list of one peer only,
@@ -45,6 +51,7 @@ void addpeer(struct peer *np)
 {
 	np->next=list;
 	list=np;
+
 }
 
 /*
@@ -60,11 +67,17 @@ static int _peers(struct peer *iter)
 
 static void _populatepoll(struct pollfd *pfd, struct peer *iter,int index, struct peer *peerlist)
 {
+	int datafd;
 	if(!iter)
 		return;
 	memcpy(&(peerlist[index]),iter,sizeof(struct peer));
-	pfd[index].fd=vde_datafd(iter->plug);
-	pfd[index++].events=POLLIN|POLLHUP;
+	datafd=vde_datafd(iter->plug);
+	if(datafd >= 0){
+		pfd[index].fd=datafd;
+		pfd[index++].events=POLLIN|POLLHUP;
+	} else {
+		
+	}
 	
 	_populatepoll(pfd,iter->next,index, peerlist);
 
@@ -103,6 +116,15 @@ static struct peer *_getpeerbyid(struct datagram *pkt, struct peer *sublist)
 	
 }
 
+
+void 
+set_expire(struct peer *p)
+{
+	gettimeofday(&(p->expire),NULL);
+	p->expire.tv_sec+=SESSION_TIMEOUT;
+}
+
+
 /*
  * Returns peer list length.
  */
@@ -113,6 +135,43 @@ static int numberofpeers(){
 }
 
 
+
+struct peer *clean_peerlist(struct peer *sublist)
+{
+	if(!sublist)
+		return NULL;
+
+	if(sublist->state == ST_AUTH && vde_datafd(sublist->plug) < 0){
+		struct peer *nxt=sublist->next;
+		free(sublist);
+		return nxt;
+	}
+
+	if(sublist->state == ST_AUTH){
+		struct timeval now;
+		gettimeofday(&now,NULL);
+		
+		if(after(now,sublist->expire)){
+			struct peer *nxt=sublist->next;
+			vde_close(sublist->plug);
+			free(sublist);
+			return nxt;
+		}
+	}
+
+	sublist->next=clean_peerlist(sublist->next);
+	return sublist;
+}
+
+
+void
+autocleaner(int signo)
+{
+	struct itimerval *old=NULL;
+	list=clean_peerlist(list);
+	setitimer(ITIMER_REAL, &TIMER, old);
+}
+
 /*
  * Returns a list of all the peer in the peer list, adding their 
  * network socket to pollfd.
@@ -120,9 +179,12 @@ static int numberofpeers(){
  */
 static struct peer *populate_peerlist(struct pollfd *pfd)
 {
-	struct peer *iter=list;
-	struct peer *peerlist=(struct peer *) malloc( (numberofpeers()+1)*sizeof(struct peer) );
+	struct peer *iter, *peerlist;
+	iter=list; //=clean_peerlist(list);
+
+	peerlist=(struct peer *) malloc( (numberofpeers()+1)*sizeof(struct peer) );
 	_populatepoll(pfd,iter,1,peerlist);
+
 	return peerlist;
 }
 
@@ -186,22 +248,24 @@ struct datagram *blowfish_select (int timeout)
    pfd[0].events=POLLIN|POLLHUP;
    peerlist = populate_peerlist(pfd);
 
-for(;;){
-  pollret=poll(pfd,1+numberofpeers(),1000);
-  if(pollret<0){
-	  if(errno==EINTR)
-		  return NULL;
-	  perror("poll");
-	  exit(1);
-  }
-  if (!ret){
-	  ret = malloc(sizeof(struct datagram));
-	  bzero(ret,sizeof(struct datagram));
-	  ret->orig = malloc(sizeof (struct peer));
-	  bzero(ret->orig,sizeof(struct peer));
-  }
+  do{
+	  pollret=poll(pfd,1+numberofpeers(),1000);
+	  if(pollret<0){
+		  if(errno==EINTR)
+			  return NULL;
+		  perror("poll");
+		  exit(1);
+	  }
+	  if (!ret){
+		  ret = malloc(sizeof(struct datagram));
+		  bzero(ret,sizeof(struct datagram));
+		  ret->orig = malloc(sizeof (struct peer));
+		  bzero(ret->orig,sizeof(struct peer));
+	  }
+  } while (pollret==0);
 
   
+for(;;){
   if (pfd[0].revents&POLLIN) {
 	unsigned char inpkt[MAXPKT];
 	unsigned char *inbuff=inpkt+1;
@@ -244,16 +308,18 @@ for(;;){
 		  ret->len += tlen;
 		  if( isvalid_crc32(ret->data,ret->len) && isvalid_timestamp(ret->data,ret->len,ret->orig) ){
 			ret->len-=12;
+			if(ret->orig->state==ST_AUTH)
+				set_expire(ret->orig);
 			return ret;
 		}else{		
-			deny_access(ret->orig);
+//			deny_access(ret->orig);
 			return NULL;
 		}
 	}else if((inpkt[0]==CMD_HANDOVER)){
 		ret->src = SRC_CTL;
 		ilen--;
 		
-		fprintf (stderr,"Recived Handover datagram.:   ");
+		//fprintf (stderr,"Recived Handover datagram.:   ");
 		EVP_DecryptInit (&ctx, EVP_bf_cbc (), ret->orig->key, ret->orig->iv);
 		 
 		if (EVP_DecryptUpdate (&ctx, ret->data+1, &ret->len, inbuff, ilen) != 1)
@@ -271,7 +337,7 @@ for(;;){
 		  if( isvalid_crc32(ret->data+1,ret->len-1) && isvalid_timestamp(ret->data,ret->len,ret->orig) ){
 			ret->len-=12;
 			ret->data[0]=CMD_HANDOVER;
-			fprintf (stderr,"Valid Handover. Resending key.\n");
+			//fprintf (stderr,"Valid Handover. Resending key.\n");
 			return ret;
 		}else{		
 			fprintf (stderr,"Invalid Handover packet. crc32?%d, timestamp?%d \n",isvalid_crc32(ret->data+1,ret->len-1), isvalid_timestamp(ret->data,ret->len,ret->orig));
@@ -292,6 +358,11 @@ for(;;){
 	}
 	
   }
+
+  // This increment comes with "static int i" def, to ensure fairness among peers.
+  i++;	  
+  if(i>numberofpeers())
+	  i=1;
   
   if (pfd[i].revents&POLLIN) {
 /*	  c=read(pfd[i].fd,ret->data,2);
@@ -308,7 +379,6 @@ for(;;){
 	// fprintf(stderr,"Read %d.\n",vde_len);
 	  
 */ 
-	 
 	ret->len = vde_recv(peerlist[i].plug, ret->data, MAXPKT,0);
 	
 	if(ret->len<1)
@@ -316,18 +386,14 @@ for(;;){
 	
 	ret->src = SRC_VDE;
 	ret->orig = &(peerlist[i]);
-	  
-	// This increment comes with "static int i" def, to ensure fairness among peers.
-	i++;
 
+	//set_expire(&(peerlist[i]));
 	  
-	if(i>numberofpeers())
-		  i=1;
 	  
 	return ret;
 		
   }
-  
+// list=clean_peerlist(list); 
 }
   return NULL;
 }
@@ -399,7 +465,7 @@ isvalid_timestamp(unsigned char *block, int size, struct peer *p)
 		p->counter=pktcounter;
 		return 1;
 	}else{
-		fprintf(stderr,"bad timestamp!\n");
+		//fprintf(stderr,"bad timestamp!\n");
 		return 0;
 	}
 	
@@ -416,7 +482,7 @@ isvalid_crc32(unsigned char *block, int len)
 		return 1;
 	else{
 			
-		fprintf(stderr,"bad crc32!\n");
+		//fprintf(stderr,"bad crc32!\n");
 		return 0;
 	}
 }
@@ -478,7 +544,7 @@ send_udp (char *data, size_t len, struct peer *p, unsigned char flags)
 struct peer
 *generate_key (struct peer *ret)
 {
-	int i, j, fd, od, createnow=0;
+	int i, j, fd=-1, od=-1, createnow=0;
 	unsigned char key[16];
 	unsigned char iv[8];
 	unsigned char c;
@@ -497,9 +563,9 @@ struct peer
 		goto failure;
 	}
 	
-	fprintf(stderr,"128 bit key stored.\n");
+	//fprintf(stderr,"128 bit key stored.\n");
 
-	fprintf(stderr,"64 bit Initialization vector stored.\n");
+	//fprintf(stderr,"64 bit Initialization vector stored.\n");
 	
 	for(i=0; i<FILENAMESIZE-1;i++){
 		read(fd,&c,1);
@@ -523,8 +589,12 @@ struct peer
 	return ret;
 	
 failure:
-	if(createnow)
+	if (createnow)
 		free(ret);
+	if (fd != -1)
+		close(fd);
+	if (od != -1)
+		close(od);
 	return NULL;
 }
 
@@ -542,6 +612,7 @@ send_challenge(struct peer *p)
 		send_udp(p->challenge,128,p,PKT_CTL|CMD_CHALLENGE);
 	}		
 	p->state=ST_CHALLENGE;
+	close(fd);
 }
 
 /*
@@ -553,6 +624,7 @@ send_auth_ok(struct peer *p)
 	send_udp(NULL,0,p,CMD_AUTH_OK);
 	p->state=ST_AUTH;
 	vde_plug(p);
+	set_expire(p);
 }
 
 /*
@@ -583,8 +655,10 @@ rcv_login(struct datagram *pkt, struct peer *p)
 		deny_access(p);
 		return;
 	}
+	close(fd);
 	memcpy(p->id,pkt->data+1,FILENAMESIZE);
 	send_challenge(p);
+
 }
 
 /*
@@ -643,4 +717,5 @@ blowfish_init(int socketfd)
 	EVP_CIPHER_CTX_init (&ctx);	
 	chksum_crc32gentab ();
 }
+
 
