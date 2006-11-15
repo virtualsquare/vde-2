@@ -3,6 +3,7 @@
  * Licensed under the GPLv2
  * Modified by Ludovico Gardenghi 2005
  * -g option (group management) by Daniel P. Berrange
+ * dir permission patch by Alessio Caprari 2006
  */
 
 #include <config.h>
@@ -390,7 +391,8 @@ static void init(void)
 		printlog(LOG_ERR,"Setting O_NONBLOCK on connection fd: %s",strerror(errno));
 		return;
 	}
-	if (mkdir(ctl_socket, (mode | 0100) & 0755) < 0) {
+	if (mkdir(ctl_socket, (mode & 0700 ? 0700 : 0) |
+				(mode & 0070 ? 0050 : 0) | (mode & 0007 ? 0005 : 0)) < 0) {
 		printlog(LOG_ERR,"creating vde ctl dir: %s",strerror(errno));
 		return;
 	}
