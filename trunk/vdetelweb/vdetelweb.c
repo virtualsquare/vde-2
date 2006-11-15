@@ -408,7 +408,7 @@ int setfds(fd_set *rds, fd_set *exc)
 static void save_pidfile()
 {
 	if(pidfile[0] != '/')
-		strncat(pidfile_path, pidfile, PATH_MAX - strlen(pidfile_path));
+		strncat(pidfile_path, pidfile, _POSIX_PATH_MAX - strlen(pidfile_path));
 	else
 		strcpy(pidfile_path, pidfile);
 
@@ -511,7 +511,7 @@ int main(int argc, char *argv[])
 
 	/* saves current path in pidfile_path, because otherwise with daemonize() we
 	 * forget it */
-	if(getcwd(pidfile_path, PATH_MAX-1) == NULL) {
+	if(getcwd(pidfile_path, _POSIX_PATH_MAX-1) == NULL) {
 		printlog(LOG_ERR, "getcwd: %s", strerror(errno));
 		exit(1);
 	}
@@ -531,6 +531,7 @@ int main(int argc, char *argv[])
 		printlog(LOG_ERR,"configuration file not found");
 		exit(1);
 	}
+	//sleep(10);
 	if (telnet)
 		telnet_init(vdefd);
 	if (web)
