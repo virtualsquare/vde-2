@@ -146,7 +146,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
 		do 
 		{
-			sprintf(req.sock.sun_path, "%s.%05d-%05d", sockname, pid, sockno++);
+			sprintf(req.sock.sun_path, "/tmp/vde.%05d-%05d", pid, sockno++);
 			res=bind(conn->fddata, (struct sockaddr *) &req.sock, sizeof (req.sock));
 		}
 		while (res < 0 && errno == EADDRINUSE);
