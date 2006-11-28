@@ -160,9 +160,22 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 			return NULL;
 		}
 	}
+
+	memcpy(&(conn->inpath),&req.sock,sizeof(req.sock));
+	if (group) {
+		struct group *gs;
+		gid_t gid;
+		if ((gs=getgrnam(group)) == NULL)
+			gid=atoi(group);
+		else
+			gid=gs->gr_gid;
+		chown(conn->inpath.sun_path,-1,gid);
+	}
+	if (mode>=0)
+		chmod(conn->inpath.sun_path,mode);
+
 	snprintf(req.description,MAXDESCR,"%s user=%s PID=%d %s SOCK=%s",
 			descr,callerpwd->pw_name,pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"",req.sock.sun_path);
-	memcpy(&(conn->inpath),&req.sock,sizeof(req.sock));
 
 	if (send(conn->fdctl,&req,sizeof(req)-MAXDESCR+strlen(req.description),0) < 0) {
 		int err=errno;
@@ -190,18 +203,6 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 		errno=err;
 		return NULL;
 	}
-
-	if (group) {
-		struct group *gs;
-		gid_t gid;
-		if ((gs=getgrnam(group)) == NULL)
-			gid=atoi(group);
-		else
-			gid=gs->gr_gid;
-		chown(conn->inpath.sun_path,-1,gid);
-	}
-	if (mode>=0)
-		chmod(conn->inpath.sun_path,mode);
 
 	return conn;
 }

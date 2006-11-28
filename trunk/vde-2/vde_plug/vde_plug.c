@@ -371,8 +371,8 @@ int main(int argc, char **argv)
 					sockname=strdup(optarg);
 					break;
 
-				case 'm':
-					sscanf(optarg,"%o",open_args.mode);
+				case 'm': 
+					sscanf(optarg,"%o",&(open_args.mode));
 					break;
 
 				case 'g':
@@ -397,6 +397,7 @@ int main(int argc, char **argv)
 	}
 	atexit(cleanup);
 	setsighandlers();
+	fprintf(stderr,"%o\n",open_args.mode);
 	conn=vde_open(sockname,"vde_plug:",&open_args);
 	if (conn == NULL)
 		exit(1);
