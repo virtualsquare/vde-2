@@ -33,8 +33,6 @@
 #define MAXCONN 3
 static int alternate_stdin;
 static int alternate_stdout;
-//#define STDIN_ALTFILENO 3
-//#define STDOUT_ALTFILENO 4
 #define NPFD NPIPES+MAXCONN+1
 struct pollfd pfd[NPFD];
 int outfd[NPIPES];
@@ -536,7 +534,7 @@ static int openmgmt(char *mgmt)
 	return mgmtconnfd;
 }
 
-static char header[]="\nVDE wirefilter V.%s\n(C) R.Davoli 2005 - GPLv2\n";
+static char header[]="\nVDE wirefilter V.%s\n(C) R.Davoli 2005,2006 - GPLv2\n";
 static char prompt[]="\nVDEwf:";
 static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 {
@@ -922,14 +920,16 @@ int main(int argc,char *argv[])
 		if (ndirs>1 && pfd[1].revents & POLLIN) {
 			packet_in(RL);
 		}
-		if (mgmtindex >= 0 && pfd[mgmtindex].revents != 0) 
-			npfd=newmgmtconn(pfd[mgmtindex].fd,pfd,npfd);
-		if (npfd > mgmtindex+1) {
-			register int i;
-			for (i=mgmtindex+1;i<npfd;i++) {
-				if (pfd[i].revents & POLLHUP ||
-						(pfd[i].revents & POLLIN && mgmtcommand(pfd[i].fd) < 0))
-					npfd=delmgmtconn(i,pfd,npfd);
+		if (mgmtindex >= 0) {
+			if (pfd[mgmtindex].revents != 0) 
+				npfd=newmgmtconn(pfd[mgmtindex].fd,pfd,npfd);
+			if (npfd > mgmtindex+1) {
+				register int i;
+				for (i=mgmtindex+1;i<npfd;i++) {
+					if (pfd[i].revents & POLLHUP ||
+							(pfd[i].revents & POLLIN && mgmtcommand(pfd[i].fd) < 0))
+						npfd=delmgmtconn(i,pfd,npfd);
+				}
 			}
 		}
 		packet_dequeue();

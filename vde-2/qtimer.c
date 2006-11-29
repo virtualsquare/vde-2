@@ -1,3 +1,8 @@
+/*
+ * Copyright 2005 Renzo Davoli
+ * Licensed under the GPLv2
+ */
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>

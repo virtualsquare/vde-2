@@ -13,18 +13,18 @@ typedef unsigned char uchar;
 #define OPTPOLL
 
 #ifdef _MALLOC_DEBUG
-#define free(X) ({ printf("MDBG-FREE %x %s %d\n",(X),__FILE__,__LINE__); \
+#define free(X) ({ printf("MDBG-FREE %p %s %d\n",(X),__FILE__,__LINE__); \
 		    free(X); })
 #define malloc(X) ({ void *x; x=malloc(X); \
-		    printf("MDBG-MALLOC %x %s %d\n",x,__FILE__,__LINE__); \
+		    printf("MDBG-MALLOC %p %s %d\n",x,__FILE__,__LINE__); \
 		    x; })
 #define strdup(X) ({ void *x; x=strdup(X); \
-		    printf("MDBG-STRDUP %x %s %d\n",x,__FILE__,__LINE__); \
+		    printf("MDBG-STRDUP %p %s %d\n",x,__FILE__,__LINE__); \
 		    x; })
 #define realloc(Y,X) ({ void *x,*old; \
 		    old=(Y);\
 		    x=realloc(old,(X)); \
-		    printf("MDBG-REALLOC %x->%x %s %d\n",old,x,__FILE__,__LINE__); \
+		    printf("MDBG-REALLOC %p->%p %s %d\n",old,x,__FILE__,__LINE__); \
 		    x; })
 #endif
 
