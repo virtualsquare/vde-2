@@ -308,7 +308,7 @@ static void fst_hello(void *arg)
 	hellocounter++;
 	//printf("HELLO\n");
 	BAC_FORALLFUN(validvlan,NUMOFVLAN,fst_hello_vlan,now);
-	if ((hellocounter && 0x3) == 0) {
+	if ((hellocounter & 0x3) == 0) {
 		rcvhistindex=1-rcvhistindex;
 		BAC_FORALLFUN(validvlan,NUMOFVLAN, fst_updatebackup,rcvhistindex);
 	}
