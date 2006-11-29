@@ -397,7 +397,6 @@ int main(int argc, char **argv)
 	}
 	atexit(cleanup);
 	setsighandlers();
-	fprintf(stderr,"%o\n",open_args.mode);
 	conn=vde_open(sockname,"vde_plug:",&open_args);
 	if (conn == NULL)
 		exit(1);
