@@ -188,7 +188,6 @@ int setup_ep(int portno, int fd_ctl,
 			return portno;
 		}
 		else {
-			free_port(portno);
 			return -1;
 		}
 	}

@@ -265,8 +265,11 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 			if(req->v1.magic == SWITCH_MAGIC){
 				int port=-1;
 				if(req->v3.version == 3) {
-					*arg=port=new_port_v1_v3(fd, req->v3.type, &(req->v3.sock));
-					setup_description(*arg,fd,strdup(req->v3.description));
+					port=new_port_v1_v3(fd, req->v3.type, &(req->v3.sock));
+					if (port>=0) {
+						*arg=port;
+						setup_description(*arg,fd,strdup(req->v3.description));
+					}
 				}
 				else if(req->v3.version > 2 || req->v3.version == 2) {
 					printlog(LOG_ERR, "Request for a version %d port, which this "
