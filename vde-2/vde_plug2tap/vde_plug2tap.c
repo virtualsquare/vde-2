@@ -112,7 +112,14 @@ static void setsighandlers()
 struct pollfd pollv[]={{0,POLLIN|POLLHUP},{0,POLLIN|POLLHUP},{0,POLLIN|POLLHUP}};
 
 static void usage(void) {
-	fprintf (stderr,"Usage: %s [-p portnum] [-g group] [-m mod] [-s sock] -daemon tap_name\n\n",prog);
+	fprintf(stderr, "Usage: %s [OPTION]... tap_name\n\n", prog);
+	fprintf(stderr, "  -p, --port=portnum          Port number in the VDE switch\n"
+			        "  -g, --group=group           Group for the socket\n"
+					"  -m, --mode=mode             Octal mode for the socket\n"
+					"  -s, --sock=socket           VDE switch control socket or dir\n"
+					"  -d, --daemon                Launch in background\n"
+					"  -P, --pidfile=pidfile       Create pidfile with our PID\n"
+					"  -h, --help                  This help\n");
 	exit(-1);
 }
 
@@ -225,7 +232,7 @@ int main(int argc, char **argv)
 			{"pidfile", 1, 0, 'P'},
 			{0, 0, 0, 0}
 		};
-		c = GETOPT_LONG (argc, argv, "hdPp:s:m:g:",
+		c = GETOPT_LONG (argc, argv, "hdP:p:s:m:g:",
 				long_options, &option_index);
 		if (c == -1)
 			break;
