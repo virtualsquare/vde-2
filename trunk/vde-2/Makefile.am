@@ -48,4 +48,4 @@ AM_CFLAGS = -Wall
 AM_CXXFLAGS = -Wall
 
 extraclean: distclean
-	rm -rf aclocal.m4 autom4te.cache autoscan.log configure.scan config.h.in* configure depcomp install-sh Makefile.in config.guess config.sub ltmain.sh missing `find -name Makefile.in` vde-*.tar.gz
+	rm -rf aclocal.m4 autom4te.cache autoscan.log configure.scan config.h.in* configure depcomp install-sh Makefile.in config.guess config.sub ltmain.sh missing `find . -name Makefile.in` vde-*.tar.gz

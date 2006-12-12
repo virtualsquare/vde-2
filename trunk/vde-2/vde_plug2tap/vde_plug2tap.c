@@ -32,6 +32,8 @@
 
 #ifdef VDE_DARWIN
 #define TAP_PREFIX "/dev/"
+#include <limits.h>
+#include <syslimits.h>
 #endif
 
 VDECONN *conn;
