@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(vde2, [2.1.4], renzo@cs.unibo.it)
+AC_INIT(vde2, [2.1.5], renzo@cs.unibo.it)
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([vde.h])
 AC_CONFIG_HEADER([config.h])
@@ -24,6 +24,10 @@ AC_CHECK_LIB([crypto], [EVP_EncryptInit],
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/socket.h sys/time.h syslog.h termio.h termios.h unistd.h sys/filio.h sys/bitypes.h sys/wait.h sys/select.h sys/signal.h sys/stropts.h termios.h sys/type32.h])
+
+AC_CHECK_HEADERS([openssl/blowfish.h],
+                 [],
+                 [add_cryptcab_support=no ; warn_cryptcab=yes])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -150,7 +154,7 @@ AC_OUTPUT
 
 if test x$warn_cryptcab = "xyes"
 then
-	AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is not installed on
-your system. Please install it if you want CryptCab to be compiled and
-installed.])
+	AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
+not installed on your system, or because openssl/blowfish.h could not be
+found. Please install them if you want CryptCab to be compiled and installed.])
 fi
