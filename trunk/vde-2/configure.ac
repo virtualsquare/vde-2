@@ -25,6 +25,8 @@ AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/socket.h sys/time.h syslog.h termio.h termios.h unistd.h sys/filio.h sys/bitypes.h sys/wait.h sys/select.h sys/signal.h sys/stropts.h termios.h sys/type32.h])
 
+AC_CHECK_HEADERS([syslimits.h sys/syslimits.h])
+
 AC_CHECK_HEADERS([openssl/blowfish.h],
                  [],
                  [add_cryptcab_support=no ; warn_cryptcab=yes])

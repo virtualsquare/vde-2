@@ -30,8 +30,14 @@
 #include <libvdeplug/libvdeplug.h>
 
 #ifdef VDE_DARWIN
-#include <limits.h>
-#include <syslimits.h>
+#	include <limits.h>
+#	if defined HAVE_SYSLIMITS_H
+#		include <syslimits.h>
+#	elif defined HAVE_SYS_SYSLIMITS_H
+#		include <sys/syslimits.h>
+#	else
+#		error "No syslimits.h found"
+#	endif
 #endif
 
 #define SWITCH_MAGIC 0xfeedface

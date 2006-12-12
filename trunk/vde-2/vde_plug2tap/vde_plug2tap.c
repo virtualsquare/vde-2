@@ -31,9 +31,15 @@
 #endif
 
 #ifdef VDE_DARWIN
-#define TAP_PREFIX "/dev/"
-#include <limits.h>
-#include <syslimits.h>
+#	define TAP_PREFIX "/dev/"
+#	include <limits.h>
+#	if defined HAVE_SYSLIMITS_H
+#		include <syslimits.h>
+#	elif defined HAVE_SYS_SYSLIMITS_H
+#		include <sys/syslimits.h>
+#	else
+#		error "No syslimits.h found"
+#	endif
 #endif
 
 VDECONN *conn;
