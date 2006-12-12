@@ -237,10 +237,17 @@ int main(int argc, char **argv)
 	struct sockaddr_in to;
 	struct datagram *pkt;
 	struct peer *p1;
+	struct sigaction sa;
+
+
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+
 	programname=argv[0];		
 	plugname="/tmp/vde.ctl";
 	localport=PORTNO;
-	sigset(SIGCHLD,zombie_carnage);
+	sa.sa_handler = zombie_carnage;
+	sigaction(SIGCHLD, &sa, NULL);
   {
 	  int c;
 	  while (1) {
@@ -327,7 +334,8 @@ int main(int argc, char **argv)
 	blowfish_init(wire);
 
 	if( (remotehost) && strlen(remotehost)>0 ) {
-		sigset(SIGALRM,client_maylogin);
+		sa.sa_handler = client_maylogin;
+		sigaction(SIGALRM, &sa, NULL);
 		p1=generate_and_xmit(NULL);
 		p1->state=ST_OPENING;
 		p1->next=NULL;
@@ -335,7 +343,8 @@ int main(int argc, char **argv)
 		addpeer(p1);
 		vde_plug(p1);
 	} else {
-		sigset(SIGALRM,autocleaner);
+		sa.sa_handler = autocleaner;
+		sigaction(SIGALRM, &sa, NULL);
 		kill(getpid(),SIGALRM);
 	}
 	
