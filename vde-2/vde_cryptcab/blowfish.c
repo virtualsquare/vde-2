@@ -27,6 +27,7 @@
 #include <errno.h>
 
 #include "blowfish.h"
+#include "crc32.h"
 
 unsigned char *crc32(unsigned char*,int);
 static unsigned long long mycounter=1;
@@ -122,6 +123,45 @@ set_expire(struct peer *p)
 {
 	gettimeofday(&(p->expire),NULL);
 	p->expire.tv_sec+=SESSION_TIMEOUT;
+}
+
+/*
+ * Check progressive number validity in incoming datagram
+ */
+int
+isvalid_timestamp(unsigned char *block, int size, struct peer *p)
+{
+	
+	
+	int i;
+	unsigned long long pktcounter=0;
+	for(i=0;i<8;i++){
+		pktcounter+=block[size-12+i]<<(i*8);
+	}
+	if(pktcounter>p->counter){
+		p->counter=pktcounter;
+		return 1;
+	}else{
+		//fprintf(stderr,"bad timestamp!\n");
+		return 0;
+	}
+	
+}
+
+/*
+ * Check CRC32 Checksum from incoming datagram
+ */
+int 
+isvalid_crc32(unsigned char *block, int len)
+{
+	unsigned char *crc=(unsigned char *)crc32(block,len-4);
+	if(strncmp((char*)block+(len-4),(char*)crc,4)==0)
+		return 1;
+	else{
+			
+		//fprintf(stderr,"bad crc32!\n");
+		return 0;
+	}
 }
 
 
@@ -235,7 +275,7 @@ deny_access(struct peer *p)
 struct datagram *blowfish_select (int timeout)
 {
    unsigned peerlen;
-   int c,pollret;
+   int pollret;
    struct pollfd *pfd;
    static struct datagram *ret = NULL;
    struct peer *peerlist;
@@ -243,7 +283,6 @@ struct datagram *blowfish_select (int timeout)
    
    pfd=malloc((1+numberofpeers())*sizeof(struct pollfd));
    
-   u_int16_t vde_len;
    pfd[0].fd=nfd;
    pfd[0].events=POLLIN|POLLHUP;
    peerlist = populate_peerlist(pfd);
@@ -448,44 +487,6 @@ set_timestamp(unsigned char *block)
 		
 }
 
-/*
- * Check progressive number validity in incoming datagram
- */
-int
-isvalid_timestamp(unsigned char *block, int size, struct peer *p)
-{
-	
-	
-	int i;
-	unsigned long long pktcounter=0;
-	for(i=0;i<8;i++){
-		pktcounter+=block[size-12+i]<<(i*8);
-	}
-	if(pktcounter>p->counter){
-		p->counter=pktcounter;
-		return 1;
-	}else{
-		//fprintf(stderr,"bad timestamp!\n");
-		return 0;
-	}
-	
-}
-
-/*
- * Check CRC32 Checksum from incoming datagram
- */
-int 
-isvalid_crc32(unsigned char *block, int len)
-{
-	unsigned char *crc=(unsigned char *)crc32(block,len-4);
-	if(strncmp((char*)block+(len-4),(char*)crc,4)==0)
-		return 1;
-	else{
-			
-		//fprintf(stderr,"bad crc32!\n");
-		return 0;
-	}
-}
 
 /*
  * Send an udp datagram to specified peer.
@@ -544,7 +545,7 @@ send_udp (char *data, size_t len, struct peer *p, unsigned char flags)
 struct peer
 *generate_key (struct peer *ret)
 {
-	int i, j, fd=-1, od=-1, createnow=0;
+	int i, fd=-1, od=-1, createnow=0;
 	unsigned char key[16];
 	unsigned char iv[8];
 	unsigned char c;
@@ -619,11 +620,11 @@ send_challenge(struct peer *p)
  * Send a "Auth OK" 4WHS packet.
  */
 static void
-send_auth_ok(struct peer *p)
+send_auth_ok(struct peer *p, void (*callback)(struct peer*))
 {
 	send_udp(NULL,0,p,CMD_AUTH_OK);
 	p->state=ST_AUTH;
-	vde_plug(p);
+	callback(p);
 	set_expire(p);
 }
 
@@ -666,7 +667,7 @@ rcv_login(struct datagram *pkt, struct peer *p)
  * or "access denied"
  */
 void
-rcv_response(struct datagram *pkt, struct peer *p)
+rcv_response(struct datagram *pkt, struct peer *p, void (*callback)(struct peer*))
 {
 	unsigned char response[MAXPKT];
 	int rlen, tlen;
@@ -687,7 +688,7 @@ rcv_response(struct datagram *pkt, struct peer *p)
 
 	  if (strncmp(response,p->challenge,128)==0){
 		  p->state=ST_AUTH;
-		  send_auth_ok(p);
+		  send_auth_ok(p, callback);
 	  }
 		  
 	  else{
@@ -701,7 +702,7 @@ rcv_response(struct datagram *pkt, struct peer *p)
  * Send a login packet. This is the first phase of 4WHS
  */
 void
-login(struct peer *p)
+blowfish_login(struct peer *p)
 {
 	send_udp(p->id,FILENAMESIZE,p,CMD_LOGIN);
 }
@@ -710,7 +711,7 @@ login(struct peer *p)
  * Initialize blowfish module.
  * Set udp socket and initialize crypto engine & CRC32.
  */
-int
+void
 blowfish_init(int socketfd)
 {
 	nfd=socketfd;

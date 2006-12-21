@@ -1,7 +1,10 @@
 /* Copyright 2004 Renzo Davoli
  * Reseased under the GPLv2 */
 
+#define _GNU_SOURCE
 #include <config.h>
+#include <dlfcn.h>
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
@@ -10,7 +13,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
-#define __USE_LARGEFILE64
 #include <fcntl.h>
 #include <errno.h>
 #include <stdio.h>
@@ -23,6 +25,21 @@
 #define VDETAPEXEC LIBEXECDIR "/vdetap"
 #define VDEALLTAP "VDEALLTAP"
 #define MAX 10
+
+#define nativesym(function, name) \
+    { \
+        char *msg; \
+	if (native_##function == NULL) { \
+	    *(void **)(&native_##function) = dlsym(RTLD_NEXT, name); \
+	    if ((msg = dlerror()) != NULL) { \
+ 		fprintf (stderr, "%s: dlsym(%s): %s\n", PACKAGE, name, msg); \
+	    } \
+	} \
+    }
+
+static int     (*native_ioctl) (int d, int request, ...) = NULL;
+static int     (*native_open) (const char *pathname, int flags, ...) = NULL;
+static int     (*native_open64) (const char *pathname, int flags, ...) = NULL;
 
 int tapfd[2] = {-1,-1};
 static int tapcount=0;
@@ -59,9 +76,13 @@ static int addpid(int pid) {
 	}
 }
 
+void libvdetap_init (void) __attribute((constructor));
 void libvdetap_init(void)
 {
 	register int i;
+	nativesym(ioctl, "ioctl");
+	nativesym(open, "open");
+	nativesym(open64, "open64");
 	for (i=1;i<MAX;i++) 
 		pidpool[i-1].next= &(pidpool[i]);
 	flh=pidpool;
@@ -75,17 +96,6 @@ void libvdetap_fini(void)
 		plp = plp->next;
 	}
 }
-
-int native_open(const char *pathname, int flags, mode_t data)
-{
-	return (syscall(SYS_open, pathname, flags, data));
-}
-
-int native_ioctl(int fd, unsigned long int command, char *data)
-{
-	return (syscall(SYS_ioctl, fd, command, data));
-}
-
 
 int open(const char *path, int flags, ...)
 {
@@ -126,7 +136,7 @@ int open64(const char *path, int flags, ...)
 			return -1;
 
 	} else
-		return native_open(path, flags | O_LARGEFILE, data);
+		return native_open64(path, flags | O_LARGEFILE, data);
 }
 
 int ioctl(int fd, unsigned long int command, ...)

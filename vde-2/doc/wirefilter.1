@@ -3,71 +3,33 @@
 wirefilter \- Wire packet filter for Virtual Distributed Ethernet
 .SH SYNOPSIS
 .B wirefilter
-OPTIONS
 
-
-[ 
-.B \-l   
-.I loss  
-] 
-
-[ 
-.B \-d   
-.I delay  
-] 
-
-[ 
-.B \-D   
-.I dup
-] 
-
-[ 
-.B \-b   
-.I bandwidth
-] 
-
-[ 
-.B \-s   
-.I interface_speed
-] 
-
-[ 
-.B \-c   
-.I channel_capacity
-] 
-
-[ 
-.B \-n   
-.I noise_factor
-] 
-
-[ 
-.B \-m   
-.I mtu_size
-] 
-
-[ 
-.B \-M   
-.I mgmt socket  
-] 
-
-[-N]
+[\fB\-l\fI loss\fR]
+[\fB\-d\fI delay\fR]
+[\fB\-D\fI dup\fR]
+[\fB\-b\fI bandwidth\fR]
+[\fB\-s\fI interface_speed\fR]
+[\fB\-c\fI channel_capacity\fR]
+[\fB\-n\fI noise_factor\fR]
+[\fB\-m\fI mtu_size\fR]
+[\fB\-M\fI mgmt socket\fR]
+[\fB-N\fR]
 .br
 .SH DESCRIPTION
 A
 \fBwirefilter\fP 
 is able to emulate delays and packet loss on virtual wires.
 e.g.:
-.br
+
 .B
-dpipe vde_plug /tmp/s1 = wirefilter -l 10 = vde_plug /tmp/s1
-.br
+dpipe vde_plug /tmp/s1 = wirefilter -l 10 = vde_plug /tmp/s2
+
 creates a wire between two vde_switches (with sockets /tmp/s1 and /tmp/s2
 respectively). This cable looses 10% of the packets in each direction.
 
 .SH OPTIONS
 .TP
-.B \A-l "\fIloss\fP"
+.B \-l "\fIloss\fP"
 percentage of loss as a floating point number. It is possible to specify
 different loss percentage for the two channels: LR20.5 means 20.5% of packet
 flowing left to right are lost, RL10 means 10% from right to left.

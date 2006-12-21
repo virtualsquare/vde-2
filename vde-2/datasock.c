@@ -394,11 +394,12 @@ static void init(void)
 		printlog(LOG_ERR,"Setting O_NONBLOCK on connection fd: %s",strerror(errno));
 		return;
 	}
-	if (mkdir(ctl_socket, (mode & 0700 ? 0700 : 0) |
-				(mode & 0070 ? 0050 : 0) | (mode & 0007 ? 0005 : 0)) < 0) {
+	if (mkdir(ctl_socket, 0777) < 0) {
 		printlog(LOG_ERR,"creating vde ctl dir: %s",strerror(errno));
 		return;
 	}
+	chmod(ctl_socket, 02000 | (mode & 0700 ? 0700 : 0) |
+				(mode & 0070 ? 0070 : 0) | (mode & 0007 ? 0005 : 0));
 	sun.sun_family = AF_UNIX;
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){

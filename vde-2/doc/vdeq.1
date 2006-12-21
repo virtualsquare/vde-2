@@ -18,6 +18,10 @@ vdeq \- Virtual Distributed Ethernet wrapper for QEMU virtual machines
 .B vdeq 
 .B qemu
 [
+.B \-m
+.I octalmode
+]
+[
 .B \-sock
 .I socketpath
 [
@@ -108,6 +112,11 @@ both start qemu with \fBone\fP ethernet interface connected both to the standard
 to the switch with local socket "/tmp/my.ctl".
 
 .SH OPTIONS
+.TP
+.B -m, --mod
+.I octalmode, 
+specify the mode for comm socket.
+.br
 .TP
 .B \-sock 
 .I socketpath, 

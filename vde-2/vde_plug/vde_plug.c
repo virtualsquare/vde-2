@@ -272,10 +272,14 @@ static void setsighandlers()
 		{ SIGVTALRM, "SIGVTALRM", 1 },
 #ifdef VDE_LINUX
 		{ SIGPOLL, "SIGPOLL", 1 },
+#ifdef SIGSTKFLT
 		{ SIGSTKFLT, "SIGSTKFLT", 1 },
+#endif
 		{ SIGIO, "SIGIO", 1 },
 		{ SIGPWR, "SIGPWR", 1 },
+#ifdef SIGUNUSED
 		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
 #endif
 #ifdef VDE_DARWIN
 		{ SIGXCPU, "SIGXCPU", 1 },
