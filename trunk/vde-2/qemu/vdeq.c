@@ -18,6 +18,8 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 #include <sys/poll.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <pwd.h>
 
 #include <vde.h>
@@ -119,10 +121,14 @@ static void setsighandlers()
 		{ SIGVTALRM, "SIGVTALRM", 1 },
 #ifdef VDE_LINUX
 		{ SIGPOLL, "SIGPOLL", 1 },
+#ifdef SIGSTKFLT
 		{ SIGSTKFLT, "SIGSTKFLT", 1 },
+#endif
 		{ SIGIO, "SIGIO", 1 },
 		{ SIGPWR, "SIGPWR", 1 },
+#ifdef SIGUNUSED
 		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
 #endif
 #ifdef VDE_DARWIN
 		{ SIGXCPU, "SIGXCPU", 1 },
@@ -135,7 +141,7 @@ static void setsighandlers()
 	for(i = 0; signals[i].sig != 0; i++)
 		if(signal(signals[i].sig,
 					signals[i].ignore ? SIG_IGN : sig_handler) < 0)
-			fprintlog(stderr,"Setting handler for %s: %s\n", signals[i].name,
+			fprintf(stderr,"Setting handler for %s: %s\n", signals[i].name,
 					strerror(errno));
 }
 
@@ -244,6 +250,7 @@ int main(int argc, char **argv)
 	int oldsyntax=0;
 	int newsyntax=0;
 	int ver;
+  mode_t mode;
 
   vdeqname=basename(argv[0]);
 	//callerpwd=getpwuid(getuid());
@@ -292,6 +299,15 @@ int main(int argc, char **argv)
 	  argc-=2;
   } else
 	  argsock=NULL;
+
+    if (argc > 2 && (
+		  (strcmp(argv[1],"--mod")==0) ||
+		  (strcmp(argv[1],"-m")==0))
+	    ){
+	sscanf(argv[2],"%o",&mode);
+	argv+=2;
+	argc-=2;
+    }
 
 	if (!newsyntax) {
 		if (argsock == NULL)
@@ -412,7 +428,7 @@ int main(int argc, char **argv)
   }
 	setsighandlers();
   for (i=0; i<nb_nics; i++) {
-		struct vde_open_args vdearg={ports[i],NULL,0};
+		struct vde_open_args vdearg={ports[i],NULL,mode};
 		conn[i]=vde_open(sockname[i],"vdeqemu",&vdearg);
 	  pollv[2*i+1].fd=vde_datafd(conn[i]);
 	  pollv[2*i].fd=sp[i][1];
@@ -427,6 +443,7 @@ int main(int argc, char **argv)
 	  for(;;) {
 	    if ((result=poll(pollv,2*nb_nics,-1)) < 0) {
 	      perror("poll");
+	      cleanup();
 	      exit(1);
 	    }
 	    for (i=0; i<nb_nics; i++) {
@@ -435,22 +452,26 @@ int main(int argc, char **argv)
 	      if (pollv[2*i].revents & POLLIN) {
 		if ((nx=read(sp[i][1],bufin,sizeof(bufin))) < 0) {
 		  perror("read");
+		  cleanup();
 		  exit(1);
 		}
 		//fprintf(stderr,"RX from qemu %d\n",nx);
 		if (vde_send(conn[i],bufin,nx,0) < 0) {
 		  perror("sendto");
+		  cleanup();
 		  exit(1);
 		}
 	      }
 	      if (pollv[2*i+1].revents & POLLIN) {
 		if ((nx=vde_recv(conn[i],bufin,BUFSIZE,0)) < 0) {
 		  perror("recvfrom");
+		  cleanup();
 		  exit(1);
 		}
 		//fprintf(stderr,"TX to qemu %d\n",nx);
 		if (write(sp[i][1],bufin,nx) < 0) {
 		  perror("write");
+		  cleanup();
 		  exit(1);
 		}
 	      }

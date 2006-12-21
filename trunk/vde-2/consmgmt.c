@@ -349,7 +349,7 @@ static void init(void)
 		exit(1);
 	}
 	strcat(pidfile_path, "/");
-	if (daemonize && daemon(0, 1)) {
+	if (daemonize && daemon(0, 0)) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
 		exit(1);
 	}

@@ -26,6 +26,9 @@
 #include <stdlib.h>
 #include <pwd.h>
 #include <grp.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #ifndef VDESTDSOCK
 #define VDESTDSOCK  "/var/run/vde.ctl"
@@ -64,7 +67,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 	char *group=NULL;
 	int sockno=0;
 	int res;
-	mode_t mode=0;
+	mode_t mode=0700;
 
 	if (open_args != NULL) {
 		if (interface_version == 1) {
@@ -203,6 +206,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 		errno=err;
 		return NULL;
 	}
+	chmod(dataout.sun_path,mode);
 
 	return conn;
 }

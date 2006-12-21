@@ -8,20 +8,21 @@ No synopsis
 .SH DESCRIPTION
 \fBvdetaplib\fP 
 is a library that emulates tap (tuntap level2 interface, see
-in kernel sources ./Documentation/networking/tun.c) and connects
+in kernel sources Documentation/networking/tun.c) and connects
 tap virtual interfaces to vde networks.
 
-To use it, the libvdetab.so library must be preloaded (sh,ksh or bash syntax):
+To use it, the libvdetab.so library must be preloaded
+(sh, ksh or bash syntax):
 .RS
 .br
 .B 
-export LD_PRELOAD=/usr/local/lib/libvdetap.so
+export LD_PRELOAD=%LIBEXECDIR%/libvdetap.so
 .RE
 (csh, tchs syntax):
 .RS
 .br
 .B
-setenv LD_PRELOAD /usr/local/lib/libvdetap.so
+setenv LD_PRELOAD %LIBEXECDIR%/libvdetap.so
 .RE
 
 If you want to divert all tap requests to a single vde_switch set the

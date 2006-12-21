@@ -11,11 +11,13 @@
  * compiling, linking, and/or using OpenSSL is allowed.
  */
 
+#define _GNU_SOURCE
 #include "config.h"
 #include "blowfish.h"
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <string.h>
@@ -33,6 +35,7 @@ static char *remotehost;
 static int localport;
 static int remoteport;
 static int may_login=1;
+static struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 
 
 #ifndef HAVE_STRNDUP
@@ -68,7 +71,7 @@ void zombie_carnage(int signo)
  */
 static struct peer *generate_and_xmit(struct peer *ret){
 	char command[255];
-	int i,res;
+	int res;
 	struct hostent *target;
 
 	//fprintf(stderr,"Generating new key..\n");
@@ -122,7 +125,7 @@ static void handover(struct peer *p)
 	p->state=ST_OPENING;
 	p->next=NULL;
 	p->counter=0;
-	login(p);
+	blowfish_login(p);
 	may_login=0;
 }
 
@@ -185,8 +188,7 @@ int r;
 void
 vde_plug(struct peer *p)
 {
-	int r;
-	p->plug=vde_open(plugname,"vde_cryptcab",NULL);
+	p->plug=vde_open(plugname,"vde_cryptcab",&open_args);
 	if(!p->plug)
 	{
 		perror ("libvdeplug");
@@ -222,7 +224,7 @@ static inline void try_to_login(struct peer *p)
 	};
 	if(!may_login)
 		return;
-	login(p);
+	blowfish_login(p);
 	may_login=0;
 	setitimer(ITIMER_REAL, &nxt, old);
 }
@@ -234,7 +236,6 @@ int main(int argc, char **argv)
 {
 	int wire;
 	struct sockaddr_in myaddr;
-	struct sockaddr_in to;
 	struct datagram *pkt;
 	struct peer *p1;
 	struct sigaction sa;
@@ -256,7 +257,6 @@ int main(int argc, char **argv)
 		  const char sepusr='@';
 		  const char sepport=':';
 		  char *pusr,*pport;
-		  struct itimerval old;
 
 		  static struct option long_options[] = {
 			  {"sock", 1, 0, 's'},
@@ -264,6 +264,7 @@ int main(int argc, char **argv)
 			  {"unix", 1, 0, 's'},
 			  {"localport", 1, 0, 'p'},
 			  {"connect",1,0,'c'},
+			  {"mod",1,0,'m'},
 			  {"help",0,0,'h'},
 			  {0, 0, 0, 0}
 		  };
@@ -313,6 +314,10 @@ int main(int argc, char **argv)
 				localport=atoi(optarg);
 				break;
 				
+			  case 'm': 
+				sscanf(optarg,"%o",&(open_args.mode));
+				break;
+
 			  case 'h':
 			  default:
 				  Usage();
@@ -367,9 +372,9 @@ int main(int argc, char **argv)
 				if(p1 && (p1->state==ST_AUTH || p1->state==ST_SERVER)){
 					vde_send(p1->plug,pkt->data,pkt->len,0);	
 				}else if(p1 && p1->state==ST_IDSENT){
-					p1->state==ST_SERVER;
+					p1->state=ST_SERVER;
 				}else{
-					
+
 					deny_access(pkt->orig);
 				}
 			}
@@ -391,7 +396,7 @@ int main(int argc, char **argv)
 						
 					case CMD_RESPONSE:
 						if(!p1){
-							p1=(struct peer*)getpeerbynewaddr(pkt->orig);
+							p1=(struct peer*)getpeerbynewaddr(pkt->orig->in_a);
 							if(p1){
 							  memcpy(&p1->in_a,&pkt->orig->in_a, sizeof(struct sockaddr_in));
 							  bzero(&p1->handover_a,sizeof(struct sockaddr_in));
@@ -399,7 +404,7 @@ int main(int argc, char **argv)
 								
 						}
 						if(p1){
-							rcv_response(pkt, p1);
+							rcv_response(pkt, p1, vde_plug);
 						}
 						break;
 						

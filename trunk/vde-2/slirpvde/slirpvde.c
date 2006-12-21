@@ -27,7 +27,10 @@
 #include <stdarg.h>
 #include <fcntl.h>
 #include <vde.h>
+#include <netinet/in.h>
 #include <libvdeplug/libvdeplug.h>
+
+#include "misc.h"
 
 #ifdef VDE_DARWIN
 #	include <limits.h>
@@ -131,10 +134,14 @@ static void setsighandlers()
 		{ SIGVTALRM, "SIGVTALRM", 1 },
 #ifdef VDE_LINUX
 		{ SIGPOLL, "SIGPOLL", 1 },
+#ifdef SIGSTKFLT
 		{ SIGSTKFLT, "SIGSTKFLT", 1 },
+#endif
 		{ SIGIO, "SIGIO", 1 },
 		{ SIGPWR, "SIGPWR", 1 },
+#ifdef SIGUNUSED
 		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
 #endif
 #ifdef VDE_DARWIN
 		{ SIGXCPU, "SIGXCPU", 1 },
@@ -395,10 +402,12 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	strcat(pidfile_path, "/");
-	if (daemonize && daemon(0, 1)) {
+	if (daemonize && daemon(0, 0)) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
 		exit(1);
 	}
+
+	if(pidfile) save_pidfile();
 
 	conn=vde_open(sockname,"slirpvde:",&open_args);
 	lfd=stderr;

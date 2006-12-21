@@ -125,11 +125,14 @@ removepeer(struct peer *np);
 struct peer 
 *generate_key (struct peer*);
 
-int 
+void 
 blowfish_init(int);
 
 struct datagram 
 *blowfish_select(int timeout);
+
+void
+blowfish_login(struct peer *p);
 
 void 
 send_udp( char *data, size_t len, struct peer *p, unsigned char flags );
@@ -139,5 +142,23 @@ send_vde( const char *data, size_t len, struct peer *p);
 
 void 
 autocleaner(int signo);
+
+void
+deny_access(struct peer *p);
+
+void
+rcv_login(struct datagram *pkt, struct peer *p);
+
+struct peer
+*getpeerbynewaddr(struct sockaddr_in saddr);
+
+void
+rcv_response(struct datagram *pkt, struct peer *p, void (*callback)(struct peer*));
+
+void 
+rcv_challenge(struct datagram *pkt, struct peer *p);
+
+struct peer 
+*getpeerbyid(struct datagram *pkt);
 
 #endif

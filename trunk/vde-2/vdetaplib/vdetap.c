@@ -31,13 +31,14 @@ main(int argc,char *argv[])
 	socklen_t datainsize;
 	int result,nx;
 	register int i;
+	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 	/*printf("argc = %d\n",argc);
 	for (i=0;i<argc;i++)
 		printf("argv %d -%s-\n",i,argv[i]);*/
 	if (argc != 4 && argv[0][0] != '-') {
 		fprintf(stderr,"vdetap must be activated by libvdetap e.g.\n"
-				"   sh%% export LD_PRELOAD=/usr/local/lib/libvdetap.so\n"
-				"   csh%% setenv LD_PRELOAD /usr/local/lib/libvdetap.so\n");
+				"   sh%% export LD_PRELOAD=%s/libvdetap.so\n"
+				"   csh%% setenv LD_PRELOAD %s/libvdetap.so\n", LIBEXECDIR, LIBEXECDIR);
 		exit (-1);
 	}
 
@@ -50,7 +51,7 @@ main(int argc,char *argv[])
 		exit(1);
 	}
 	/* TODO insert argv[3] in descr */
-	conn=vde_open(argv[2],"tuntaplib",NULL);
+	conn=vde_open(argv[2],"tuntaplib",&open_args);
 	pollv[0].fd=fd;
 	pollv[1].fd=vde_datafd(conn);
 	for(;;) {
