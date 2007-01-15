@@ -13,6 +13,7 @@ wirefilter \- Wire packet filter for Virtual Distributed Ethernet
 [\fB\-n\fI noise_factor\fR]
 [\fB\-m\fI mtu_size\fR]
 [\fB\-M\fI mgmt socket\fR]
+[\fB\-v\fI vde_plug1:vde_plug2\fR]
 [\fB-N\fR]
 .br
 .SH DESCRIPTION
@@ -26,6 +27,11 @@ dpipe vde_plug /tmp/s1 = wirefilter -l 10 = vde_plug /tmp/s2
 
 creates a wire between two vde_switches (with sockets /tmp/s1 and /tmp/s2
 respectively). This cable looses 10% of the packets in each direction.
+
+The same cable can be created using:
+
+.B
+wirefilter -v /tmp/s1:/tmp/s2 -l 10
 
 .SH OPTIONS
 .TP
@@ -73,6 +79,10 @@ nofifo. with -N packets can be reordered.
 .B \-M "\fImgmt socket\fP" 
 the unix socket where the parameters (loss percentage, delay etc) can be checked and
 changed runtime. unixterm(1) can be used as a remote terminal for wirefilter.
+.TP
+.B \-v "\fIvde_plug1:vde_plug2\fP"
+If this option is used, the two local vde_plugs (vde_plug1 and vde_plug2) will be connected each other instead of stdin/stdout,
+using the libvdeplug libraries. 
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
