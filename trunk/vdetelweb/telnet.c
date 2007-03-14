@@ -164,7 +164,7 @@ static void telnet_option_send3(int fd,int action,int object)
 	lwip_write(fd,opt,3);
 }
 
-static int telnet_options(int fn,int fd,char *s)
+static int telnet_options(int fn,int fd,unsigned char *s)
 {
 	struct telnetstat *st=status[fn];
 	register int action_n_object;
@@ -204,7 +204,7 @@ static int telnet_options(int fn,int fd,char *s)
 
 int telnetdata(int fn,int fd,int vdefd)
 {
-	char buf[BUFSIZE];
+	unsigned char buf[BUFSIZE];
 	int n,i;
 	struct telnetstat *st=status[fn];
 	n=lwip_read(fd,buf,BUFSIZE);
