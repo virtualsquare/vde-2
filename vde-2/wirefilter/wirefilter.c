@@ -1,6 +1,8 @@
 /* WIREFILTER (C) 2005 Renzo Davoli
  * Licensed under the GPLv2
  * Modified by Ludovico Gardenghi 2005
+ * Modified by Renzo Davoli & Daniela Lacamera 2007:
+ * 	-v option added (direct access to libvdeplug)
  *
  * This filter can be used for testing network protcols. 
  * It is possible to loose, delay or reorder packets.
