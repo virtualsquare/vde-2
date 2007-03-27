@@ -101,7 +101,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 		errno=err;
 		return NULL;
 	}
-	if (sockname == NULL)
+	if (sockname == NULL || *sockname == NULL)
 		sockname=VDESTDSOCK;
 	else {
 		char *split;
