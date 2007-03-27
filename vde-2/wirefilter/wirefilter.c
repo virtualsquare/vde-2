@@ -1,8 +1,6 @@
 /* WIREFILTER (C) 2005 Renzo Davoli
  * Licensed under the GPLv2
  * Modified by Ludovico Gardenghi 2005
- * Modified by Renzo Davoli & Daniela Lacamera 2007:
- * 	-v option added (direct access to libvdeplug)
  *
  * This filter can be used for testing network protcols. 
  * It is possible to loose, delay or reorder packets.
@@ -17,6 +15,7 @@
 #include <getopt.h>
 #include <errno.h>
 #include <libgen.h>
+#include <syslog.h>
 #include <fcntl.h>
 #include <time.h>
 #include <signal.h>
@@ -28,6 +27,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <config.h>
+#include <libvdeplug/libvdeplug.h>
 
 #include <vde.h>
 
@@ -35,7 +35,7 @@
 #define MAXCONN 3
 static int alternate_stdin;
 static int alternate_stdout;
-#define NPFD NPIPES+MAXCONN+1
+#define NPFD NPIPES+NPIPES+MAXCONN+1
 struct pollfd pfd[NPFD];
 int outfd[NPIPES];
 char *progname;
@@ -53,16 +53,40 @@ double noise[2],noiseplus[2];
 double mtu[2],mtuplus[2];
 struct timeval nextband[2];
 struct timeval nextspeed[2];
-int nofifo;
-int ndirs;
-int bufsize[2];
+int nofifo; 
+int ndirs; //1 mono directional, 2 bi directional filter (always 2 with -v)
+int delay_bufsize[2]; //total size of delayed packets
+char *vdepath[2]; //path of the directly connected switched (via vde_plug)
+VDECONN *vdeplug[2]; //vde_plug connections (if NULL stdin/stdout)
+int daemonize; // daemon mode
+static char *pidfile = NULL;
+static char pidfile_path[PATH_MAX];
+static int logok=0;
 
 #define BUFSIZE 2048
 #define MAXCMD 128
 #define MGMTMODEARG 129
+#define DAEMONIZEARG 130
+#define PIDFILEARG 131
 #define KILO (1<<10)
 #define MEGA (1<<20)
 #define GIGA (1<<30)
+
+void printlog(int priority, const char *format, ...)
+{
+	va_list arg;
+
+	va_start (arg, format);
+
+	if (logok)
+		vsyslog(priority,format,arg);
+	else {
+		fprintf(stderr,"%s: ",progname);
+		vfprintf(stderr,format,arg);
+		fprintf(stderr,"\n");
+	}
+	va_end (arg);
+}
 
 static void readdualvalue(char *s,double *val,double *valplus)
 {
@@ -131,6 +155,14 @@ static int nextms()
 	return -1;
 }
 
+static inline int outpacket(int dir,const unsigned char *buf,int size)
+{
+	if (vdeplug[1-dir]) 
+		vde_send(vdeplug[1-dir],buf+2,size-2,0);
+	else
+		write(outfd[dir],buf,size);
+}
+
 int writepacket(int dir,const unsigned char *buf,int size)
 {
 	/* NOISE */
@@ -148,11 +180,11 @@ int writepacket(int dir,const unsigned char *buf,int size)
 				noisedpacket[(flippedbit >> 3) + 2] ^= 1<<(flippedbit & 0x7);
 				nobit--;
 			}
-			return write(outfd[dir],noisedpacket,size);
+			return outpacket(dir,noisedpacket,size);
 		} else
-			return write(outfd[dir],buf,size);
+			return outpacket(dir,buf,size);
 	} else
-		return write(outfd[dir],buf,size);
+		return outpacket(dir,buf,size);
 }
 
 /* packet queues are priority queues implemented on a heap.
@@ -167,7 +199,7 @@ static void packet_dequeue()
 	while (npq>0 && pqh[1]->when <= now) {
 		struct packpq *old=pqh[npq--];
 		int k=1;
-		bufsize[pqh[1]->dir] -= pqh[1]->size;
+		delay_bufsize[pqh[1]->dir] -= pqh[1]->size;
 		writepacket(pqh[1]->dir,pqh[1]->buf,pqh[1]->size);
 		free(pqh[1]->buf);
 		free(pqh[1]);
@@ -194,14 +226,14 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 		double capval=capacity[dir];
 		if (capacityplus[dir])
 			capval+=((drand48()*2.0)-1.0)*capacityplus[dir];
-		if ((bufsize[dir]+size) > capval)
+		if ((delay_bufsize[dir]+size) > capval)
 			return;
 	}
 	/* */
 
 	struct packpq *new=malloc(sizeof(struct packpq));
 	if (new==NULL) {
-		fprintf(stderr,"%s: malloc elem %s\n",progname,strerror(errno));
+		printlog(LOG_WARNING,"%s: malloc elem %s",progname,strerror(errno));
 		exit (1);
 	}
 	gettimeofday(&v,NULL);
@@ -211,16 +243,16 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	new->dir=dir;
 	new->buf=malloc(size);
 	if (new->buf==NULL) {
-		fprintf(stderr,"%s: malloc elem buf %s\n",progname,strerror(errno));
+		printlog(LOG_WARNING,"%s: malloc elem buf %s",progname,strerror(errno));
 		exit (1);
 	}
 	memcpy(new->buf,buf,size);
 	new->size=size;
-	bufsize[dir]+=size;
+	delay_bufsize[dir]+=size;
 	if (pqh==NULL) {
 		pqh=malloc(PQCHUNK*sizeof(struct packpq *));
 		if (pqh==NULL) {
-			fprintf(stderr,"%s: malloc %s\n",progname,strerror(errno));
+			printlog(LOG_WARNING,"%s: malloc %s",progname,strerror(errno));
 			exit (1);
 		}
 		pqh[0]=&sentinel; maxpq=PQCHUNK;
@@ -228,7 +260,7 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	if (npq >= maxpq) {
 		pqh=realloc(pqh,(maxpq=maxpq+PQCHUNK) * sizeof(struct packpq *));
 		if (pqh==NULL) {
-			fprintf(stderr,"%s: malloc %s\n",progname,strerror(errno));
+			printlog(LOG_WARNING,"%s: malloc %s",progname,strerror(errno));
 			exit (1);
 		}
 	}
@@ -355,7 +387,7 @@ static void splitpacket(const unsigned char *buf,int size,int dir)
 		rnx[dir]=(buf[0]<<8)+buf[1];
 		//fprintf(stderr,"%s: packet %d size %d %x %x dir %d\n",progname,rnx[dir],size-2,buf[0],buf[1],dir);
 		if (rnx[dir]>1521) {
-			fprintf(stderr,"%s: Packet length error size %d rnx %d\n",progname,size,rnx[dir]);
+			printlog(LOG_WARNING,"%s: Packet length error size %d rnx %d",progname,size,rnx[dir]);
 			rnx[dir]=0;
 			return;
 		}
@@ -379,10 +411,17 @@ static void packet_in(int dir)
 {
 	unsigned char buf[BUFSIZE];
 	int n;
-	n=read(pfd[dir].fd,buf,BUFSIZE);
-	if (n == 0)
-		exit (0);
-	splitpacket(buf,n,dir);
+	if(vdeplug[dir]) {
+		n=vde_recv(vdeplug[dir],buf+2,BUFSIZE-2,0);
+		buf[0]=n>>8;
+		buf[1]=n&0xFF;
+		handle_packet(dir,buf,n+2);
+	} else {
+		n=read(pfd[dir].fd,buf,BUFSIZE);
+		if (n == 0)
+			exit (0);
+		splitpacket(buf,n,dir);
+	}
 }
 
 static void initrand()
@@ -392,9 +431,9 @@ static void initrand()
 	srand48(v.tv_sec ^ v.tv_usec ^ getpid());
 }
 
-static int check_open_fifos(struct pollfd *pfd,int *outfd)
+static int check_open_fifos_n_plugs(struct pollfd *pfd,int *outfd,char *vdepath[],VDECONN *vdeplug[])
 {
-	int ndirs;
+	int ndirs=0;
 	struct stat stfd[NPIPES];
 	char *env_in;
 	char *env_out;
@@ -404,56 +443,119 @@ static int check_open_fifos(struct pollfd *pfd,int *outfd)
 		alternate_stdin=atoi(env_in);
 	if (env_out != NULL)
 		alternate_stdout=atoi(env_out);
-	if (fstat(STDIN_FILENO,&stfd[STDIN_FILENO]) < 0) {
-		fprintf(stderr,"%s: Error on stdin: %s\n",progname,strerror(errno));
-		return -1;
-	}
-	if (fstat(STDOUT_FILENO,&stfd[STDOUT_FILENO]) < 0) {
-		fprintf(stderr,"%s: Error on stdout: %s\n",progname,strerror(errno));
-		return -1;
-	}
-	if (!S_ISFIFO(stfd[STDIN_FILENO].st_mode)) {
-		fprintf(stderr,"%s: Error on stdin: %s\n",progname,"it is not a pipe");
-		return -1;
-	}
-	if (!S_ISFIFO(stfd[STDOUT_FILENO].st_mode)) {
-		fprintf(stderr,"%s: Error on stdin: %s\n",progname,"it is not a pipe");
-		return -1;
-	}
-	if (env_in == NULL || fstat(alternate_stdin,&stfd[0]) < 0) {
-		ndirs=1;
-		pfd[0].fd=STDIN_FILENO;
-		pfd[0].events=POLLIN | POLLHUP;
-		pfd[0].revents=0;
-		outfd[0]=STDOUT_FILENO;
-	} else {
-		if (fstat(outfd[1],&stfd[1]) < 0) {
-			fprintf(stderr,"%s: Error on secondary out: %s\n",progname,strerror(errno));
-			return -1;
+	if (vdepath[0]) { // -v selected
+		if (strcmp(vdepath[0],"-") != 0) {
+			if((vdeplug[LR]=vde_open(vdepath[0],"vde_crosscable",NULL))==NULL){
+				fprintf(stderr,"vdeplug %s: %s\n",vdepath[0],strerror(errno));
+				return -1;
+			}
+			pfd[0].fd=vde_datafd(vdeplug[LR]);
+			pfd[0].events=POLLIN | POLLHUP;
 		}
-		if (!S_ISFIFO(stfd[0].st_mode)) {
-			fprintf(stderr,"%s: Error on secondary in: %s\n",progname,"it is not a pipe");
-			return -1;
-		}
-		if (!S_ISFIFO(stfd[1].st_mode)) {
-			fprintf(stderr,"%s: Error on secondary out: %s\n",progname,"it is not a pipe");
-			return -1;
+		if (strcmp(vdepath[1],"-") != 0) {
+			if((vdeplug[RL]=vde_open(vdepath[1],"vde_crosscable",NULL))==NULL){
+				fprintf(stderr,"vdeplug %s: %s\n",vdepath[1],strerror(errno));
+				return -1;
+			}
+			pfd[1].fd=vde_datafd(vdeplug[RL]);
+			pfd[1].events=POLLIN | POLLHUP;
 		}
 		ndirs=2;
-		pfd[LR].fd=STDIN_FILENO;
-		pfd[LR].events=POLLIN | POLLHUP;
-		pfd[LR].revents=0;
-		outfd[LR]=alternate_stdout;
-		pfd[RL].fd=alternate_stdin;
-		pfd[RL].events=POLLIN | POLLHUP;
-		pfd[RL].revents=0;
-		outfd[RL]=STDOUT_FILENO;
+	}
+	if (vdeplug[LR] == NULL || vdeplug[RL] == NULL) {
+		if (fstat(STDIN_FILENO,&stfd[STDIN_FILENO]) < 0) {
+			fprintf(stderr,"%s: Error on stdin: %s\n",progname,strerror(errno));
+			return -1;
+		}
+		if (fstat(STDOUT_FILENO,&stfd[STDOUT_FILENO]) < 0) {
+			fprintf(stderr,"%s: Error on stdout: %s\n",progname,strerror(errno));
+			return -1;
+		}
+		if (!S_ISFIFO(stfd[STDIN_FILENO].st_mode)) {
+			fprintf(stderr,"%s: Error on stdin: %s\n",progname,"it is not a pipe");
+			return -1;
+		}
+		if (!S_ISFIFO(stfd[STDOUT_FILENO].st_mode)) {
+			fprintf(stderr,"%s: Error on stdin: %s\n",progname,"it is not a pipe");
+			return -1;
+		}
+		if (vdeplug[RL] != NULL) { /* -v -:xxx */
+			pfd[0].fd=STDIN_FILENO;
+			pfd[0].events=POLLIN | POLLHUP;
+			outfd[1]=STDOUT_FILENO;
+		} else if (vdeplug[LR] != NULL) { /* -v xxx:- */
+			pfd[1].fd=STDIN_FILENO;
+			pfd[1].events=POLLIN | POLLHUP;
+			outfd[0]=STDOUT_FILENO;
+		} else if (env_in == NULL || fstat(alternate_stdin,&stfd[0]) < 0) {
+			ndirs=1;
+			pfd[0].fd=STDIN_FILENO;
+			pfd[0].events=POLLIN | POLLHUP;
+			outfd[0]=STDOUT_FILENO;
+		} else {
+			if (fstat(outfd[1],&stfd[1]) < 0) {
+				fprintf(stderr,"%s: Error on secondary out: %s\n",progname,strerror(errno));
+				return -1;
+			}
+			if (!S_ISFIFO(stfd[0].st_mode)) {
+				fprintf(stderr,"%s: Error on secondary in: %s\n",progname,"it is not a pipe");
+				return -1;
+			}
+			if (!S_ISFIFO(stfd[1].st_mode)) {
+				fprintf(stderr,"%s: Error on secondary out: %s\n",progname,"it is not a pipe");
+				return -1;
+			}
+			ndirs=2;
+			pfd[LR].fd=STDIN_FILENO;
+			pfd[LR].events=POLLIN | POLLHUP;
+			outfd[LR]=alternate_stdout;
+			pfd[RL].fd=alternate_stdin;
+			pfd[RL].events=POLLIN | POLLHUP;
+			outfd[RL]=STDOUT_FILENO;
+		}
 	}
 	return ndirs;
 }
 
+static void save_pidfile()
+{
+	if(pidfile[0] != '/')
+		strncat(pidfile_path, pidfile, PATH_MAX - strlen(pidfile_path));
+	else
+		strcpy(pidfile_path, pidfile);
+
+	int fd = open(pidfile_path,
+			O_WRONLY | O_CREAT | O_EXCL,
+			S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	FILE *f;
+
+	if(fd == -1) {
+		printlog(LOG_ERR, "Error in pidfile creation: %s", strerror(errno));
+		exit(1);
+	}
+
+	if((f = fdopen(fd, "w")) == NULL) {
+		printlog(LOG_ERR, "Error in FILE* construction: %s", strerror(errno));
+		exit(1);
+	}
+
+	if(fprintf(f, "%ld\n", (long int)getpid()) <= 0) {
+		printlog(LOG_ERR, "Error in writing pidfile");
+		exit(1);
+	}
+
+	fclose(f);
+}
+
 static void cleanup(void)
 {
+	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
+		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
+	}
+	if (vdeplug[LR])
+		vde_close(vdeplug[LR]);
+	if (vdeplug[RL])
+		vde_close(vdeplug[RL]);
 	if (mgmt)
 		unlink(mgmt);
 }
@@ -550,7 +652,7 @@ static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 	struct sockaddr addr;
 	new = accept(fd, &addr, &len);
 	if(new < 0){
-		fprintf(stderr,"%s: mgmt accept %s",progname,strerror(errno));
+		printlog(LOG_WARNING,"%s: mgmt accept %s",progname,strerror(errno));
 		return nfds;
 	}
 	if (nfds < NPFD) {
@@ -559,10 +661,9 @@ static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 		write(new,prompt,strlen(prompt));
 		pfd[nfds].fd=new;
 		pfd[nfds].events=POLLIN | POLLHUP;
-		pfd[nfds].revents=0;
 		return ++nfds;
 	} else {
-		fprintf(stderr,"%s: too many mgmt connections",progname);
+		printlog(LOG_WARNING,"%s: too many mgmt connections",progname);
 		close (new);
 		return nfds;
 	}
@@ -678,7 +779,7 @@ static int showinfo(int fd,char *s)
 		printoutc(fd, "Noise L->R %g+%g   R->L %g+%g",noise[LR],noiseplus[LR],noise[RL],noiseplus[RL]);
 		printoutc(fd, "MTU   L->R %g      R->L %g   ",mtu[LR],mtu[RL]);
 		printoutc(fd, "Cap.  L->R %g+%g   R->L %g+%g",capacity[LR],capacityplus[LR],capacity[RL],capacityplus[RL]);
-		printoutc(fd, "Current Delay Queue size:   L->R %d      R->L %d   ",bufsize[LR],bufsize[RL]);
+		printoutc(fd, "Current Delay Queue size:   L->R %d      R->L %d   ",delay_bufsize[LR],delay_bufsize[RL]);
 	} else {
 		printoutc(fd, "Loss  %g+%g",loss[0],lossplus[0]);
 		printoutc(fd, "Delay %g+%g",delay[0],delayplus[0]);
@@ -688,7 +789,7 @@ static int showinfo(int fd,char *s)
 		printoutc(fd, "Noise %g+%g",noise[0],noiseplus[0]);
 		printoutc(fd, "MTU   %g",mtu[0]);
 		printoutc(fd, "Cap.  %g+%g",capacity[0],capacityplus[0]);
-		printoutc(fd, "Current Delay Queue size:   %d",bufsize[0]);
+		printoutc(fd, "Current Delay Queue size:   %d",delay_bufsize[0]);
 	}
 	printoutc(fd,"Fifoness %s",(nofifo == 0)?"TRUE":"FALSE");
 	printoutc(fd,"Waiting packets in delay queues %d",npq);
@@ -721,7 +822,7 @@ static int handle_cmd(int fd,char *inbuf)
 {
 	int rv=ENOSYS;
 	int i;
-	while (*inbuf == ' ' || *inbuf == '\t') inbuf++;
+	while (*inbuf == ' ' || *inbuf == '\t' || *inbuf == '\n') inbuf++;
 	if (*inbuf != '\0' && *inbuf != '#') {
 		for (i=0; i<NCL 
 				&& strncmp(commandlist[i].tag,inbuf,strlen(commandlist[i].tag))!=0;
@@ -743,18 +844,21 @@ static int mgmtcommand(int fd)
 {
 	char buf[MAXCMD+1];
 	int n,rv;
+	int outfd=fd;
 	n = read(fd, buf, MAXCMD);
 	if (n<0) {
-		fprintf(stderr,"%s: read from mgmt %s",progname,strerror(errno));
+		printlog(LOG_WARNING,"%s: read from mgmt %s",progname,strerror(errno));
 		return 0;
 	}
 	else if (n==0) 
 		return -1;
 	else {
+		if (fd==STDIN_FILENO)
+			outfd=STDOUT_FILENO;
 		buf[n]=0;
-		rv=handle_cmd(fd,buf);
+		rv=handle_cmd(outfd,buf);
 		if (rv>=0)
-			write(fd,prompt,strlen(prompt));
+			write(outfd,prompt,strlen(prompt));
 		return rv;
 	}
 }
@@ -763,6 +867,8 @@ static int delmgmtconn(int i,struct pollfd *pfd,int nfds)
 {
 	if (i<nfds) {
 		close(pfd[i].fd);
+		if (pfd[i].fd == 0) /* close stdin implies exit */
+			exit(0);
 		memmove(pfd+i,pfd+i+1,sizeof (struct pollfd) * (nfds-i-1));
 		nfds--;
 	}
@@ -772,18 +878,21 @@ static int delmgmtconn(int i,struct pollfd *pfd,int nfds)
 void usage(void)
 {
 	fprintf(stderr,"Usage: %s OPTIONS\n"
-		"\t--help|-h\n"
-		"\t--loss|-l loss_percentage\n"
-		"\t--delay|-d delay_ms\n"
-		"\t--dup|-D dup_percentage\n"
-		"\t--band|-b bandwidth(bytes/s)\n"
-		"\t--speed|-s interface_speed(bytes/s)\n"
-		"\t--capacity|-c delay_channel_capacity\n"
-		"\t--noise|-n noise_bits/megabye\n"
-		"\t--mtu|-m mtu_size\n"
-		"\t--nofifo|-N\n"
-		"\t--mgmt|-M management_socket\n"
-		"\t--mgmtmode management_permission(octal)\n"
+			"\t--help|-h\n"
+			"\t--loss|-l loss_percentage\n"
+			"\t--delay|-d delay_ms\n"
+			"\t--dup|-D dup_percentage\n"
+			"\t--band|-b bandwidth(bytes/s)\n"
+			"\t--speed|-s interface_speed(bytes/s)\n"
+			"\t--capacity|-c delay_channel_capacity\n"
+			"\t--noise|-n noise_bits/megabye\n"
+			"\t--mtu|-m mtu_size\n"
+			"\t--nofifo|-N\n"
+			"\t--mgmt|-M management_socket\n"
+			"\t--mgmtmode management_permission(octal)\n"
+			"\t--vde-plug plug1:plug2 | -v plug1:plug2\n"
+			"\t--daemon\n"
+			"\t--pidfile pidfile\n"
 			,progname);
 	exit (1);
 }
@@ -794,6 +903,7 @@ int main(int argc,char *argv[])
 	int npfd;
 	int option_index;
 	int mgmtindex=-1;
+	int consoleindex=-1;
 	static struct option long_options[] = {
 		{"help",0 , 0, 'h'},
 		{"loss", 1, 0, 'l'},
@@ -806,20 +916,20 @@ int main(int argc,char *argv[])
 		{"mtu",1 , 0, 'm'},
 		{"nofifo",0 , 0, 'N'},
 		{"mgmt", 1, 0, 'M'},
-		{"mgmtmode", 1, 0, MGMTMODEARG}
+		{"mgmtmode", 1, 0, MGMTMODEARG},
+		{"vde-plug",1,0,'v'},
+		{"daemon",0 , 0, DAEMONIZEARG},
+		{"pidfile", 1, 0, PIDFILEARG}
 	};
 	progname=basename(argv[0]);
 
 	setsighandlers();
 	atexit(cleanup);
 
-	ndirs=check_open_fifos(pfd,outfd);
-	if (ndirs < 0)
-		usage();
 
 	while(1) {
 		int c;
-		c = GETOPT_LONG (argc, argv, "hnl:d:M:D:m:b:s:c:",
+		c = GETOPT_LONG (argc, argv, "hnl:d:M:D:m:b:s:c:v:",
 				long_options, &option_index);
 		if (c<0)
 			break;
@@ -857,8 +967,27 @@ int main(int argc,char *argv[])
 			case 'N':
 				nofifo=1;
 				break;
+			case 'v':
+				{
+					char *colon;
+					vdepath[LR]=strdup(optarg);
+					colon=index(vdepath[LR],':');
+					if (colon) {
+						*colon=0;
+						vdepath[RL]=colon+1;
+					} else {
+						fprintf(stderr,"Bad vde_plugs specification.\n");
+						usage();
+					}
+				}
 			case MGMTMODEARG:
 				sscanf(optarg,"%o",&mgmtmode);
+				break;
+			case DAEMONIZEARG:
+				daemonize=1;
+				break;
+			case PIDFILEARG:
+				pidfile=strdup(optarg);
 				break;
 			default:
 				usage();
@@ -868,21 +997,74 @@ int main(int argc,char *argv[])
 	if (optind < argc)
 		usage();
 
-	if (ndirs==2)
-		fprintf(stderr,"%s: bidirectional filter starting...\n",progname);
-	else
-		fprintf(stderr,"%s: monodirectional filter starting...\n",progname);
+	/* pfd structure:
+	 * monodir: 0 input LR, 1 mgmtctl, >1  mgmt open conn (mgmtindex==ndirs==1)
+	 * bidir on streams: 0 input LR, 1 input RL, 2 mgmtctl, >2 mgmt open conn (mgmtindex==ndirs==2)
+	 * vdeplug xx:xx : 0 input LR, 1 input RL, 2&3 ctlfd, 4 mgmtctl, > 4 mgmt open conn (mgmtindex>ndirs==2) 5 is console
+	 * vdeplug xx:xx : 0 input LR, 1 input RL, 2&3 ctlfd, 4 console (if not -M)
+	 * vdeplug -:xx : 0 input LR(stdin), 1 input RL, 2 ctlfd, 3 mgmtctl, > 3 mgmt open conn (mgmtindex>ndirs==2)
+	 * vdeplug xx:- : 0 input LR, 1 input RL(stdin), 2 ctlfd, 3 mgmtctl, > 3 mgmt open conn (mgmtindex>ndirs==2)
+	 */
+
+	ndirs=check_open_fifos_n_plugs(pfd,outfd,vdepath,vdeplug);
+
+	if (ndirs < 0)
+		usage();
 
 	npfd=ndirs;
+	if (vdeplug[LR]) {
+		pfd[npfd].fd=vde_ctlfd(vdeplug[LR]);
+		pfd[npfd].events=POLLIN | POLLHUP;
+		npfd++;
+	}
+	if (vdeplug[RL]) {
+		pfd[npfd].fd=vde_ctlfd(vdeplug[RL]);
+		pfd[npfd].events=POLLIN | POLLHUP;
+		npfd++;
+	}
 
 	if(mgmt != NULL) {
 		int mgmtfd=openmgmt(mgmt);
 		mgmtindex=npfd;
 		pfd[mgmtindex].fd=mgmtfd;
 		pfd[mgmtindex].events=POLLIN | POLLHUP;
-		pfd[mgmtindex].revents=0;
 		npfd++;
 	}
+
+	if (daemonize) {
+		openlog(progname, LOG_PID, 0);
+		logok=1;
+	} else if (vdeplug[LR] && vdeplug[RL]) { // console mode
+		consoleindex=npfd;
+		pfd[npfd].fd=STDIN_FILENO;
+		pfd[npfd].events=POLLIN | POLLHUP;
+		npfd++;
+	}
+
+	/* saves current path in pidfile_path, because otherwise with daemonize() we
+	 * forget it */
+	if(getcwd(pidfile_path, PATH_MAX-1) == NULL) {
+		printlog(LOG_ERR, "getcwd: %s", strerror(errno));
+		exit(1);
+	}
+	strcat(pidfile_path, "/");
+	if (daemonize && daemon(0, 0)) {
+		printlog(LOG_ERR,"daemon: %s",strerror(errno));
+		exit(1);
+	}
+
+	/* once here, we're sure we're the true process which will continue as a
+	 * server: save PID file if needed */
+	if(pidfile) save_pidfile();
+
+	if (vdepath[LR]) 
+	  printlog(LOG_INFO,"%s: bidirectional vdeplug filter L=%s R=%s starting...",progname,
+				(*vdepath[LR])?vdepath[LR]:"DEFAULT_SWITCH",
+				(*vdepath[RL])?vdepath[RL]:"DEFAULT_SWITCH");
+	else if (ndirs==2)
+		printlog(LOG_INFO,"%s: bidirectional filter starting...",progname);
+	else
+		printlog(LOG_INFO,"%s: monodirectional filter starting...",progname);
 
 	initrand();
 	while(1) {
@@ -921,22 +1103,31 @@ int main(int argc,char *argv[])
 		if (pfd[0].revents & POLLHUP || (ndirs>1 && pfd[1].revents & POLLHUP))
 			exit(0);
 		if (pfd[0].revents & POLLIN) {
-			packet_in(LR);
+			packet_in(LR); n--;
 		}
 		if (ndirs>1 && pfd[1].revents & POLLIN) {
-			packet_in(RL);
+			packet_in(RL); n--;
 		}
-		if (mgmtindex >= 0) {
-			if (pfd[mgmtindex].revents != 0) 
-				npfd=newmgmtconn(pfd[mgmtindex].fd,pfd,npfd);
-			if (npfd > mgmtindex+1) {
+		if (n>0) { // if there are already events to handle (performance: packet switching first)
+			int mgmtfdstart=consoleindex;
+			if (mgmtindex >= 0) {
+				if (pfd[mgmtindex].revents != 0) {
+					npfd=newmgmtconn(pfd[mgmtindex].fd,pfd,npfd);
+					n--;
+				}
+				mgmtfdstart=mgmtindex+1;
+			}
+			if (mgmtfdstart >= 0 && npfd > mgmtfdstart) {
 				register int i;
-				for (i=mgmtindex+1;i<npfd;i++) {
+				for (i=mgmtfdstart;i<npfd;i++) {
 					if (pfd[i].revents & POLLHUP ||
 							(pfd[i].revents & POLLIN && mgmtcommand(pfd[i].fd) < 0))
 						npfd=delmgmtconn(i,pfd,npfd);
+					if (pfd[i].revents) n--;
 				}
-			}
+			} 
+/*			if (n>0) // if there are already pending events, it means that a ctlfd has hunged up
+				exit(0);*/
 		}
 		packet_dequeue();
 	}
