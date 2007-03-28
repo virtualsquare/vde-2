@@ -1,6 +1,7 @@
 /* WIREFILTER (C) 2005 Renzo Davoli
  * Licensed under the GPLv2
  * Modified by Ludovico Gardenghi 2005
+ * Modified by Renzo Davoli, Luca Bigliardi 2007
  *
  * This filter can be used for testing network protcols. 
  * It is possible to loose, delay or reorder packets.
@@ -643,7 +644,7 @@ static int openmgmt(char *mgmt)
 }
 
 static char header[]="\nVDE wirefilter V.%s\n(C) R.Davoli 2005,2006 - GPLv2\n";
-static char prompt[]="\nVDEwf:";
+static char prompt[]="\nVDEwf: ";
 static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 {
 	int new;
@@ -796,24 +797,26 @@ static int showinfo(int fd,char *s)
 	return 0;
 }
 
+#define WITHFD 0x80
 static struct comlist {
 	char *tag;
 	int (*fun)(int fd,char *arg);
+	unsigned char type;
 } commandlist [] = {
-	{"help", help},
-	{"showinfo",showinfo},
-	{"delay",setdelay},
-	{"loss",setloss},
-	{"dup",setddup},
-	{"bandwidth",setband},
-	{"band",setband},
-	{"speed",setspeed},
-	{"capacity",setcapacity},
-	{"noise",setnoise},
-	{"mtu",setmtu},
-	{"fifo",setfifo},
-	{"logout",logout},
-	{"shutdown",doshutdown}
+	{"help", help, WITHFD},
+	{"showinfo",showinfo, WITHFD},
+	{"delay",setdelay, 0},
+	{"loss",setloss, 0},
+	{"dup",setddup, 0},
+	{"bandwidth",setband, 0},
+	{"band",setband, 0},
+	{"speed",setspeed, 0},
+	{"capacity",setcapacity, 0},
+	{"noise",setnoise, 0},
+	{"mtu",setmtu, 0},
+	{"fifo",setfifo, 0},
+	{"logout",logout, 0},
+	{"shutdown",doshutdown, 0}
 };
 
 #define NCL sizeof(commandlist)/sizeof(struct comlist)
@@ -832,7 +835,11 @@ static int handle_cmd(int fd,char *inbuf)
 		{
 			inbuf += strlen(commandlist[i].tag);
 			while (*inbuf == ' ' || *inbuf == '\t') inbuf++;
+			if (commandlist[i].type & WITHFD)
+				printoutc(fd,"0000 DATA END WITH '.'");
 			rv=commandlist[i].fun(fd,inbuf);
+			if (commandlist[i].type & WITHFD)
+				printoutc(fd,".");
 		}
 		printoutc(fd,"1%03d %s",rv,strerror(rv));
 		return rv;
