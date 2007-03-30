@@ -49,8 +49,8 @@ The command
 .B vde_cryptcab -s /tmp/vde2.ctl -c foo@remote.machine.org:2100
 .RE
 will connect a client to the remote server, running on udp port 2100.
-At this point,  on server side a verify for user "foo" credentials is required, 
-tipically it could be: host-based authentication, password challenge 
+At this point, on server side a verify for user "foo" credentials is required, 
+typically it could be: host-based authentication, password challenge 
 or public key authentication. See
 .B ssh (1)
 for more details about it.
@@ -62,7 +62,7 @@ a level 2 encrypted tunnel is established.
 .TP
 .B \-p "\fIportnum\fP" 
 It is possible to decide which local udp port to use.
-When this option is not specified, cryptocab will use default udp port number,
+When this option is not specified, cryptcab will use default udp port number,
 7667.
 .TP
 .B \-c "\fI[remote_user@]host[:remote_portnum]\fP" 
