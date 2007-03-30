@@ -45,13 +45,13 @@ dpipe \- bi-directional pipe command
 .SH DESCRIPTION
 \fBdpipe\fP is a general tool to run two commands diverting the
 standard output of the first command into the standard input of the second
-and viceversa.
+and vice-versa.
 It is the bi-directional
 extension of the \fB|\fP (pipe) syntax used by all the shells.
-The \fB=\fP has been chosen as a metaphore of two parallel communication lines
+The \fB=\fP has been chosen as a metaphor of two parallel communication lines
 between the commands.
-It is also possible to catenate several tools. Itermediate programs communicate
-using standard input and stardard output with the preceding tool and alternate standard input
+It is also possible to concatenate several tools. Intermediate programs communicate
+using standard input and standard output with the preceding tool and alternate standard input
 and output (respectively file descriptors number 3 and 4) towards the following tool.
 If an intermediate tool should process only the data flowing in one direction 
 use \fB{\fP or \fB}\fP
@@ -62,11 +62,11 @@ This tool has been written as a tool for the Virtual Distributed Ethernet.
 .B dpipe a = b
 .br
 processes a and b are bidirectionally connected: stdin of a is connected to stdout of b 
-and viceversa
+and vice-versa
 .br
 .B dpipe a = b = c
 .br
-a and b are connected as above. alternate stdin of b is connected to stdout of c and
+a and b are connected as above. Alternate stdin of b is connected to stdout of c and
 alternate stdout of b to stdin of c
 .br
 .B dpipe a =} b }= c

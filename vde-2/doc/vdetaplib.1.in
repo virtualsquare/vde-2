@@ -27,7 +27,7 @@ setenv LD_PRELOAD %LIBEXECDIR%/libvdetap.so
 
 If you want to divert all tap requests to a single vde_switch set the
 variable VDEALLTAP to the vde socket. 
-(sh,ksh or bash syntax):
+(sh, ksh or bash syntax):
 .RS
 .br
 .B
@@ -42,7 +42,7 @@ setenv VDEALLTAP /tmp/vde.ctl
 
 It is also possible to set each single interface to different vde_switches
 by setting the environment variable with the same name of the interface.
-(sh,ksh or bash syntax):
+(sh, ksh or bash syntax):
 .RS
 .br
 .B
