@@ -580,7 +580,7 @@ void slirp_input(const uint8_t *pkt, int pkt_len)
         m->m_len = pkt_len;
         memcpy(m->m_data, pkt, pkt_len);
 
-	client_eth_register_ip(m->m_data, m->m_len);
+				client_eth_register_ip(m->m_data, m->m_len);
         m->m_data += ETH_HLEN;
         m->m_len -= ETH_HLEN;
 
