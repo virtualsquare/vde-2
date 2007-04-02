@@ -513,7 +513,7 @@ tcp_connect(inso)
 		so->so_state = SS_NOFDREF; /* Don't select it yet, even though we have an FD */
 					   /* if it's not FACCEPTONCE, it's already NOFDREF */
 	}
-	fprintf(stderr,"S=%d\n",s);
+	/*fprintf(stderr,"S=%d\n",s);*/
 	so->s = s;
 	
 	so->so_iptos = tcp_tos(so);
