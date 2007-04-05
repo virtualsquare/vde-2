@@ -424,7 +424,7 @@ static void init(void)
 	add_fd(connect_fd,ctl_type,-1);
 }
 
-static int showinfo(int fd)
+static int showinfo(FILE *fd)
 {
 	printoutc(fd,"ctl dir %s",ctl_socket);
 	printoutc(fd,"std mode 0%03o",mode);
@@ -433,7 +433,7 @@ static int showinfo(int fd)
 
 static struct comlist cl[]={
 	{"ds","============","DATA SOCKET MENU",NULL,NOARG},
-	{"ds/showinfo","","show ds info",showinfo,NOARG|WITHFD},
+	{"ds/showinfo","","show ds info",showinfo,NOARG|WITHFILE},
 };
 
 static void delep (int fd, void* data, void *descr)

@@ -1,8 +1,10 @@
-/* Copyright 2005 Renzo Davoli - VDE-2
+/* Copyright 2005,2006,2007 Renzo Davoli - VDE-2
+ * 2007 co-authors Ludovico Gardenghi, Filippo Giunchedi, Luca Bigliardi
  * --pidfile/-p and cleanup management by Mattia Belletti (C) 2004.
  * Licensed under the GPLv2
  */
 
+#define _GNU_SOURCE
 #include <config.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -18,9 +20,9 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <sys/un.h>
+#include <sys/uio.h>
 #include <net/if.h>
 #include <stdarg.h>
-#define _GNU_SOURCE
 #include <getopt.h>
 
 #include <vde.h>
@@ -49,6 +51,10 @@ static char header[]="VDE switch V.%s\n(C) R.Davoli 2005 - GPLv2\n";
 static char prompt[]="\nvde: ";
 
 static struct comlist *clh=NULL;
+#ifdef DEBUGOPT
+static int ndebugclients=8;
+static struct dbgcl *dbgclh=NULL;
+#endif
 
 void addcl(int ncl,struct comlist *cl)
 {
@@ -60,6 +66,22 @@ void addcl(int ncl,struct comlist *cl)
 		clt=(&cl->next);
 	}
 }
+
+#ifdef DEBUGOPT
+void adddbgcl(int ncl,struct dbgcl *cl)
+{
+	int i, j;
+	static struct dbgcl **clt=&dbgclh;
+	for (i=0;i<ncl;i++,cl++) {
+		if ((cl->fds=malloc(ndebugclients * sizeof(int))) != NULL) {
+			cl->next=NULL;
+			for(j=0; j<ndebugclients; j++) cl->fds[j]= -1;
+			(*clt)=cl;
+			clt=(&cl->next);
+		}
+	}
+}
+#endif
 
 void printlog(int priority, const char *format, ...)
 {
@@ -77,27 +99,70 @@ void printlog(int priority, const char *format, ...)
 	va_end (arg);
 }
 
+#if 0
 void printoutc(int fd, const char *format, ...)
 {
 	va_list arg;
 
 	va_start (arg, format);
+#if 0
 	if (fd < 0)
 		printlog(LOG_INFO,format,arg);
 	else {
+#endif
 		char outbuf[MAXCMD+1];
 		vsnprintf(outbuf,MAXCMD,format,arg);
 		strcat(outbuf,"\n");
 		write(fd,outbuf,strlen(outbuf));
+#if 0
 	}
+#endif
 }
+#endif
+
+void printoutc(FILE *f, const char *format, ...)
+{
+	va_list arg;
+
+	va_start (arg, format);
+	if (f) {
+		vfprintf(f,format,arg);
+		fprintf(f,"\n");
+	} else
+		printlog(LOG_INFO,format,arg);
+	va_end(arg);
+}
+
+#ifdef DEBUGOPT
+static char _dbgnl='\n';
+void debugout(struct dbgcl* cl, const char *format, ...)
+{
+	va_list arg;
+	char *msg;
+	int i;
+	char *header;
+	struct iovec iov[]={{NULL,0},{NULL,0},{&_dbgnl,1}};
+
+	va_start (arg, format);
+	iov[0].iov_len=asprintf(&header,"%d %s ",3000+0,cl->path);
+	iov[0].iov_base=header;
+	iov[1].iov_len=vasprintf(&msg,format,arg);
+	iov[1].iov_base=msg;
+	va_end (arg);
+
+	for (i=0; i<ndebugclients && cl->fds[i] >=0; i++)
+		writev(cl->fds[i],iov,3);
+	free(header);
+	free(msg);
+}
+#endif
 
 void setmgmtperm(char *path)
 {
 	chmod(path,mgmt_mode);
 }
 
-static int help(int fd,char *arg)
+static int help(FILE *fd,char *arg)
 {
 	struct comlist *p;
 	int n=strlen(arg);
@@ -115,6 +180,13 @@ static int handle_cmd(int type,int fd,char *inbuf)
 	int rv=ENOSYS;
 	while (*inbuf == ' ' || *inbuf == '\t') inbuf++;
 	if (*inbuf != '\0' && *inbuf != '#') {
+		char *outbuf;
+		size_t outbufsize;
+		FILE *f;
+		if (fd >= 0)
+			f=open_memstream(&outbuf,&outbufsize);
+		else
+			f=NULL;
 		for (p=clh;p!=NULL && (p->doit==NULL || strncmp(p->path,inbuf,strlen(p->path))!=0); p=p->next)
 			;
 		if (p!=NULL)
@@ -122,13 +194,29 @@ static int handle_cmd(int type,int fd,char *inbuf)
 			inbuf += strlen(p->path);
 			while (*inbuf == ' ' || *inbuf == '\t') inbuf++;
 			if (p->type & WITHFD) {
-				printoutc(fd,"0000 DATA END WITH '.'");
-				switch(p->type & ~WITHFD){
-					case NOARG: rv=p->doit(fd); break;
-					case INTARG: rv=p->doit(fd,atoi(inbuf)); break;
-					case STRARG: rv=p->doit(fd,inbuf); break;
+				if (p->type & WITHFILE) {
+					printoutc(f,"0000 DATA END WITH '.'");
+					switch(p->type & ~(WITHFILE | WITHFD)){
+						case NOARG: rv=p->doit(f,fd); break;
+						case INTARG: rv=p->doit(f,fd,atoi(inbuf)); break;
+						case STRARG: rv=p->doit(f,fd,inbuf); break;
+					}
+					printoutc(f,".");
+				} else {
+					switch(p->type & ~WITHFD){
+						case NOARG: rv=p->doit(fd); break;
+						case INTARG: rv=p->doit(fd,atoi(inbuf)); break;
+						case STRARG: rv=p->doit(fd,inbuf); break;
+					}
 				}
-				printoutc(fd,".");
+			} else if (p->type & WITHFILE) {
+				printoutc(f,"0000 DATA END WITH '.'");
+				switch(p->type & ~WITHFILE){
+					case NOARG: rv=p->doit(f); break;
+					case INTARG: rv=p->doit(f,atoi(inbuf)); break;
+					case STRARG: rv=p->doit(f,inbuf); break;
+				}
+				printoutc(f,".");
 			} else {
 				switch(p->type){
 					case NOARG: rv=p->doit(); break;
@@ -138,7 +226,12 @@ static int handle_cmd(int type,int fd,char *inbuf)
 			}
 		}
 		if (rv >= 0 && (rv > 0 || fd >= 0))
-			printoutc(fd,"1%03d %s",rv,strerror(rv));
+			printoutc(f,"1%03d %s",rv,strerror(rv));
+		if (f) {
+			fclose(f);
+			write(fd,outbuf,outbufsize);
+			free(outbuf);
+		}
 	}
 	return rv;
 }
@@ -152,7 +245,12 @@ static int runscript(int fd,char *path)
 	else {
 		while (fgets(buf,MAXCMD,f) != NULL) {
 			if (strlen(buf) > 1 && buf[strlen(buf)-1]=='\n') buf[strlen(buf)-1]= '\0';
-			if (fd >= 0) printoutc(fd,"vde[%s]: %s",path,buf);
+			if (fd >= 0) {
+				char *scriptprompt=NULL;
+				asprintf(&scriptprompt,"vde[%s]: %s",path,buf);
+				write(fd,scriptprompt,strlen(scriptprompt));
+				free(scriptprompt);
+			}
 			handle_cmd(mgmt_data, fd, buf);
 		}
 		return 0;
@@ -175,6 +273,7 @@ void loadrcfile(void)
 	}
 }
 
+static char *EOS="9999 END OF SESSION";
 static void handle_input(unsigned char type,int fd,int revents,int *unused)
 {
 	char buf[MAXCMD];
@@ -203,7 +302,7 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 				write(fd,prompt,strlen(prompt));
 			else {
 				if(type==mgmt_data) {
-					printoutc(fd,"9999 END OF SESSION");
+					write(fd,EOS,strlen(EOS));
 					remove_fd(fd);
 				}
 				if (cmdout == -2)
@@ -285,7 +384,10 @@ static struct option long_options[] = {
 	{"pidfile", 1, 0, 'p'},
 	{"rcfile", 1, 0, 'f'},
 	{"mgmt", 1, 0, 'M'},
-	{"mgmtmode", 1, 0, MGMTMODEARG}
+	{"mgmtmode", 1, 0, MGMTMODEARG},
+#ifdef DEBUGOPT
+	{"debugclients",1,0,'D'},
+#endif
 };
 
 #define Nlong_options (sizeof(long_options)/sizeof(struct option));
@@ -299,6 +401,9 @@ static void usage(void)
 			"  -f, --rcfile               Configuration file (overrides %s and ~/.vderc)\n"
 			"  -M, --mgmt SOCK            path of the management UNIX socket\n"
 			"      --mgmtmode MODE        management UNIX socket access mode (octal)\n"
+#ifdef DEBUGOPT
+			"  -D, --debugclients #        number of debug clients allowed\n"
+#endif
 			,STDRCFILE);
 }
 
@@ -321,6 +426,11 @@ static int parseopt(int c, char *optarg)
 		case MGMTMODEARG:
 			sscanf(optarg,"%o",&mgmt_mode);
 			break;
+#ifdef DEBUGOPT
+		case 'D':
+			ndebugclients = atoi(optarg);
+			break;
+#endif
 		default:
 			outc=c;
 	}
@@ -407,7 +517,7 @@ static int vde_shutdown()
 	return -2; 
 }
 
-static int showinfo(int fd) 
+static int showinfo(FILE *fd) 
 {
 	printoutc(fd,header,PACKAGE_VERSION);
 	printoutc(fd,"pid %d MAC %02x:%02x:%02x:%02x:%02x:%02x uptime %d",getpid(),
@@ -419,12 +529,92 @@ static int showinfo(int fd)
 	return 0;
 }
 
+#ifdef DEBUGOPT
+static int debuglist(FILE *f,int fd,char *arg)
+{
+#define DEBUGFORMAT "%-22s %-6s %s"
+	struct dbgcl *p;
+	int i;
+	int rv=ENOENT;
+	printoutc(f,DEBUGFORMAT,"CATEGORY", "STATUS", "HELP");
+	printoutc(f,DEBUGFORMAT,"------------","------", "----");
+	for (p=dbgclh; p!=NULL; p=p->next){
+		if (strncmp(p->path, arg, strlen(arg)) == 0) {
+			for (i=0; i<ndebugclients && p->fds[i] != fd; i++)
+				;
+			rv=0;
+			printoutc(f, DEBUGFORMAT, p->path,  i<ndebugclients ? "ON" : "OFF", p->help);
+		}
+	}
+	return rv;
+}
+
+/* EINVAL -> no matches
+ * EEXIST -> all the matches already include fd
+ * EMFILE -> fd buffer averflow in at least one match 
+ * 0 otherwise */
+static int debugadd(int fd,char *arg) {
+	struct dbgcl *p;
+	int rv=EINVAL;
+	for (p=dbgclh; p!=NULL; p=p->next) {
+		if (strncmp(p->path, arg, strlen(arg)) == 0) {
+			int i;
+			if (rv==EINVAL) rv=EEXIST;
+			for(i=0;i<ndebugclients && (p->fds[i] != -1) && (p->fds[i] != fd); i++)
+				;
+			if (i<ndebugclients) {
+				if ( p->fds[i] == -1 ) {
+					p->fds[i] = fd;
+					if (rv!=EMFILE) rv=0;
+				} 
+			} else
+				rv=EMFILE;
+		} 
+	}
+	return rv;
+}
+
+/* EINVAL -> no matches
+ * ENOENT -> all the matches do not include fd
+ * 0 otherwise */
+static int debugdel(int fd,char *arg) {
+	struct dbgcl *p;
+	int rv=EINVAL;
+	for (p=dbgclh; p!=NULL; p=p->next){
+		if (strncmp(p->path, arg, strlen(arg)) == 0) {
+			int i;
+			if (rv==EINVAL) rv=ENOENT;
+			for(i=0;i<ndebugclients && (p->fds[i] != -1) && (p->fds[i] != fd); i++)
+				;
+			if (i<ndebugclients && p->fds[i] == fd) {
+				int j;
+				for (j=i;j<ndebugclients && p->fds[i] >= 0; j++)
+					;
+				j--; /* the last one */
+				p->fds[i]=p->fds[j]; /* swap it with the deleted element*/
+				p->fds[j] = -1; /* null the last one, if deleting the last one
+													 null itself */
+				rv=0;
+			} 
+		}
+	}
+	return rv;
+}
+
+#endif
+
 static struct comlist cl[]={
-	{"help","[arg]","Help (limited to arg when specified)",help,STRARG | WITHFD},
+	{"help","[arg]","Help (limited to arg when specified)",help,STRARG | WITHFILE},
 	{"logout","","logout from this mgmt terminal",vde_logout,NOARG},
 	{"shutdown","","shutdown of the switch",vde_shutdown,NOARG},
-	{"showinfo","","show switch version and info",showinfo,NOARG|WITHFD},
+	{"showinfo","","show switch version and info",showinfo,NOARG|WITHFILE},
 	{"load","path","load a configuration script",runscript,STRARG|WITHFD},
+#ifdef DEBUGOPT
+	{"debug","============","DEBUG MENU",NULL,NOARG},
+	{"debug/list","","list debug categories",debuglist,STRARG|WITHFILE|WITHFD},
+	{"debug/add","dbgpath","enable debug info for a given category",debugadd,WITHFD|STRARG},
+	{"debug/del","dbgpath","disable debug info for a given category",debugdel,WITHFD|STRARG},
+#endif
 };
 
 void start_consmgmt(void)

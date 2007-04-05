@@ -30,6 +30,14 @@ static int hash_bits;
 static int hash_mask;
 #define HASH_SIZE (1 << hash_bits)
 
+#ifdef DEBUGOPT
+#define DBGHASHNEW (dl) 
+#define DBGHASHDEL (dl+1) 
+static struct dbgcl dl[]= {
+	{"hash/+","hash: new element",NULL,NULL},
+	{"hash/-","hash: discarded element",NULL,NULL},
+};
+#endif
 struct hash_entry {
 	struct hash_entry *next;
 	struct hash_entry **prev;
@@ -89,6 +97,8 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 			return -1;
 		}
 
+		DBGOUT(DBGHASHNEW,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x",
+				     esrc[0], esrc[1], esrc[2], esrc[3], esrc[4], esrc[5], esrc[6], esrc[7]);
 		memcpy(&e->dst, esrc, ETH_ALEN+2);
 		if(h[k] != NULL) h[k]->prev = &(e->next);
 		e->next = h[k];
@@ -108,6 +118,7 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 
 #define delete_hash_entry(OLD) \
 	({ \
+	 DBGOUT(DBGHASHDEL,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x", OLD->dst[0], OLD->dst[1], OLD->dst[2], OLD->dst[3], OLD->dst[4], OLD->dst[5], OLD->dst[6], OLD->dst[7]);\
 	 *((OLD)->prev)=(OLD)->next; \
 	 if((OLD)->next != NULL) (OLD)->next->prev = (OLD)->prev; \
 	 free((OLD)); \
@@ -298,7 +309,7 @@ int hash_get_gc_expire()
 	return gc_expire;
 }
 
-static int find_hash(int fd,char *strmac)
+static int find_hash(FILE *fd,char *strmac)
 {
 	int maci[ETH_ALEN];
 	unsigned char mac[ETH_ALEN];
@@ -332,23 +343,23 @@ static int find_hash(int fd,char *strmac)
 static void print_hash_entry(struct hash_entry *e, void *arg)
 {
 
-	int *pfd=arg;
-	printoutc(*pfd,"Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  " 
+	FILE *pfd=arg;
+	printoutc(pfd,"Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  " 
 			"age %ld secs", calc_hash(e->dst),
 			e->dst[0], e->dst[1], e->dst[2], e->dst[3], e->dst[4], e->dst[5],
 			*((u_int16_t *)(e->dst+ETH_ALEN)),
 			e->port, qtime() - e->last_seen);
 }
 
-static int print_hash(int fd)
+static int print_hash(FILE *fd)
 {
 	qtime_csenter();
-	for_all_hash(print_hash_entry, &fd);
+	for_all_hash(print_hash_entry, fd);
 	qtime_csexit();
 	return 0;
 }
 
-static int showinfo(int fd)
+static int showinfo(FILE *fd)
 {
 	printoutc(fd,"Hash size %d",HASH_SIZE);
 	printoutc(fd,"GC interval %d secs",gc_interval);
@@ -359,13 +370,13 @@ static int showinfo(int fd)
 
 static struct comlist cl[]={
 	{"hash","============","HASH TABLE MENU",NULL,NOARG},
-	{"hash/showinfo","","show hash info",showinfo,NOARG|WITHFD},
+	{"hash/showinfo","","show hash info",showinfo,NOARG|WITHFILE},
 	{"hash/setsize","N","change hash size",hash_resize,INTARG},
 	{"hash/setgcint","N","change garbage collector interval",hash_set_gc_interval,INTARG},
 	{"hash/setexpire","N","change hash entries expire time",hash_set_gc_expire,INTARG},
 	{"hash/setminper","N","minimum persistence time",hash_set_minper,INTARG},
-	{"hash/print","","print the hash table",print_hash,NOARG|WITHFD},
-	{"hash/find","MAC [VLAN]","MAC lookup",find_hash,STRARG|WITHFD},
+	{"hash/print","","print the hash table",print_hash,NOARG|WITHFILE},
+	{"hash/find","MAC [VLAN]","MAC lookup",find_hash,STRARG|WITHFILE},
 };
 
 /* sets sig_alarm as handler for SIGALRM, and run it a first time */
@@ -377,4 +388,7 @@ void hash_init(int hash_size)
 	gc_expire=GC_EXPIRE;
 	gc_timerno=qtimer_add(gc_interval,0,hash_gc,NULL);
 	ADDCL(cl);
+#ifdef DEBUGOPT
+	ADDDBGCL(dl);
+#endif
 }

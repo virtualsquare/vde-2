@@ -1,4 +1,4 @@
-/* Copyright 2003 Renzo Davoli 
+/* Copyright 2003-2007 Renzo Davoli 
  * Licensed under the GPL
  * Modified by Ludovico Gardenghi 2005
  */
@@ -31,6 +31,7 @@
 #include <libvdeplug/libvdeplug.h>
 
 #include "misc.h"
+#include "tcp2unix.h"
 
 #ifdef VDE_DARWIN
 #	include <limits.h>
@@ -307,6 +308,17 @@ static struct redirx *parse_redir_x(struct redirx *head, char *buff)
 	}
 }
 
+static void parse_redir_locx(char *buff)
+{
+	char *path;
+	int port=atoi(buff);
+	if ((path = strchr(buff, ':'))) {
+		*path++=0;
+		tcp2unix_add(port,path);
+	} else 
+		fprintf(stderr,"Error: tcp2unix redirection sytax error -x port:path e.g. -x 6000:/tmp/.X11-unix/X0\r\n");
+}
+
 static void do_redir_tcp(struct redirtcp *head)
 {
 	if (head) {
@@ -330,8 +342,11 @@ void usage(char *name) {
 			"Usage:\n"
 			" %s [-socket vdesock] [-dhcp] [-daemon] [-network netaddr] \n"
 			"\t [-L host_port:guest_addr:guest_port] [-X guest_addr[:display[.screen]]] \n"
+			"\t [-x portno:unix_socket_path]\n"
 			" %s [-s vdesock] [-D] [-d] [-n netaddr]\n"
-			"\t [-L host_port:guest_addr:guest_port] [-X guest_addr[:display[.screen]]] \n" ,name,name);
+			"\t [-L host_port:guest_addr:guest_port] [-X guest_addr[:display[.screen]]] \n" 
+			"\t [-x portno:unix_socket_path]\n"
+			,name,name);
 	exit(-1);
 }
 
@@ -365,7 +380,7 @@ int main(int argc, char **argv)
 
   prog=basename(argv[0]);
 
-  while ((opt=GETOPT_LONG(argc,argv,"s:n:p:g:m:L:X:dD",slirpvdeopts,&longindx)) > 0) {
+  while ((opt=GETOPT_LONG(argc,argv,"s:n:p:g:m:L:X:x:dD",slirpvdeopts,&longindx)) > 0) {
 		switch (opt) {
 			case 's' : sockname=optarg;
 								 break;
@@ -386,6 +401,8 @@ int main(int argc, char **argv)
 			case 'L': rtcp=parse_redir_tcp(rtcp,optarg);
 								 break;
 			case 'X': rx=parse_redir_x(rx,optarg);
+								 break;
+			case 'x': parse_redir_locx(optarg);
 								 break;
 			default  : usage(prog);
 								 break;

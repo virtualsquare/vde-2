@@ -38,9 +38,28 @@ static int numports;
 #define STP_PROPOSAL 0x02
 #define STP_TC 0x01
 
+#ifdef DEBUGOPT
+#define DBGFSTPSTATUS (dl) 
+#define DBGFSTPROOT (dl+1) 
+static struct dbgcl dl[]= {
+	  {"fstp/status","fstp: status change",NULL,NULL},
+	  {"fstp/root","fstp: rootswitch/port change",NULL,NULL},
+};
+static char *fstpdecodestatus[]={
+	"discarding",
+	"learning",
+	"forwarding",
+	"learning+forwarding"};
+#define port_set_status(P,V,S) \
+	({DBGOUT(DBGFSTPSTATUS,"Port %02d VLAN %02x:%02x %s",\
+					       (P),(V)>>8,(V)&0xff,fstpdecodestatus[(S)]);\
+	 port_set_status(P,V,S);})
+#endif
+
 #define SWITCHID_LEN (ETH_ALEN+2)
 #define FSTP_ACTIVE(VLAN,PORT) (BA_CHECK(fsttab[(VLAN)]->rcvhist[0],(PORT)) || \
 			BA_CHECK(fsttab[(VLAN)]->rcvhist[1],(PORT)))
+
 static int rcvhistindex;
 struct vlst {
 	unsigned char root[SWITCHID_LEN];
@@ -152,7 +171,6 @@ static struct fsttagbpdu outtagpacket = {
 	 port_get_status((PORT),(VLAN)) << 4 | \
 	 (AGR) << 6 | \
 	 (TCACK) << 7)
-
 
 int fstnewvlan(int vlan)
 {
@@ -458,6 +476,10 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 			memcpy(v->port,p->stp_port,2);
 			v->rootport=port;
 			v->roottimestamp=qtime();
+			DBGOUT(DBGFSTPROOT,"%02d VLAN %02x:%02x -> %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+					port,vlan>>8,vlan&0xff,
+					v->root[0], v->root[1], v->root[2], v->root[3],
+					v->root[4], v->root[5], v->root[6], v->root[7]);
 			fastprotocol(vlan,port);
 			topology_change(vlan,port);
 		}
@@ -533,7 +555,7 @@ static void fstinitpkt(void)
 	fst_timerno=qtimer_add(helloperiod,0,fst_hello,NULL);
 }
 
-static int fstpshowinfo(int fd)
+static int fstpshowinfo(FILE *fd)
 {
 	printoutc(fd,"MAC %02x:%02x:%02x:%02x:%02x:%02x Priority %d (0x%x)",
 			switchmac[0], switchmac[1], switchmac[2], switchmac[3], switchmac[4], switchmac[5],
@@ -578,7 +600,7 @@ static char *decoderole(int vlan, int port)
 	return "Designated";
 }
 
-static void fstprintactive(int vlan,int fd)
+static void fstprintactive(int vlan,FILE *fd)
 {
 	register int i;
 	printoutc(fd,"FST DATA VLAN %04d %s %s",vlan,
@@ -600,7 +622,7 @@ static void fstprintactive(int vlan,int fd)
 			printoutc(fd," -- Port %04d tagged=%d portcost=%d role=%s",i,1,port_getcost(i),decoderole(vlan,i)),i);
 }	
 
-static int fstprint(int fd,char *arg)
+static int fstprint(FILE *fd,char *arg)
 {
 	if (*arg != 0) {
 		register int vlan;
@@ -653,11 +675,11 @@ static int fstsetedge(char *arg)
 
 static struct comlist cl[]={
 	{"fstp","============","FAST SPANNING TREE MENU",NULL,NOARG},
-	{"fstp/showinfo","","show fstp info",fstpshowinfo,NOARG|WITHFD},
+	{"fstp/showinfo","","show fstp info",fstpshowinfo,NOARG|WITHFILE},
 	{"fstp/setfstp","0/1","Fast spanning tree protocol 1=ON 0=OFF",fstpsetonoff,INTARG},
 	{"fstp/setedge","VLAN PORT 1/0","Define an edge port for a vlan 1=Y 0=N",fstsetedge,STRARG},
 	{"fstp/bonus","VLAN PORT COST","set the port bonus for a vlan",fstsetbonus,STRARG},
-	{"fstp/print","[N]","print fst data for the defined vlan",fstprint,STRARG|WITHFD},
+	{"fstp/print","[N]","print fst data for the defined vlan",fstprint,STRARG|WITHFILE},
 };
 
 int fstflag(int op,int f)
@@ -678,5 +700,8 @@ void fst_init(int initnumports)
 	if (pflag & FSTP_TAG)
 		fstinitpkt();
 	ADDCL(cl);
+#ifdef DEBUGOPT
+	ADDDBGCL(dl);
+#endif
 }
 #endif

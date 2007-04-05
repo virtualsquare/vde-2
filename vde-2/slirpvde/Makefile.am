@@ -38,6 +38,8 @@ slirpvde_SOURCES = \
 		   udp.h \
 		   bootp.c \
 		   bootp.h \
+		   tcp2unix.c \
+		   tcp2unix.h \
 		   slirpvde.c
 
 slirpvde_LDADD = ../libvdeplug/libvdeplug.la
