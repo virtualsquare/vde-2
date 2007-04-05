@@ -1,3 +1,7 @@
+/* Copyright 2007 Renzo Davoli 
+ * Licensed under the GPLv2
+ */
+
 #ifndef _TCP2UNIX_H
 #define _TCP2UNIX_H
 

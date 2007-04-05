@@ -1,3 +1,7 @@
+/* Copyright 2007 Renzo Davoli 
+ * Licensed under the GPLv2
+ */
+
 #include <stdlib.h>
 #include <string.h>
 
