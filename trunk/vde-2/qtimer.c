@@ -11,7 +11,8 @@
 #include <errno.h>
 #include <string.h>
 #include <switch.h>
-#include <consmgmt.h>
+#include <stdio.h>
+#include <consmgmt.h> /* just for printlog def */
 
 #define QT_ALLOC_STEP 4
 

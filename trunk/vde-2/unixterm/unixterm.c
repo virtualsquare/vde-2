@@ -28,8 +28,14 @@ int main(int argc,char *argv[])
 	static int fileout[]={STDOUT_FILENO,STDOUT_FILENO};
 	sun.sun_family=PF_UNIX;
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",argv[1]);
-	fd=socket(PF_UNIX,SOCK_STREAM,0);
-	rv=connect(fd,(struct sockaddr *)(&sun),sizeof(sun));
+	if((fd=socket(PF_UNIX,SOCK_STREAM,0))<0) {
+		perror("Socket opening error");
+		exit -1;
+	}
+	if ((rv=connect(fd,(struct sockaddr *)(&sun),sizeof(sun))) < 0) {
+		perror("Socket connecting error");
+		exit -1;
+	}
 	pfd[1].fd=fileout[0]=fd;
 	while(1) {
 		int m,i,n=poll(pfd,2,-1);
@@ -41,7 +47,7 @@ int main(int argc,char *argv[])
 				if((m=read(pfd[i].fd,buf,BUFSIZE)) == 0)
 					exit(0);
 				write(fileout[i],buf,m);
-			}
+			} 
 		}
 	}
 }

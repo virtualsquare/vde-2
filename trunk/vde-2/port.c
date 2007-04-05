@@ -31,6 +31,22 @@
 static int pflag=0;
 static int numports;
 
+#ifdef DEBUGOPT
+#define DBGPORTNEW (dl) 
+#define DBGPORTDEL (dl+1) 
+#define DBGPORTDESCR (dl+2) 
+#define DBGEPNEW (dl+3) 
+#define DBGEPDEL (dl+4) 
+#define DBGFSTPSTATUS (dl+5)
+static struct dbgcl dl[]= {
+	  {"port/+","new port",NULL,NULL},
+		{"port/-","closed port",NULL,NULL},
+		{"port/descr","set port description",NULL,NULL},
+	  {"port/ep/+","new endpoint",NULL,NULL},
+		{"port/ep/-","closed endpoint",NULL,NULL},
+};
+#endif
+
 // for dedugging if needed
 
 /*
@@ -111,6 +127,8 @@ static int alloc_port(unsigned int portno)
 				return -1;
 			} else
 			{
+				DBGOUT(DBGPORTNEW,"%02d", i);
+
 				portv[i]=port;
 				port->fd_data=-1;
 				port->ep=NULL;
@@ -157,6 +175,7 @@ int setup_ep(int portno, int fd_ctl,
 			port->fd_data=modfun->newport(fd_ctl,portno);
 		if (port->fd_data >= 0 &&
 				(ep=malloc(sizeof(struct endpoint))) != NULL) {
+			DBGOUT(DBGEPNEW,"Port %02d FD %2d", portno,fd_ctl);
 			port->ms=modfun;
 			port->sender=modfun->sender;
 			ep->port=portno;
@@ -165,7 +184,7 @@ int setup_ep(int portno, int fd_ctl,
 			ep->descr=NULL;
 			if(port->ep == NULL) {/* WAS INACTIVE */
 				register int i;
-				/* copy all the vlan defs to the active vlan defs*/
+				/* copy all the vlan defs to the active vlan defs */
 				ep->next=port->ep;
 				port->ep=ep;
 				BAC_FORALL(validvlan,NUMOFVLAN,
@@ -202,9 +221,10 @@ void setup_description(int portno, int fd_ctl, char *descr)
 		if (port != NULL) {
 			struct endpoint *ep;
 			for (ep=port->ep;ep!=NULL;ep=ep->next) 
-				if (ep->fd_ctl == fd_ctl)
+				if (ep->fd_ctl == fd_ctl) {
+					DBGOUT(DBGPORTDESCR,"Port %02d FD %2d -> \"%s\"",portno,fd_ctl,descr);
 					ep->descr=descr;
-
+				}
 		}
 	}
 }
@@ -214,6 +234,7 @@ static int rec_close_ep(struct endpoint **pep, int fd_ctl)
 	struct endpoint *this=*pep;
 	if (this != NULL) {
 		if (this->fd_ctl==fd_ctl) {
+			DBGOUT(DBGEPDEL,"Port %02d FD %2d",this->port,fd_ctl);
 			*pep=this->next;
 			if (portv[this->port]->ms->delep)
 				portv[this->port]->ms->delep(this->fd_ctl,this->data,this->descr);
@@ -232,6 +253,7 @@ int close_ep(int portno, int fd_ctl)
 		if (port != NULL) {
 			int rv=rec_close_ep(&(port->ep),fd_ctl);
 			if (port->ep == NULL) {
+				DBGOUT(DBGPORTDEL,"%02d",portno);
 				hash_delete_port(portno);
 #ifdef VDE_PQ
 				packetq_delfd(port->fd_data);
@@ -272,6 +294,7 @@ int portflag(int op,int f)
 
 /*********************** sending macro used by Core ******************/
 
+/* VDBG counter: count[port].spacket++; count[port].sbytes+=len */
 #ifdef VDE_PQ
 #define SEND_PACKET_PORT(PORT,PACKET,LEN) \
 	({ \
@@ -305,6 +328,7 @@ void portset_send_packet(bitarray portset, void *packet, int len)
 	BA_FORALL(portset,numports,
 			SEND_PACKET_PORT(portv[i],packet,len), i);
 }
+
 
 void port_set_status(int portno, int vlan, int status)
 {
@@ -394,6 +418,7 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 	int tarport;
 	int vlan,tagged;
 
+	/* VDBG counter: count[port].rpacket++; count[port].rbytes+=len */
 	if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00) {
 		tagged=1;
 		vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
@@ -468,7 +493,7 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 
 /**************************************** COMMAND MANAGEMENT ****************************************/
 
-static int showinfo(int fd)
+static int showinfo(FILE *fd)
 {
 	printoutc(fd,"Numports=%d",numports);
 	printoutc(fd,"HUB=%s",(pflag & HUB_TAG)?"true":"false");
@@ -569,7 +594,7 @@ static int epclose(char *arg)
 		return close_ep(port,id);
 }
 
-static int print_port(int fd,int i,int inclinactive)
+static int print_port(FILE *fd,int i,int inclinactive)
 {
 	struct endpoint *ep;
 	if (portv[i] != NULL && (inclinactive || portv[i]->ep!=NULL)) {
@@ -585,7 +610,7 @@ static int print_port(int fd,int i,int inclinactive)
 		return ENXIO;
 }
 
-static int print_ptable(int fd,char *arg)
+static int print_ptable(FILE *fd,char *arg)
 {
 	register int i;
 	if (*arg != 0) {
@@ -602,7 +627,7 @@ static int print_ptable(int fd,char *arg)
 	}
 }
 
-static int print_ptableall(int fd,char *arg)
+static int print_ptableall(FILE *fd,char *arg)
 {
 	register int i;
 	if (*arg != 0) {
@@ -671,8 +696,9 @@ static int vlancreate_nocheck(int vlan)
 #ifdef FSTP
 		rv=fstnewvlan(vlan);
 #endif
-		if (rv == 0) 
+		if (rv == 0) {
 			BAC_SET(validvlan,NUMOFVLAN,vlan);
+		}
 		return rv;
 	}
 }
@@ -765,7 +791,7 @@ static int vlandelport(char *arg)
 	 (BA_CHECK(vlant[(V)].bctag,(PN)) || BA_CHECK(vlant[(V)].bcuntag,(PN))) ? \
 	 "Forwarding" : "Learning")
 
-static void vlanprintactive(int vlan,int fd)
+static void vlanprintactive(int vlan,FILE *fd)
 {
 	register int i;
 	printoutc(fd,"VLAN %04d",vlan);
@@ -806,7 +832,7 @@ static void vlanprintactive(int vlan,int fd)
 #endif
 }
 
-static int vlanprint(int fd,char *arg)
+static int vlanprint(FILE *fd,char *arg)
 {
 	if (*arg != 0) {
 		register int vlan;
@@ -823,7 +849,7 @@ static int vlanprint(int fd,char *arg)
 	return 0;
 }
 
-static void vlanprintelem(int vlan,int fd)
+static void vlanprintelem(int vlan,FILE *fd)
 {
 	register int i;
 	printoutc(fd,"VLAN %04d",vlan);
@@ -832,7 +858,7 @@ static void vlanprintelem(int vlan,int fd)
 				i, portv[i]->vlanuntag != vlan, portv[i]->ep != NULL, STRSTATUS(i,vlan)),i);
 }
 
-static int vlanprintall(int fd,char *arg)
+static int vlanprintall(FILE *fd,char *arg)
 {
 	if (*arg != 0) {
 		register int vlan;
@@ -874,7 +900,7 @@ static int setmacaddr(char *strmac)
 
 static struct comlist cl[]={
 	{"port","============","PORT STATUS MENU",NULL,NOARG},
-	{"port/showinfo","","show hash info",showinfo,NOARG|WITHFD},
+	{"port/showinfo","","show hash info",showinfo,NOARG|WITHFILE},
 	{"port/setnumports","N","set the number of ports",portsetnumports,INTARG},
 	/*{"port/setmacaddr","MAC","set the switch MAC address",setmacaddr,STRARG},*/
 	{"port/sethub","0/1","1=HUB 0=switch",portsethub,INTARG},
@@ -883,15 +909,15 @@ static struct comlist cl[]={
 	{"port/remove","N","remove the port N",portremove,INTARG},
 	{"port/allocatable","N 0/1","Is the port allocatable as unnamed? 1=Y 0=N",portallocatable,STRARG},
 	{"port/epclose","N ID","remove the endpoint port N/id ID",epclose,STRARG},
-	{"port/print","[N]","print the port/endpoint table",print_ptable,STRARG|WITHFD},
-	{"port/allprint","[N]","print the port/endpoint table (including inactive port)",print_ptableall,STRARG|WITHFD},
+	{"port/print","[N]","print the port/endpoint table",print_ptable,STRARG|WITHFILE},
+	{"port/allprint","[N]","print the port/endpoint table (including inactive port)",print_ptableall,STRARG|WITHFILE},
 	{"vlan","============","VLAN MANAGEMENT MENU",NULL,NOARG},
 	{"vlan/create","N","create the VLAN with tag N",vlancreate,INTARG},
 	{"vlan/remove","N","remove the VLAN with tag N",vlanremove,INTARG},
 	{"vlan/addport","N PORT","add port to the vlan N (tagged)",vlanaddport,STRARG},
 	{"vlan/delport","N PORT","add port to the vlan N (tagged)",vlandelport,STRARG},
-	{"vlan/print","[N]","print the list of defined vlan",vlanprint,STRARG|WITHFD},
-	{"vlan/allprint","[N]","print the list of defined vlan (including inactive port)",vlanprintall,STRARG|WITHFD},
+	{"vlan/print","[N]","print the list of defined vlan",vlanprint,STRARG|WITHFILE},
+	{"vlan/allprint","[N]","print the list of defined vlan (including inactive port)",vlanprintall,STRARG|WITHFILE},
 };
 
 void port_init(int initnumports)
@@ -907,9 +933,12 @@ void port_init(int initnumports)
 		printlog(LOG_ERR,"ALLOC port data structures");
 		exit(1);
 	}
+	ADDCL(cl);
+#ifdef DEBUGOPT
+	ADDDBGCL(dl);
+#endif
 	if (vlancreate_nocheck(0) != 0) {
 		printlog(LOG_ERR,"ALLOC vlan port data structures");
 		exit(1);
 	}
-	ADDCL(cl);
 }

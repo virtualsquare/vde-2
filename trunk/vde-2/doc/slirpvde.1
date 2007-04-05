@@ -67,6 +67,12 @@ slirpvde \- Virtual Distributed Ethernet-Slirp interface
 ]
 ]
 ]
+[
+.B \-x
+.I port
+.B :
+.I unix_socket_path
+]
 .br
 .SH DESCRIPTION
 \fBslirpvde\fP 
@@ -94,10 +100,13 @@ All the packet received by the host running slirpvde at port \fIport\fR
 will be forwarded to \fIvde_host\fR at port \fIvde_hostport\fR.
 
 \fB-X \fIvde_host\fR[:\fIdisplay\fR.[\fIscreen\fR]] is the option to
-redirect a X window screen. Slirpvde gets the first unused X display on the
+redirect a X window screen of a virtual machine. Slirpvde gets the first unused X display on the
 host running slirpvde and redirects all the requests to \fIvde_host\fR.
 \fIdisplay\fR and \fIscreen\fR] must be specified when different from :0.0.
 
+\fB-x \fIport\fR:\fIunix_socket_path\fR] is the option to
+redirect a port of the virtual router (usually 10.0.2.2) to a unix stream socket.
+It is used for example to redirect a X display of the hosting computer on the virtual network. e.g. -x6000:/tmp/.X11-unix/X0. (A suitable xhost configuration is needed (e.g. 'xhost local:').
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"

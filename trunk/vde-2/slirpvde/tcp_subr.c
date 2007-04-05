@@ -45,6 +45,7 @@
 #define WANT_SYS_IOCTL_H
 #include <config.h>
 #include <slirp.h>
+#include "tcp2unix.h"
 
 /* patchable/settable parameters for tcp */
 int 	tcp_mssdflt = TCP_MSS;
@@ -397,10 +398,27 @@ int tcp_fconnect(so)
      struct socket *so;
 {
   int ret=0;
+	char *path;
   
   DEBUG_CALL("tcp_fconnect");
   DEBUG_ARG("so = %lx", (long )so);
 
+	//fprintf(stderr,"fconnect %d %s\n",ntohs(so->so_fport), inet_ntoa(so->so_faddr));
+	if (__builtin_expect(tcp2unix_check,0) &&
+			(so->so_faddr.s_addr & htonl(0xffffff00)) == special_addr.s_addr &&
+			(ntohl(so->so_faddr.s_addr) & 0xff) == CTL_ALIAS &&
+			(path=tcp2unix_search(ntohs(so->so_fport)))!=NULL ) {
+		if ( (ret=so->s=socket(AF_FILE,SOCK_STREAM,0)) >= 0) {
+			int opt, s=so->s;
+			struct sockaddr_un addr;
+
+			fd_nonblock(s);
+			addr.sun_family = AF_FILE;
+			strncpy(addr.sun_path,path,UNIX_PATH_MAX);
+			ret = connect(s,(struct sockaddr *)&addr,sizeof (addr));
+			soisfconnecting(so);
+		}
+	} else
   if( (ret=so->s=socket(AF_INET,SOCK_STREAM,0)) >= 0) {
     int opt, s=so->s;
     struct sockaddr_in addr;
@@ -416,12 +434,12 @@ int tcp_fconnect(so)
       /* It's an alias */
       switch(ntohl(so->so_faddr.s_addr) & 0xff) {
       case CTL_DNS:
-	addr.sin_addr = dns_addr;
-	break;
+				addr.sin_addr = dns_addr;
+				break;
       case CTL_ALIAS:
       default:
-	addr.sin_addr = loopback_addr;
-	break;
+				addr.sin_addr = loopback_addr;
+				break;
       }
     } else
       addr.sin_addr = so->so_faddr;
