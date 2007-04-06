@@ -44,10 +44,10 @@ if HAVE_BROKEN_POLL
   vde_switch_SOURCES += poll2select.c poll2select.h
 endif
 
-#AM_CFLAGS = -Wall 
-#AM_CXXFLAGS = -Wall
-AM_CFLAGS = -Wall -DDEBUGOPT
-AM_CXXFLAGS = -Wall -DDEBUGOPT
+AM_CFLAGS = -Wall 
+AM_CXXFLAGS = -Wall
+#AM_CFLAGS = -Wall -DDEBUGOPT
+#AM_CXXFLAGS = -Wall -DDEBUGOPT
 
 extraclean: distclean
 	rm -rf aclocal.m4 autom4te.cache autoscan.log configure.scan config.h.in* configure depcomp install-sh Makefile.in config.guess config.sub ltmain.sh missing `find . -name Makefile.in` vde-*.tar.gz
