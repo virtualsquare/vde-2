@@ -308,6 +308,9 @@ int main(int argc, char **argv)
 
 	if (optind < argc)
 		tapname=argv[optind];
+	else
+		usage(); // implies exit
+	
 	atexit(cleanup);
 	setsighandlers();
 
