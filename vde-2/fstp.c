@@ -51,7 +51,7 @@ static char *fstpdecodestatus[]={
 	"forwarding",
 	"learning+forwarding"};
 #define port_set_status(P,V,S) \
-	({DBGOUT(DBGFSTPSTATUS,"Port %02d VLAN %02x:%02x %s",\
+	({DBGOUT(DBGFSTPSTATUS,"Port %04d VLAN %02x:%02x %s",\
 					       (P),(V)>>8,(V)&0xff,fstpdecodestatus[(S)]);\
 	 port_set_status(P,V,S);})
 #endif
@@ -175,9 +175,9 @@ static struct fsttagbpdu outtagpacket = {
 int fstnewvlan(int vlan)
 {
 	/*printf("F new vlan %d\n",vlan);*/
-	int newvlan=(fsttab[vlan] == NULL);
 	register unsigned int port;
-	if ((fsttab[vlan] == NULL)  &&
+	int newvlan=(fsttab[vlan] == NULL);
+	if (newvlan  &&
 			((fsttab[vlan]=malloc(sizeof(struct vlst))) == NULL ||
 			 (fsttab[vlan]->untag = BA_ALLOC(numports)) == NULL ||
 			 (fsttab[vlan]->tagged = BA_ALLOC(numports)) == NULL ||
@@ -196,6 +196,12 @@ int fstnewvlan(int vlan)
 			fsttab[vlan]->bonusport=fsttab[vlan]->bonuscost=0;
 			fsttab[vlan]->tctime=0;
 		}
+		DBGOUT(DBGFSTPROOT,"Port %04d VLAN %02x:%02x -> %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+				0,vlan>>8,vlan&0xff,
+				fsttab[vlan]->root[0], fsttab[vlan]->root[1], 
+				fsttab[vlan]->root[2], fsttab[vlan]->root[3],
+				fsttab[vlan]->root[4], fsttab[vlan]->root[5], 
+				fsttab[vlan]->root[6], fsttab[vlan]->root[7]);
 		BA_FORALL(fsttab[vlan]->backup,numports, ({
 				BA_CLR(fsttab[vlan]->backup,port);
 				port_set_status(port,vlan,FORWARDING);
@@ -476,7 +482,7 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 			memcpy(v->port,p->stp_port,2);
 			v->rootport=port;
 			v->roottimestamp=qtime();
-			DBGOUT(DBGFSTPROOT,"%02d VLAN %02x:%02x -> %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+			DBGOUT(DBGFSTPROOT,"Port %04d VLAN %02x:%02x -> %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 					port,vlan>>8,vlan&0xff,
 					v->root[0], v->root[1], v->root[2], v->root[3],
 					v->root[4], v->root[5], v->root[6], v->root[7]);
