@@ -236,7 +236,7 @@ static void vde_helpline(struct vdemenu **headp,char *buf,int len,int indata,int
 		for (;i<len && buf[i]==' ';i++) ;
 		helppos=i;
 	}
-	else if (nl > 2 && indata) {
+	else if (nl > 2 && indata && (strncmp(buf,"debug",5) !=0 )) {
 		int i;
 		char *name;
 		char *syntax;
