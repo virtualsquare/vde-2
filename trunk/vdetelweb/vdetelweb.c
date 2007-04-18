@@ -32,6 +32,7 @@
 #include  <errno.h>
 #include <netdb.h>
 #include <libgen.h>
+#include <unistd.h>
 #include  <sys/types.h>
 #include  <sys/socket.h>
 #include  <sys/select.h>
