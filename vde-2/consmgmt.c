@@ -273,6 +273,9 @@ void loadrcfile(void)
 	}
 }
 
+#ifdef DEBUGOPT
+static int debugdel(int fd,char *arg);
+#endif
 static char *EOS="9999 END OF SESSION";
 static void handle_input(unsigned char type,int fd,int revents,int *unused)
 {
@@ -291,6 +294,9 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 				printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
 				exit(0);
 			} else {
+#ifdef DEBUGOPT
+				debugdel(fd,"");
+#endif
 				remove_fd(fd);
 			}
 		} else {
@@ -303,6 +309,9 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 			else {
 				if(type==mgmt_data) {
 					write(fd,EOS,strlen(EOS));
+#ifdef DEBUGOPT
+					debugdel(fd,"");
+#endif
 					remove_fd(fd);
 				}
 				if (cmdout == -2)
