@@ -1,8 +1,8 @@
 #vdetelweb rc sample
-ip=192.168.250.5/24
+ip=192.168.250.6/24
 defroute=192.168.250.1
 #ip4=switch.a.b.it/24
 #defroute4=192.168.250.1
-ip=2001:760:2e00:ff00::5555/64
+ip=2001:760:2e00:ff00::5556/64
 defroute=2001:760:2e00:ff00::1
 password=piripicchio

@@ -148,6 +148,25 @@ void setprompt(char *ctrl,char *nodename)
 	prompt=strdup(buf);
 }
 
+int openextravdem()
+{
+	struct sockaddr_un sun;
+	int fd,n;
+	char buf[BUFSIZE+1];
+	sun.sun_family=PF_UNIX;
+	snprintf(sun.sun_path,UNIX_PATH_MAX,"%s",mgmt);
+	fd=socket(PF_UNIX,SOCK_STREAM,0);
+	if (connect(fd,(struct sockaddr *)(&sun),sizeof(sun)) < 0) {
+		printlog(LOG_ERR,"mgmt extra connect %s",strerror(errno));
+		return(-1);
+	}
+	if ((n=read(fd,buf,BUFSIZE))<=0) {
+		printlog(LOG_ERR,"banner %s",strerror(errno));
+		return(-1);
+	}
+	return fd;
+}
+
 int openvdem(char *mgmt,char *progname, struct netif **nif,char *nodename)
 {
 	struct sockaddr_un sun;
