@@ -37,13 +37,16 @@ static int numports;
 #define DBGPORTDESCR (dl+2) 
 #define DBGEPNEW (dl+3) 
 #define DBGEPDEL (dl+4) 
-#define DBGFSTPSTATUS (dl+5)
+#define PKTFILTIN (dl+5)
+#define PKTFILTOUT (dl+6)
 static struct dbgcl dl[]= {
-	  {"port/+","new port",NULL,NULL},
-		{"port/-","closed port",NULL,NULL},
-		{"port/descr","set port description",NULL,NULL},
-	  {"port/ep/+","new endpoint",NULL,NULL},
-		{"port/ep/-","closed endpoint",NULL,NULL},
+	  {"port/+","new port",D_PORT|D_PLUS},
+		{"port/-","closed port",D_PORT|D_MINUS},
+		{"port/descr","set port description",D_PORT|D_DESCR},
+	  {"port/ep/+","new endpoint",D_EP|D_PLUS},
+		{"port/ep/-","closed endpoint",D_EP|D_MINUS},
+		{"packet/in",NULL,D_PACKET|D_IN},
+		{"packet/out",NULL,D_PACKET|D_OUT},
 };
 #endif
 
@@ -85,6 +88,9 @@ struct port {
 	int vlanuntag;
 #ifdef FSTP
 	int cost;
+#endif
+#ifdef PORTCOUNTERS
+	long long pktsin,pktsout,bytesin,bytesout;
 #endif
 };
 
@@ -128,12 +134,19 @@ static int alloc_port(unsigned int portno)
 			} else
 			{
 				DBGOUT(DBGPORTNEW,"%02d", i);
+				EVENTOUT(DBGPORTNEW,i);
 
 				portv[i]=port;
 				port->fd_data=-1;
 				port->ep=NULL;
 #ifdef FSTP
 				port->cost=DEFAULT_COST;
+#endif
+#ifdef PORTCOUNTERS
+				port->pktsin=0;
+				port->pktsout=0;
+				port->bytesin=0;
+				port->bytesout=0;
 #endif
 				port->flag=0;
 				port->sender=NULL;
@@ -176,6 +189,7 @@ int setup_ep(int portno, int fd_ctl,
 		if (port->fd_data >= 0 &&
 				(ep=malloc(sizeof(struct endpoint))) != NULL) {
 			DBGOUT(DBGEPNEW,"Port %02d FD %2d", portno,fd_ctl);
+			EVENTOUT(DBGEPNEW,portno,fd_ctl);
 			port->ms=modfun;
 			port->sender=modfun->sender;
 			ep->port=portno;
@@ -223,6 +237,7 @@ void setup_description(int portno, int fd_ctl, char *descr)
 			for (ep=port->ep;ep!=NULL;ep=ep->next) 
 				if (ep->fd_ctl == fd_ctl) {
 					DBGOUT(DBGPORTDESCR,"Port %02d FD %2d -> \"%s\"",portno,fd_ctl,descr);
+					EVENTOUT(DBGPORTDESCR,portno,fd_ctl,descr);
 					ep->descr=descr;
 				}
 		}
@@ -235,6 +250,7 @@ static int rec_close_ep(struct endpoint **pep, int fd_ctl)
 	if (this != NULL) {
 		if (this->fd_ctl==fd_ctl) {
 			DBGOUT(DBGEPDEL,"Port %02d FD %2d",this->port,fd_ctl);
+			EVENTOUT(DBGEPDEL,this->port,fd_ctl);
 			*pep=this->next;
 			if (portv[this->port]->ms->delep)
 				portv[this->port]->ms->delep(this->fd_ctl,this->data,this->descr);
@@ -254,6 +270,7 @@ int close_ep(int portno, int fd_ctl)
 			int rv=rec_close_ep(&(port->ep),fd_ctl);
 			if (port->ep == NULL) {
 				DBGOUT(DBGPORTDEL,"%02d",portno);
+				EVENTOUT(DBGPORTDEL,portno);
 				hash_delete_port(portno);
 #ifdef VDE_PQ
 				packetq_delfd(port->fd_data);
@@ -295,23 +312,35 @@ int portflag(int op,int f)
 /*********************** sending macro used by Core ******************/
 
 /* VDBG counter: count[port].spacket++; count[port].sbytes+=len */
+#ifdef PORTCOUNTERS
+#define SEND_COUNTER_UPD(Port,LEN) ({Port->pktsout++; Port->bytesout +=len;})
+#else
+#define SEND_COUNTER_UPD(Port,LEN)
+#endif
+
 #ifdef VDE_PQ
-#define SEND_PACKET_PORT(PORT,PACKET,LEN) \
-	({ \
+#define SEND_PACKET_PORT(PORT,PORTNO,PACKET,LEN) \
+	 ({\
 	 struct port *Port=(PORT); \
+	 if (PACKETFILTER(PKTFILTOUT,(PORTNO),(PACKET), (LEN))) {\
 	 struct endpoint *ep; \
+	 SEND_COUNTER_UPD(Port,LEN); \
 	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
 	 if (Port->ms->sender(Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port)) \
 	 	packetq_add(Port->ms->sender,Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
-	 })
+	 } \
+		})
 #else
-#define SEND_PACKET_PORT(PORT,PACKET,LEN) \
-	({ \
+#define SEND_PACKET_PORT(PORT,PORTNO,PACKET,LEN) \
+	 ({\
 	 struct port *Port=(PORT); \
+	 if (PACKETFILTER(PKTFILTOUT,(PORTNO),(PACKET), (LEN))) {\
 	 struct endpoint *ep; \
+	 SEND_COUNTER_UPD(Port,LEN); \
 	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
 	 Port->ms->sender(Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
-	 })
+	 } \
+		})
 #endif
 
 #ifdef FSTP
@@ -319,14 +348,14 @@ int portflag(int op,int f)
 /* functions for FSTP */
 void port_send_packet(int portno, void *packet, int len)
 {
-	SEND_PACKET_PORT(portv[portno],packet,len);
+	SEND_PACKET_PORT(portv[portno],portno,packet,len);
 }
 
 void portset_send_packet(bitarray portset, void *packet, int len)
 {
 	register int i;
 	BA_FORALL(portset,numports,
-			SEND_PACKET_PORT(portv[i],packet,len), i);
+			SEND_PACKET_PORT(portv[i],i,packet,len), i);
 }
 
 
@@ -413,80 +442,85 @@ int port_getcost(int port)
 
 
 void handle_in_packet(int port,  struct packet *packet, int len)
-	/* static void update_src(int port, struct packet *p) */
 {
 	int tarport;
 	int vlan,tagged;
 
-	/* VDBG counter: count[port].rpacket++; count[port].rbytes+=len */
-	if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00) {
-		tagged=1;
-		vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
-		if (! BA_CHECK(vlant[vlan].table,port))
-			return; /*discard unwanted packets*/
-	} else {
-		tagged=0;
-		if ((vlan=portv[port]->vlanuntag) == NOVLAN)
-			return; /*discard unwanted packets*/
-	}
+	if(PACKETFILTER(PKTFILTIN,port,packet,len)) {
+
+#ifdef PORTCOUNTERS
+		portv[port]->pktsin++;
+		portv[port]->bytesin+=len;
+#endif
+		if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00) {
+			tagged=1;
+			vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
+			if (! BA_CHECK(vlant[vlan].table,port))
+				return; /*discard unwanted packets*/
+		} else {
+			tagged=0;
+			if ((vlan=portv[port]->vlanuntag) == NOVLAN)
+				return; /*discard unwanted packets*/
+		}
 
 #ifdef FSTP
-	/* when it works as a HUB, MST packet must be forwarded */
-	if (ISBPDU(packet) && !(pflag & HUB_TAG)) {
-		fst_in_bpdu(port,packet,len,vlan,tagged);
-		return; /* BPDU packets are not forwarded */
-	}
+		/* when it works as a HUB, MST packet must be forwarded */
+		if (ISBPDU(packet) && !(pflag & HUB_TAG)) {
+			fst_in_bpdu(port,packet,len,vlan,tagged);
+			return; /* BPDU packets are not forwarded */
+		}
 #endif
-	/* The port is in blocked status, no packet received */
-	if (BA_CHECK(vlant[vlan].notlearning,port)) return; 
+		/* The port is in blocked status, no packet received */
+		if (BA_CHECK(vlant[vlan].notlearning,port)) return; 
 
-	/* We don't like broadcast source addresses */
-	if(! ((IS_BROADCAST(packet->header.src)) || (pflag & HUB_TAG))) {
+		/* We don't like broadcast source addresses */
+		if(! ((IS_BROADCAST(packet->header.src)) || (pflag & HUB_TAG))) {
 
-		int last = find_in_hash_update(packet->header.src,vlan,port);
-		/* old value differs from actual input port */
-		if(last >=0 && (port != last)){
-			printlog(LOG_INFO,"MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d",packet->header.src[0],packet->header.src[1],packet->header.src[2],packet->header.src[3],packet->header.src[4],packet->header.src[5],last,port);
+			int last = find_in_hash_update(packet->header.src,vlan,port);
+			/* old value differs from actual input port */
+			if(last >=0 && (port != last)){
+				printlog(LOG_INFO,"MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d",packet->header.src[0],packet->header.src[1],packet->header.src[2],packet->header.src[3],packet->header.src[4],packet->header.src[5],last,port);
+			}
 		}
-	}
-	/* static void send_dst(int port,struct packet *packet, int len) */
-	if(IS_BROADCAST(packet->header.dest) || (pflag & HUB_TAG) || 
-			(tarport = find_in_hash(packet->header.dest,vlan)) < 0 ){
-		/* FST HERE! broadcast only on active ports*/
-		/* no cache or broadcast/multicast == all ports *except* the source port! */
-		/* BROADCAST: tag/untag. Broadcast the packet untouched on the ports
-		 * of the same tag-ness, then transform it to the other tag-ness for the others*/
-		if (tagged) {
-			register int i;
-			BA_FORALL(vlant[vlan].bctag,numports,
-					({if (i != port) SEND_PACKET_PORT(portv[i],packet,len);}),i);
-			packet=TAG2UNTAG(packet,len);
-			BA_FORALL(vlant[vlan].bcuntag,numports,
-					({if (i != port) SEND_PACKET_PORT(portv[i],packet,len);}),i);
-		} else { /* untagged */
-			register int i;
-			BA_FORALL(vlant[vlan].bcuntag,numports,
-					({if (i != port) SEND_PACKET_PORT(portv[i],packet,len);}),i);
-			packet=UNTAG2TAG(packet,vlan,len);
-			BA_FORALL(vlant[vlan].bctag,numports,
-					({if (i != port) SEND_PACKET_PORT(portv[i],packet,len);}),i);
+		/* static void send_dst(int port,struct packet *packet, int len) */
+		if(IS_BROADCAST(packet->header.dest) || (pflag & HUB_TAG) || 
+				(tarport = find_in_hash(packet->header.dest,vlan)) < 0 ){
+			/* FST HERE! broadcast only on active ports*/
+			/* no cache or broadcast/multicast == all ports *except* the source port! */
+			/* BROADCAST: tag/untag. Broadcast the packet untouched on the ports
+			 * of the same tag-ness, then transform it to the other tag-ness for the others*/
+			if (tagged) {
+				register int i;
+				BA_FORALL(vlant[vlan].bctag,numports,
+						({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+				packet=TAG2UNTAG(packet,len);
+				BA_FORALL(vlant[vlan].bcuntag,numports,
+						({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+			} else { /* untagged */
+				register int i;
+				BA_FORALL(vlant[vlan].bcuntag,numports,
+						({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+				packet=UNTAG2TAG(packet,vlan,len);
+				BA_FORALL(vlant[vlan].bctag,numports,
+						({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+			}
 		}
-	}
-	else {
-		/* the hash table should not generate tarport not in vlan 
-		 * any time a port is removed from a vlan, the port is flushed from the hash */
-		if (tarport==port)
-			return; /*do not loop!*/
-		if (tagged) {
-			if (portv[tarport]->vlanuntag==vlan) /* TAG->UNTAG */
-				SEND_PACKET_PORT(portv[tarport],TAG2UNTAG(packet,len),len);
-			else                               /* TAG->TAG */
-				SEND_PACKET_PORT(portv[tarport],packet,len);
-		} else {
-			if (portv[tarport]->vlanuntag==vlan) /* UNTAG->UNTAG */
-				SEND_PACKET_PORT(portv[tarport],packet,len);
-			else                               /* UNTAG->TAG */
-				SEND_PACKET_PORT(portv[tarport],UNTAG2TAG(packet,vlan,len),len);
+		else {
+			/* the hash table should not generate tarport not in vlan 
+			 * any time a port is removed from a vlan, the port is flushed from the hash */
+			if (tarport==port)
+				return; /*do not loop!*/
+			if (tagged) {
+				if (portv[tarport]->vlanuntag==vlan) /* TAG->UNTAG */
+					SEND_PACKET_PORT(portv[tarport],tarport,TAG2UNTAG(packet,len),len);
+				else                               /* TAG->TAG */
+					SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
+			} else {
+				if (portv[tarport]->vlanuntag==vlan) /* UNTAG->UNTAG */
+					SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
+				else                               /* UNTAG->TAG */
+					SEND_PACKET_PORT(portv[tarport],tarport,UNTAG2TAG(packet,vlan,len),len);
+			}
 		}
 	}
 }
@@ -602,6 +636,10 @@ static int print_port(FILE *fd,int i,int inclinactive)
 				i,portv[i]->vlanuntag,
 				portv[i]->ep?"":"IN",
 				(portv[i]->flag & NOTINPOOL)?"NOT ":"");
+#ifdef PORTCOUNTERS
+		printoutc(fd," IN:  pkts %10lld          bytes %20lld",portv[i]->pktsin,portv[i]->bytesin);
+		printoutc(fd," OUT: pkts %10lld          bytes %20lld",portv[i]->pktsout,portv[i]->bytesout);
+#endif
 		for (ep=portv[i]->ep; ep != NULL; ep=ep->next) 
 			printoutc(fd,"  -- endpoint ID %04d module %-12s: %s",ep->fd_ctl,
 					portv[i]->ms->modname,(ep->descr)?ep->descr:"no endpoint description");
@@ -643,6 +681,36 @@ static int print_ptableall(FILE *fd,char *arg)
 		return 0;
 	}
 }
+
+#ifdef PORTCOUNTERS
+static void portzerocounter(int i)
+{
+	if (portv[i] != NULL) {
+		portv[i]->pktsin=0;
+		portv[i]->pktsout=0;
+		portv[i]->bytesin=0;
+		portv[i]->bytesout=0;
+	}
+}
+
+static int portresetcounters(char *arg)
+{
+	register int i;
+	if (*arg != 0) {
+		i=atoi(arg);
+		if (i <0 || i>=numports)
+			return EINVAL;
+		else {
+			portzerocounter(i);
+			return 0;
+		}
+	} else {
+		for (i=0;i<numports;i++)
+			portzerocounter(i);
+		return 0;
+	}
+}
+#endif
 
 static int portsethub(int val)
 {
@@ -798,35 +866,35 @@ static void vlanprintactive(int vlan,FILE *fd)
 #ifdef FSTP
 	if (pflag & FSTP_TAG) {
 #if 0
-	printoutc(fd," ++ FST root %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x \n"
-			"        designated %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x port %d cost %d age %d",
-			fsttab[vlan]->root[0], fsttab[vlan]->root[1], fsttab[vlan]->root[2], fsttab[vlan]->root[3],
-			fsttab[vlan]->root[4], fsttab[vlan]->root[5], fsttab[vlan]->root[6], fsttab[vlan]->root[7],
-			fsttab[vlan]->desbr[0], fsttab[vlan]->desbr[1], fsttab[vlan]->desbr[2], fsttab[vlan]->desbr[3],
-			fsttab[vlan]->desbr[4], fsttab[vlan]->desbr[5], fsttab[vlan]->desbr[6], fsttab[vlan]->desbr[7],
-		  fsttab[vlan]->rootport, 
-			ntohl(*(u_int32_t *)(&(fsttab[vlan]->rootcost))),
-			qtime()-fsttab[vlan]->roottimestamp);
-	BA_FORALL(vlant[vlan].table,numports,
-			({ int tagged=portv[i]->vlanuntag != vlan;
-			 if (portv[i]->ep)
-			 printoutc(fd," -- Port %04d tagged=%d act=%d learn=%d forw=%d cost=%d role=%s",
-				i, tagged, 1, !(NOTLEARNING(i,vlan)),
-					(tagged)?(BA_CHECK(vlant[vlan].bctag,i) != 0):(BA_CHECK(vlant[vlan].bcuntag,i) != 0),
-					portv[i]->cost,
-					(fsttab[vlan]->rootport==i?"Root":
-					 ((BA_CHECK(fsttab[vlan]->backup,i)?"Alternate/Backup":"Designated")))
-					); 0;
-				}) ,i);
+		printoutc(fd," ++ FST root %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x \n"
+				"        designated %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x port %d cost %d age %d",
+				fsttab[vlan]->root[0], fsttab[vlan]->root[1], fsttab[vlan]->root[2], fsttab[vlan]->root[3],
+				fsttab[vlan]->root[4], fsttab[vlan]->root[5], fsttab[vlan]->root[6], fsttab[vlan]->root[7],
+				fsttab[vlan]->desbr[0], fsttab[vlan]->desbr[1], fsttab[vlan]->desbr[2], fsttab[vlan]->desbr[3],
+				fsttab[vlan]->desbr[4], fsttab[vlan]->desbr[5], fsttab[vlan]->desbr[6], fsttab[vlan]->desbr[7],
+				fsttab[vlan]->rootport, 
+				ntohl(*(u_int32_t *)(&(fsttab[vlan]->rootcost))),
+				qtime()-fsttab[vlan]->roottimestamp);
+		BA_FORALL(vlant[vlan].table,numports,
+				({ int tagged=portv[i]->vlanuntag != vlan;
+				 if (portv[i]->ep)
+				 printoutc(fd," -- Port %04d tagged=%d act=%d learn=%d forw=%d cost=%d role=%s",
+					 i, tagged, 1, !(NOTLEARNING(i,vlan)),
+					 (tagged)?(BA_CHECK(vlant[vlan].bctag,i) != 0):(BA_CHECK(vlant[vlan].bcuntag,i) != 0),
+					 portv[i]->cost,
+					 (fsttab[vlan]->rootport==i?"Root":
+						((BA_CHECK(fsttab[vlan]->backup,i)?"Alternate/Backup":"Designated")))
+					 ); 0;
+				 }) ,i);
 #endif
 	} else {
 #endif
-	BA_FORALL(vlant[vlan].table,numports,
-			({ int tagged=portv[i]->vlanuntag != vlan;
-			 if (portv[i]->ep)
-			 printoutc(fd," -- Port %04d tagged=%d active=1 status=%s", i, tagged, 
-				 STRSTATUS(i,vlan));
-			}), i);
+		BA_FORALL(vlant[vlan].table,numports,
+				({ int tagged=portv[i]->vlanuntag != vlan;
+				 if (portv[i]->ep)
+				 printoutc(fd," -- Port %04d tagged=%d active=1 status=%s", i, tagged, 
+					 STRSTATUS(i,vlan));
+				 }), i);
 #ifdef FSTP
 	}
 #endif
@@ -909,6 +977,9 @@ static struct comlist cl[]={
 	{"port/remove","N","remove the port N",portremove,INTARG},
 	{"port/allocatable","N 0/1","Is the port allocatable as unnamed? 1=Y 0=N",portallocatable,STRARG},
 	{"port/epclose","N ID","remove the endpoint port N/id ID",epclose,STRARG},
+#ifdef PORTCOUNTERS
+	{"port/resetcounter","[N]","reset the port (N) counters",portresetcounters,STRARG},
+#endif
 	{"port/print","[N]","print the port/endpoint table",print_ptable,STRARG|WITHFILE},
 	{"port/allprint","[N]","print the port/endpoint table (including inactive port)",print_ptableall,STRARG|WITHFILE},
 	{"vlan","============","VLAN MANAGEMENT MENU",NULL,NOARG},
