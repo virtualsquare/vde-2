@@ -34,8 +34,8 @@ static int hash_mask;
 #define DBGHASHNEW (dl) 
 #define DBGHASHDEL (dl+1) 
 static struct dbgcl dl[]= {
-	{"hash/+","hash: new element",NULL,NULL},
-	{"hash/-","hash: discarded element",NULL,NULL},
+	{"hash/+","hash: new element",D_HASH|D_PLUS},
+	{"hash/-","hash: discarded element",D_HASH|D_MINUS},
 };
 #endif
 struct hash_entry {
@@ -99,6 +99,7 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 
 		DBGOUT(DBGHASHNEW,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x",
 				     esrc[0], esrc[1], esrc[2], esrc[3], esrc[4], esrc[5], esrc[6], esrc[7]);
+		EVENTOUT(DBGHASHNEW,esrc);
 		memcpy(&e->dst, esrc, ETH_ALEN+2);
 		if(h[k] != NULL) h[k]->prev = &(e->next);
 		e->next = h[k];
@@ -119,6 +120,7 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 #define delete_hash_entry(OLD) \
 	({ \
 	 DBGOUT(DBGHASHDEL,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x", OLD->dst[0], OLD->dst[1], OLD->dst[2], OLD->dst[3], OLD->dst[4], OLD->dst[5], OLD->dst[6], OLD->dst[7]);\
+	 EVENTOUT(DBGHASHDEL,OLD->dst);\
 	 *((OLD)->prev)=(OLD)->next; \
 	 if((OLD)->next != NULL) (OLD)->next->prev = (OLD)->prev; \
 	 free((OLD)); \

@@ -24,6 +24,7 @@
 #include <net/if.h>
 #include <stdarg.h>
 #include <getopt.h>
+#include <dlfcn.h>
 
 #include <vde.h>
 #include <port.h>
@@ -47,19 +48,30 @@ static unsigned int mgmt_ctl=-1;
 static unsigned int mgmt_data=-1;
 static int mgmt_mode = 0600;
 static char *mgmt_socket = NULL;
-static char header[]="VDE switch V.%s\n(C) R.Davoli 2005 - GPLv2\n";
+static char header[]="VDE switch V.%s\n(C) Virtual Square Team (leader: R. Davoli) 2005,2006,2007 - GPLv2\n";
 static char prompt[]="\nvde: ";
 
 static struct comlist *clh=NULL;
+static struct comlist **clt=&clh;
 #ifdef DEBUGOPT
-static int ndebugclients=8;
+#define DBGCLSTEP 8
 static struct dbgcl *dbgclh=NULL;
+static struct dbgcl **dbgclt=&dbgclh;
+#define MGMTPORTNEW (dl) 
+#define MGMTPORTDEL (dl+1) 
+static struct dbgcl dl[]= {
+	{"mgmt/+",NULL,D_MGMT|D_PLUS},
+	{"mgmt/-",NULL,D_MGMT|D_MINUS}
+};
+#endif
+#ifdef VDEPLUGIN
+static struct plugin *pluginh=NULL;
+static struct plugin **plugint=&pluginh;
 #endif
 
 void addcl(int ncl,struct comlist *cl)
 {
 	register int i;
-	static struct comlist **clt=&clh;
 	for (i=0;i<ncl;i++,cl++) {
 		cl->next=NULL;
 		(*clt)=cl;
@@ -67,17 +79,69 @@ void addcl(int ncl,struct comlist *cl)
 	}
 }
 
+void delcl(int ncl,struct comlist *cl)
+{
+	register int i;
+	for (i=0;i<ncl;i++,cl++) {
+		register struct comlist **p=&clh;
+		while (*p != NULL) {
+			if (*p == cl) 
+				*p=cl->next;
+			else {
+				p=&(*p)->next;
+				clt=p;
+			}
+		}
+	}
+}
+
 #ifdef DEBUGOPT
 void adddbgcl(int ncl,struct dbgcl *cl)
 {
-	int i, j;
-	static struct dbgcl **clt=&dbgclh;
+	int i;
 	for (i=0;i<ncl;i++,cl++) {
-		if ((cl->fds=malloc(ndebugclients * sizeof(int))) != NULL) {
-			cl->next=NULL;
-			for(j=0; j<ndebugclients; j++) cl->fds[j]= -1;
-			(*clt)=cl;
-			clt=(&cl->next);
+		cl->next=NULL;
+		(*dbgclt)=cl;
+		dbgclt=(&cl->next);
+	}
+}
+
+void deldbgcl(int ncl,struct dbgcl *cl)
+{
+	register int i;
+	for (i=0;i<ncl;i++,cl++) {
+		register struct dbgcl **p=&dbgclh;
+		while (*p != NULL) {
+			if (*p == cl) {
+				if (cl->fds) free(cl->fds);
+				if (cl->fun) free(cl->fun);
+				*p=cl->next;
+			} else {
+				p=&(*p)->next;
+				dbgclt=p;
+			}
+		}
+	}
+}
+#endif
+
+#ifdef VDEPLUGIN
+void addplugin(struct plugin *cl)
+{
+	cl->next=NULL;
+	(*plugint)=cl;
+	plugint=(&cl->next);
+}
+
+void delplugin(struct plugin *cl)
+{
+	register struct plugin **p=&pluginh;
+	while (*p != NULL) {
+		if (*p == cl)
+			*p=cl->next;
+		else {
+			p=&(*p)->next;
+			plugint=p;
 		}
 	}
 }
@@ -144,16 +208,50 @@ void debugout(struct dbgcl* cl, const char *format, ...)
 	struct iovec iov[]={{NULL,0},{NULL,0},{&_dbgnl,1}};
 
 	va_start (arg, format);
-	iov[0].iov_len=asprintf(&header,"%d %s ",3000+0,cl->path);
+	iov[0].iov_len=asprintf(&header,"3%03o %s ",cl->tag & 0777,cl->path);
 	iov[0].iov_base=header;
 	iov[1].iov_len=vasprintf(&msg,format,arg);
 	iov[1].iov_base=msg;
 	va_end (arg);
 
-	for (i=0; i<ndebugclients && cl->fds[i] >=0; i++)
+	for (i=0; i<cl->nfds; i++)
 		writev(cl->fds[i],iov,3);
 	free(header);
 	free(msg);
+}
+
+void eventout(struct dbgcl* cl, ...)
+{
+	int i;
+	va_list arg;
+	for (i=0; i<cl->nfun; i++) {
+		va_start (arg, cl);
+		(cl->fun[i])(cl,arg);
+		va_end(arg);
+	}
+}
+
+int packetfilter(struct dbgcl* cl, ...)
+{
+	int i;
+	va_list arg;
+	int len;
+	va_start (arg, cl);
+	(void) va_arg(arg,int); /*port*/
+	(void) va_arg(arg,char *); /*buf*/
+	len=va_arg(arg,int);
+	va_end(arg);
+	for (i=0; i<cl->nfun && len>0; i++) {
+		va_start (arg, cl);
+		int rv=(cl->fun[i])(cl,arg);
+		va_end (arg);
+		if (rv!=0) 
+			len=rv;
+	}
+	if (len < 0)
+		return 0;
+	else
+		return len;
 }
 #endif
 
@@ -273,6 +371,22 @@ void loadrcfile(void)
 	}
 }
 
+void mgmtnewfd(int new)
+{
+	char buf[MAXCMD];
+	if(fcntl(new, F_SETFL, O_NONBLOCK) < 0){
+		printlog(LOG_WARNING,"mgmt fcntl - setting O_NONBLOCK %s",strerror(errno));
+		close(new);
+		return;
+	}
+
+	add_fd(new,mgmt_data,-1);
+	EVENTOUT(MGMTPORTNEW,new);
+	snprintf(buf,MAXCMD,header,PACKAGE_VERSION);
+	write(new,buf,strlen(buf));
+	write(new,prompt,strlen(prompt));
+}
+
 #ifdef DEBUGOPT
 static int debugdel(int fd,char *arg);
 #endif
@@ -310,6 +424,7 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 				if(type==mgmt_data) {
 					write(fd,EOS,strlen(EOS));
 #ifdef DEBUGOPT
+					EVENTOUT(MGMTPORTDEL,fd);
 					debugdel(fd,"");
 #endif
 					remove_fd(fd);
@@ -336,6 +451,7 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 		}
 
 		add_fd(new,mgmt_data,-1);
+		EVENTOUT(MGMTPORTNEW,new);
 		snprintf(buf,MAXCMD,header,PACKAGE_VERSION);
 		write(new,buf,strlen(buf));
 		write(new,prompt,strlen(prompt));
@@ -435,11 +551,6 @@ static int parseopt(int c, char *optarg)
 		case MGMTMODEARG:
 			sscanf(optarg,"%o",&mgmt_mode);
 			break;
-#ifdef DEBUGOPT
-		case 'D':
-			ndebugclients = atoi(optarg);
-			break;
-#endif
 		default:
 			outc=c;
 	}
@@ -539,20 +650,21 @@ static int showinfo(FILE *fd)
 }
 
 #ifdef DEBUGOPT
-static int debuglist(FILE *f,int fd,char *arg)
+static int debuglist(FILE *f,int fd,char *path)
 {
-#define DEBUGFORMAT "%-22s %-6s %s"
+#define DEBUGFORMAT1 "%-22s %-3s %-6s %s"
+#define DEBUGFORMAT2 "%-22s %03o %-6s %s"
 	struct dbgcl *p;
 	int i;
 	int rv=ENOENT;
-	printoutc(f,DEBUGFORMAT,"CATEGORY", "STATUS", "HELP");
-	printoutc(f,DEBUGFORMAT,"------------","------", "----");
+	printoutc(f,DEBUGFORMAT1,"CATEGORY", "TAG", "STATUS", "HELP");
+	printoutc(f,DEBUGFORMAT1,"------------","---","------", "----");
 	for (p=dbgclh; p!=NULL; p=p->next){
-		if (strncmp(p->path, arg, strlen(arg)) == 0) {
-			for (i=0; i<ndebugclients && p->fds[i] != fd; i++)
+		if (p->help && strncmp(p->path, path, strlen(path)) == 0) {
+			for (i=0; i<p->nfds && p->fds[i] != fd; i++)
 				;
 			rv=0;
-			printoutc(f, DEBUGFORMAT, p->path,  i<ndebugclients ? "ON" : "OFF", p->help);
+			printoutc(f, DEBUGFORMAT2, p->path,  p->tag &0777, i<p->nfds ? "ON" : "OFF", p->help);
 		}
 	}
 	return rv;
@@ -560,24 +672,34 @@ static int debuglist(FILE *f,int fd,char *arg)
 
 /* EINVAL -> no matches
  * EEXIST -> all the matches already include fd
- * EMFILE -> fd buffer averflow in at least one match 
+ * ENOMEM -> fd buffer realloc failed
  * 0 otherwise */
-static int debugadd(int fd,char *arg) {
+static int debugadd(int fd,char *path) {
 	struct dbgcl *p;
 	int rv=EINVAL;
 	for (p=dbgclh; p!=NULL; p=p->next) {
-		if (strncmp(p->path, arg, strlen(arg)) == 0) {
+		if (p->help && strncmp(p->path, path, strlen(path)) == 0) {
 			int i;
 			if (rv==EINVAL) rv=EEXIST;
-			for(i=0;i<ndebugclients && (p->fds[i] != -1) && (p->fds[i] != fd); i++)
+			for(i=0;i<p->nfds && (p->fds[i] != fd); i++)
 				;
-			if (i<ndebugclients) {
-				if ( p->fds[i] == -1 ) {
-					p->fds[i] = fd;
-					if (rv!=EMFILE) rv=0;
+			if (i>=p->nfds) {
+				if (i>=p->maxfds) {
+					int newsize=p->maxfds+DBGCLSTEP;
+					p->fds=realloc(p->fds,newsize*sizeof(int));
+					if (p->fds) {
+						p->maxfds=newsize;
+						p->fds[i]=fd;
+						p->nfds++;
+						if (rv != ENOMEM) rv=0;
+					} else
+						rv=ENOMEM;
+				} else {
+					p->fds[i]=fd;
+					p->nfds++;
+					if (rv != ENOMEM) rv=0;
 				} 
-			} else
-				rv=EMFILE;
+			}
 		} 
 	}
 	return rv;
@@ -586,23 +708,18 @@ static int debugadd(int fd,char *arg) {
 /* EINVAL -> no matches
  * ENOENT -> all the matches do not include fd
  * 0 otherwise */
-static int debugdel(int fd,char *arg) {
+static int debugdel(int fd,char *path) {
 	struct dbgcl *p;
 	int rv=EINVAL;
 	for (p=dbgclh; p!=NULL; p=p->next){
-		if (strncmp(p->path, arg, strlen(arg)) == 0) {
+		if (strncmp(p->path, path, strlen(path)) == 0) {
 			int i;
 			if (rv==EINVAL) rv=ENOENT;
-			for(i=0;i<ndebugclients && (p->fds[i] != -1) && (p->fds[i] != fd); i++)
+			for(i=0;i<p->nfds && (p->fds[i] != fd); i++)
 				;
-			if (i<ndebugclients && p->fds[i] == fd) {
-				int j;
-				for (j=i;j<ndebugclients && p->fds[i] >= 0; j++)
-					;
-				j--; /* the last one */
-				p->fds[i]=p->fds[j]; /* swap it with the deleted element*/
-				p->fds[j] = -1; /* null the last one, if deleting the last one
-													 null itself */
+			if (i<p->nfds) {
+				p->nfds--; /* the last one */
+				p->fds[i]=p->fds[p->nfds]; /* swap it with the deleted element*/
 				rv=0;
 			} 
 		}
@@ -610,6 +727,116 @@ static int debugdel(int fd,char *arg) {
 	return rv;
 }
 
+int eventadd(int (*fun)(),char *path,void *arg) {
+	struct dbgcl *p;
+	int rv=EINVAL;
+	for (p=dbgclh; p!=NULL; p=p->next) {
+		if (strncmp(p->path, path, strlen(path)) == 0) {
+			int i;
+			if (rv==EINVAL) rv=EEXIST;
+			for(i=0;i<p->nfun && (p->fun[i] != fun); i++)
+				;
+			if (i>=p->nfun) {
+				if (i>=p->maxfun) {
+					int newsize=p->maxfun+DBGCLSTEP;
+					p->fun=realloc(p->fun,newsize*sizeof(int));
+					p->funarg=realloc(p->funarg,newsize*sizeof(void *));
+					if (p->fun && p->funarg) {
+						p->maxfun=newsize;
+						p->fun[i]=fun;
+						p->funarg[i]=arg;
+						p->nfun++;
+						if (rv != ENOMEM) rv=0;
+					} else
+						rv=ENOMEM;
+				} else {
+					p->fun[i]=fun;
+					p->nfun++;
+					if (rv != ENOMEM) rv=0;
+				}
+			}
+		}
+	}
+	return rv;
+}
+
+/* EINVAL -> no matches
+ * ENOENT -> all the matches do not include fun
+ * 0 otherwise */
+int eventdel(int (*fun)(),char *path,void *arg) {
+	struct dbgcl *p;
+	int rv=EINVAL;
+	for (p=dbgclh; p!=NULL; p=p->next){
+		if (strncmp(p->path, path, strlen(path)) == 0) {
+			int i;
+			if (rv==EINVAL) rv=ENOENT;
+			for(i=0;i<p->nfun && (p->fun[i] != fun) && (p->funarg[i] != arg); i++)
+				;
+			if (i<p->nfun) {
+				p->nfun--; /* the last one */
+				p->fun[i]=p->fun[p->nfun]; /* swap it with the deleted element*/
+				rv=0;
+			}
+		}
+	}
+	return rv;
+}
+
+#endif
+
+#ifdef VDEPLUGIN
+static int pluginlist(FILE *f,char *arg)
+{
+#define PLUGINFMT "%-22s %s"
+	struct plugin *p;
+	int rv=ENOENT;
+	printoutc(f,PLUGINFMT,"NAME", "HELP");
+	printoutc(f,PLUGINFMT,"------------","----");
+	for (p=pluginh; p!=NULL; p=p->next){
+		if (strncmp(p->name, arg, strlen(arg)) == 0) {
+			printoutc(f,PLUGINFMT,p->name,p->help);
+			rv=0;
+		}
+	}
+	return rv;
+}
+
+static int pluginadd(char *arg) {
+	void *handle;
+	struct plugin *p;
+	int rv=ENOENT;
+	if ((handle=dlopen(arg,RTLD_LAZY)) != NULL) {
+		if ((p=(struct plugin *) dlsym(handle,"vde_plugin_data")) != NULL) {
+			if (p->handle != NULL) { /* this dyn library is already loaded*/
+				dlclose(handle);
+				rv=EEXIST;
+			} else {
+				addplugin(p);
+				p->handle=handle;
+				rv=0;
+			}
+		} else {
+			rv=EINVAL;
+		}
+	} 
+	return rv;
+}
+
+static int plugindel(char *arg) {
+	int rv=ENOENT;
+	struct plugin **p=&pluginh;
+	while (*p!=NULL){
+		if (strncmp((*p)->name, arg, strlen(arg)) == 0
+				&& ((*p)->handle != NULL)) {
+			struct plugin *this=*p;
+			delplugin(this);
+			dlclose(this->handle);
+			rv=0;
+		} else
+			p=&(*p)->next;
+	}
+	return rv;
+}
 #endif
 
 static struct comlist cl[]={
@@ -624,6 +851,12 @@ static struct comlist cl[]={
 	{"debug/add","dbgpath","enable debug info for a given category",debugadd,WITHFD|STRARG},
 	{"debug/del","dbgpath","disable debug info for a given category",debugdel,WITHFD|STRARG},
 #endif
+#ifdef VDEPLUGIN
+	{"plugin","============","PLUGINS MENU",NULL,NOARG},
+	{"plugin/list","","list plugins",pluginlist,STRARG|WITHFILE},
+	{"plugin/add","library","load a plugin",pluginadd,STRARG},
+	{"plugin/del","name","unload a plugin",plugindel,STRARG},
+#endif
 };
 
 void start_consmgmt(void)
@@ -637,5 +870,8 @@ void start_consmgmt(void)
 	swmi.handle_input=handle_input;
 	swmi.cleanup=cleanup;
 	ADDCL(cl);
+#ifdef DEBUGOPT
+	ADDDBGCL(dl);
+#endif
 	add_swm(&swmi);
 }
