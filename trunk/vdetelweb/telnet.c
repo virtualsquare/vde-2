@@ -532,26 +532,36 @@ int telnetdata(int fn,int fd,int vdefd)
 					telnet_close(fn,fd);
 					break;
 				}
-				if (buf[i] == 3) /*ctrl C cleans the current buffer */ {
-					erase_line(st,0);
-					st->bufindex=0;
-					st->linebuf[(st->bufindex)]=0;
-					break;
-				}
-				if (buf[i] == 12) /* ctrl L redraw */ {
-					erase_line(st,1);
-					redraw_line(st,1);
-				}
-				if (buf[i] == '\t') /* tab */ {
-					if (st->lastchar== '\t') {
-						erase_line(st,1);
-						showexpand(st->linebuf,st->bufindex,fd);
-						redraw_line(st,1);
-					} else {
+				switch (buf[i]) {
+					case 3:  /*ctrl C cleans the current buffer */ 
 						erase_line(st,0);
-						st->bufindex=tabexpand(st->linebuf,st->bufindex,BUFSIZE);
+						st->bufindex=0;
+						st->linebuf[(st->bufindex)]=0;
+						break;
+					case 12: /* ctrl L redraw */ 
+						erase_line(st,1);
+						redraw_line(st,1);
+						break;
+					case 1: /* ctrl A begin of line */
+						erase_line(st,0);
+						st->bufindex=0;
 						redraw_line(st,0);
-					}
+						break;
+					case 5: /* ctrl E endofline */
+						erase_line(st,0);
+						st->bufindex=strlen(st->linebuf);
+						redraw_line(st,0);
+					case '\t': /* tab */ 
+						if (st->lastchar== '\t') {
+							erase_line(st,1);
+							showexpand(st->linebuf,st->bufindex,fd);
+							redraw_line(st,1);
+						} else {
+							erase_line(st,0);
+							st->bufindex=tabexpand(st->linebuf,st->bufindex,BUFSIZE);
+							redraw_line(st,0);
+						}
+						break;
 				}
 			} else if(buf[i] == 0x7f) {
 				if(st->bufindex > 0) {
