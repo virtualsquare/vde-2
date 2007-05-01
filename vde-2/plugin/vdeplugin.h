@@ -2,11 +2,6 @@
 #define _VDEPLUGIN_H
 #include <stdarg.h>
 #include <stdio.h>
-#define NOARG 0
-#define INTARG 1
-#define STRARG 2
-#define WITHFILE 0x40
-#define WITHFD 0x80
 
 /* command type constants */
 /* doit signature:
@@ -14,7 +9,7 @@
  *            FILE *f,        *** only when WITHFILE
  *            int fd,         *** only when WITHFD
  *            int|char *arg)  *** when INTARG or STRARG */
-/* if type==0  int doit()
+/* if type==NOARG  int doit()
  * if type==INTARG   int doit(int arg)
  * if type==WITHFILE|WITHFD|STRARG int doit(FILE *f,int fd,char *arg)
  * doit returns 0 on success otherwise it returns a valid errno code */
@@ -61,7 +56,7 @@ struct dbgcl {
 	char *path; /* pathname structured debug/event request */
 	char *help; /* description for debug options listing
 								 if help==NULL the entry will be used only for 
-								 plugin event pubish/subscribe not directly accessible
+								 plugin event publish/subscribe not directly accessible
 								 from the user interface */
 	int tag;    /* numerical tag of the debug/event */
 	/* the following fields are for management. never set or change them*/

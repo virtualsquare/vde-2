@@ -178,7 +178,8 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 		chmod(conn->inpath.sun_path,mode);
 
 	snprintf(req.description,MAXDESCR,"%s user=%s PID=%d %s SOCK=%s",
-			descr,callerpwd->pw_name,pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"",req.sock.sun_path);
+			descr,(callerpwd != NULL)?callerpwd->pw_name:"??",
+			pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"",req.sock.sun_path);
 
 	if (send(conn->fdctl,&req,sizeof(req)-MAXDESCR+strlen(req.description),0) < 0) {
 		int err=errno;

@@ -287,7 +287,10 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 				return;
 			}
 		} else {
-			close_ep(*arg,fd);
+			if (*arg >= 0)
+				close_ep(*arg,fd);
+			else
+				remove_fd(fd);
 		}
 	}
 	else /*if (type == ctl_type)*/ {
