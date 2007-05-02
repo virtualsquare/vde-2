@@ -151,6 +151,7 @@ AC_CONFIG_FILES([Makefile]
                 [dpipe/Makefile]
                 [unixterm/Makefile]
                 [wirefilter/Makefile]
+		[vde_over_ns/Makefile]
                 [uml/Makefile])
 AC_OUTPUT
 
