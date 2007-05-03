@@ -1,4 +1,6 @@
-SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap vde_over_ns 
+SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap 
+
+# vde_over_ns 
 
 if WANT_TUNTAP
 if CAN_MAKE_LIBVDETAP
@@ -44,10 +46,12 @@ if HAVE_BROKEN_POLL
   vde_switch_SOURCES += poll2select.c poll2select.h
 endif
 
-AM_CFLAGS = -Wall 
-AM_CXXFLAGS = -Wall
-#AM_CFLAGS = -Wall -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN -rdynamic
-#AM_CXXFLAGS = -Wall -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN -rdynamic
+AM_CFLAGS = -Wall
+
+if ENABLE_EXPERIMENTAL
+  AM_CFLAGS += -rdynamic
+  AM_CPPFLAGS = -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN
+endif
 
 extraclean: distclean
 	rm -rf aclocal.m4 autom4te.cache autoscan.log configure.scan config.h.in* configure depcomp install-sh Makefile.in config.guess config.sub ltmain.sh missing `find . -name Makefile.in` vde-*.tar.gz

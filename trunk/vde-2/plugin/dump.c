@@ -35,26 +35,28 @@ int testevent(struct dbgcl *event,va_list v)
 {
 	struct dbgcl *this=dl;
 	switch (event->tag) {
-		case D_PACKET|D_OUT: this++;
-		case D_PACKET|D_IN: {
-													int port=va_arg(v,int);
-													unsigned char *buf=va_arg(v,char *);
-													int len=va_arg(v,int);
-													char *pktdump;
-													int dumplen;
-													FILE *out=open_memstream(&pktdump,&dumplen);
-													if (out) {
-														int i;
-														fprintf(out,"Pkt: Port %04d len=%04d ",
-																port,
-																len);
-														for (i=0;i<len;i++)
-															fprintf(out,"%02x ",buf[i]);
-														fclose(out);
-														DBGOUT(this, "%s",pktdump);
-														free(pktdump);
-													}
-												}
+		case D_PACKET|D_OUT: 
+			this++;
+		case D_PACKET|D_IN: 
+			{
+				int port=va_arg(v,int);
+				unsigned char *buf=va_arg(v,char *);
+				int len=va_arg(v,int);
+				char *pktdump;
+				int dumplen;
+				FILE *out=open_memstream(&pktdump,&dumplen);
+				if (out) {
+					int i;
+					fprintf(out,"Pkt: Port %04d len=%04d ",
+							port,
+							len);
+					for (i=0;i<len;i++)
+						fprintf(out,"%02x ",buf[i]);
+					fclose(out);
+					DBGOUT(this, "%s",pktdump);
+					free(pktdump);
+				}
+			}
 	}
 	return 0;
 }

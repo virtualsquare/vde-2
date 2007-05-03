@@ -74,6 +74,11 @@ Linux and Darwin are supported. Contributions are appreciated! :-)])
 		;;
 esac
 
+# Enable experimental features
+AC_ARG_ENABLE([experimental],
+	AS_HELP_STRING([--enable-experimental],
+		[Enable experimental features (async notifies, plugin support, packet counter)]),
+	[if test $enableval = "yes"; then enable_experimental=yes; fi])
 
 # Disable vde_cryptcab? (depends on ssl, maybe unwanted)
 AC_ARG_ENABLE([cryptcab],
@@ -137,6 +142,7 @@ AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
 AM_CONDITIONAL(WANT_TUNTAP, test "$add_tuntap_support" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
 AM_CONDITIONAL(HAVE_BROKEN_POLL, test "$have_broken_poll" = yes)
+AM_CONDITIONAL(ENABLE_EXPERIMENTAL, test "$enable_experimental" = yes)
 
 AC_CONFIG_FILES([Makefile]
                 [doc/Makefile]
@@ -151,7 +157,7 @@ AC_CONFIG_FILES([Makefile]
                 [dpipe/Makefile]
                 [unixterm/Makefile]
                 [wirefilter/Makefile]
-		[vde_over_ns/Makefile]
+                [vde_over_ns/Makefile]
                 [uml/Makefile])
 AC_OUTPUT
 
