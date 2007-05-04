@@ -3,7 +3,7 @@
 
 AC_PREREQ(2.59)
 AC_INIT(vde2, [2.1.6], renzo@cs.unibo.it)
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([foreign dist-bzip2])
 AC_CONFIG_SRCDIR([vde.h])
 AC_CONFIG_HEADER([config.h])
 
@@ -158,6 +158,7 @@ AC_CONFIG_FILES([Makefile]
                 [unixterm/Makefile]
                 [wirefilter/Makefile]
                 [vde_over_ns/Makefile]
+                [plugin/Makefile]
                 [uml/Makefile])
 AC_OUTPUT
 

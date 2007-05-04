@@ -1,6 +1,5 @@
-SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap 
+SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap vde_over_ns plugin
 
-# vde_over_ns 
 
 if WANT_TUNTAP
 if CAN_MAKE_LIBVDETAP
