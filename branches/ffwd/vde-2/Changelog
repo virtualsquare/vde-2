@@ -1,0 +1,18 @@
+VDE 2.1.6, 2006-12-21
+	* Creation of changelog
+	* vde_switch and slirpvde didn't detach from terminal when in daemon mode
+	  (thanks: Piotr Roszatycki)
+	* Patch for group-level privileges; -m option added to vdeq and vdetap
+	  (thanks: Piotr Roszatycki)
+	* Added #ifdefs for some signals, for better portability (thanks: Piotr
+	  Roszatycki)
+	* Fixed LD_PRELOAD examples in vdetaplib help and man page (thanks:
+	  Piotr Roszatycki)
+	* Typos in vde_switch man page
+	* Typos in wirefilter man page (thanks: Helmut Grohne)
+	* Missing cleanups in vdeq (thanks: Piotr Roszatycki)
+	* Various fixes in vde_cryptcab source code; added callback to prevent
+	  direct calling of vde_cryptcab.c functions from within blowfish.c;
+	  added prototypes for some functions (thanks: Dann Frazier)
+	* libvdetap should not use system calls but the next function in the
+	  dynamic library symbol list (thanks: Piotr Roszatycki)
