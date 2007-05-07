@@ -159,6 +159,7 @@ AC_CONFIG_FILES([Makefile]
                 [wirefilter/Makefile]
                 [vde_over_ns/Makefile]
                 [plugin/Makefile]
+		[vde_l3/Makefile]
                 [uml/Makefile])
 AC_OUTPUT
 
