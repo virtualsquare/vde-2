@@ -2,13 +2,15 @@
  * from vde_plug Davoli Gardenghi
  */
 
-#include <config.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 #include <poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <syslog.h>
 #include <errno.h>
 #include <string.h>
@@ -21,6 +23,7 @@
 #include <libvdeplug/libvdeplug.h>
 #define _GNU_SOURCE
 #include <getopt.h>
+#include <config.h>
 #include <vde.h>
 
 #define BUFSIZE 2048
@@ -30,7 +33,13 @@
 #include <linux/if_tun.h>
 #endif
 
-#ifdef VDE_DARWIN
+#ifdef VDE_FREEBSD
+#include <sys/socket.h>
+#include <net/if.h>
+#include <net/if_tun.h>
+#endif
+
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 #	define TAP_PREFIX "/dev/"
 #	include <limits.h>
 #	if defined HAVE_SYSLIMITS_H
@@ -158,7 +167,7 @@ int open_tap(char *dev)
 }
 #endif
 
-#ifdef VDE_DARWIN
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 int open_tap(char *dev)
 {
 	int fd;

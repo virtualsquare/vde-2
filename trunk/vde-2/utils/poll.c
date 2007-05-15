@@ -12,10 +12,8 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include <consmgmt.h>
-#include <vde.h>
-
-#include "poll2select.h"
+/* Just for structs and defines */
+#include <sys/poll.h>
 
 #ifndef MAX
 #define MAX(x,y) ((x)>(y)?(x):(y))
@@ -119,7 +117,7 @@ static int convert_results(struct pollfd *ufds, int nfds,
 	return retval;
 }
 
-int poll2select(struct pollfd *ufds, nfds_t nfds, int timeout)
+int rpl_poll(struct pollfd *ufds, nfds_t nfds, int timeout)
 {
 	fd_set rfds, wfds, efds;
 	struct timeval stimeout;

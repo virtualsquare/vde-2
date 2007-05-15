@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 
 /* crc_tab[] -- this crcTable is being build by chksum_crc32GenTab().
  *		so make sure, you call it before using the other

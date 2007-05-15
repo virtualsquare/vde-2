@@ -33,7 +33,7 @@
 #include "misc.h"
 #include "tcp2unix.h"
 
-#ifdef VDE_DARWIN
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 #	include <limits.h>
 #	if defined HAVE_SYSLIMITS_H
 #		include <syslimits.h>

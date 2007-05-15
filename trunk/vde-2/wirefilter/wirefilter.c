@@ -23,6 +23,9 @@
 #include <stdarg.h>
 #include <sys/time.h>
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -31,6 +34,17 @@
 #include <libvdeplug/libvdeplug.h>
 
 #include <vde.h>
+
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+#	include <limits.h>
+#	if defined HAVE_SYSLIMITS_H
+#		include <syslimits.h>
+#	elif defined HAVE_SYS_SYSLIMITS_H
+#		include <sys/syslimits.h>
+#	else
+#		error "No syslimits.h found"
+#	endif
+#endif
 
 #define NPIPES 2
 #define MAXCONN 3

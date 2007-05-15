@@ -12,6 +12,9 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -25,6 +28,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+
+#include <config.h>
 
 #include "blowfish.h"
 #include "crc32.h"
@@ -111,7 +116,7 @@ static struct peer *_getpeerbyid(struct datagram *pkt, struct peer *sublist)
 		return NULL;
 	if(!sublist)
 		return NULL;
-	if(strncmp(pkt->data+1,sublist->id,FILENAMESIZE)==0)
+	if(strncmp((char *)pkt->data+1,sublist->id,FILENAMESIZE)==0)
 		return sublist;
 	return _getpeerbyid(pkt,sublist->next);
 	
@@ -262,7 +267,7 @@ struct peer *getpeerbyid(struct datagram *pkt)
 void
 deny_access(struct peer *p)
 {
-	send_udp("Access Denied.\0",15,p,CMD_DENY);
+	send_udp((unsigned char *)"Access Denied.\0",15,p,CMD_DENY);
 }
 
 /*
@@ -492,7 +497,7 @@ set_timestamp(unsigned char *block)
  * Send an udp datagram to specified peer.
  */
 void
-send_udp (char *data, size_t len, struct peer *p, unsigned char flags)
+send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 {
 		  
 	unsigned char outpkt[MAXPKT];
@@ -610,7 +615,7 @@ send_challenge(struct peer *p)
 	if ( ((fd = open ("/dev/random", O_RDONLY)) == -1)||
 			 ((read (fd, p->challenge, 128)) != -1))
 	{	
-		send_udp(p->challenge,128,p,PKT_CTL|CMD_CHALLENGE);
+		send_udp((unsigned char *)p->challenge,128,p,PKT_CTL|CMD_CHALLENGE);
 	}		
 	p->state=ST_CHALLENGE;
 	close(fd);
@@ -686,7 +691,7 @@ rcv_response(struct datagram *pkt, struct peer *p, void (*callback)(struct peer*
 		return;
 	  }
 
-	  if (strncmp(response,p->challenge,128)==0){
+	  if (strncmp((char *)response,p->challenge,128)==0){
 		  p->state=ST_AUTH;
 		  send_auth_ok(p, callback);
 	  }
@@ -704,7 +709,7 @@ rcv_response(struct datagram *pkt, struct peer *p, void (*callback)(struct peer*
 void
 blowfish_login(struct peer *p)
 {
-	send_udp(p->id,FILENAMESIZE,p,CMD_LOGIN);
+	send_udp((unsigned char*)p->id,FILENAMESIZE,p,CMD_LOGIN);
 }
 
 /*

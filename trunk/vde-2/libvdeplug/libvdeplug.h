@@ -48,9 +48,9 @@ struct vde_open_args {
 VDECONN *vde_open_real(char *vde_switch,char *descr,int interface_version,
 	struct vde_open_args *open_args);
 
-ssize_t vde_recv(VDECONN *conn,char *buf,size_t len,int flags);
+ssize_t vde_recv(VDECONN *conn,void *buf,size_t len,int flags);
 
-ssize_t vde_send(VDECONN *conn,const char *buf,size_t len,int flags);
+ssize_t vde_send(VDECONN *conn,const void *buf,size_t len,int flags);
 
 /* for select/poll when this fd receive data, there are packets to recv
  * (call vde_recv) */

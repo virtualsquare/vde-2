@@ -14,8 +14,9 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
-#ifndef HAVE_BROKEN_POLL
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
 #endif
 #include <switch.h>
 #include <config.h>
@@ -32,11 +33,6 @@
 #include <vde.h>
 #ifdef VDE_PQ
 #include <packetq.h>
-#endif
-
-#ifdef HAVE_BROKEN_POLL
-#include "poll2select.h"
-#define poll poll2select
 #endif
 
 static struct swmodule *swmh;
@@ -545,5 +541,7 @@ static void start_modules(void)
 	void start_tuntap(void);
 	start_consmgmt();
 	start_datasock();
+#ifdef HAVE_TUNTAP
 	start_tuntap();
+#endif
 }

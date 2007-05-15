@@ -408,12 +408,12 @@ int tcp_fconnect(so)
 			(so->so_faddr.s_addr & htonl(0xffffff00)) == special_addr.s_addr &&
 			(ntohl(so->so_faddr.s_addr) & 0xff) == CTL_ALIAS &&
 			(path=tcp2unix_search(ntohs(so->so_fport)))!=NULL ) {
-		if ( (ret=so->s=socket(AF_FILE,SOCK_STREAM,0)) >= 0) {
+		if ( (ret=so->s=socket(AF_UNIX,SOCK_STREAM,0)) >= 0) {
 			int opt, s=so->s;
 			struct sockaddr_un addr;
 
 			fd_nonblock(s);
-			addr.sun_family = AF_FILE;
+			addr.sun_family = AF_UNIX;
 			strncpy(addr.sun_path,path,UNIX_PATH_MAX);
 			ret = connect(s,(struct sockaddr *)&addr,sizeof (addr));
 			soisfconnecting(so);

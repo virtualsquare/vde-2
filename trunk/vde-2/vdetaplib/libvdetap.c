@@ -28,7 +28,7 @@
 
 #define nativesym(function, name) \
     { \
-        char *msg; \
+        const char *msg; \
 	if (native_##function == NULL) { \
 	    *(void **)(&native_##function) = dlsym(RTLD_NEXT, name); \
 	    if ((msg = dlerror()) != NULL) { \
@@ -101,10 +101,10 @@ int open(const char *path, int flags, ...)
 {
 	static char buf[PATH_MAX];
 	va_list ap;
-	mode_t data;
+	int data;
 
 	va_start(ap, flags);
-	data = va_arg(ap, mode_t);
+	data = va_arg(ap, int);
 	va_end(ap);
 
 	if (strcmp(path,TUNTAPPATH)==0 && tapfd[0] == -1) {
@@ -122,10 +122,10 @@ int open64(const char *path, int flags, ...)
 {
 	static char buf[PATH_MAX];
 	va_list ap;
-	mode_t data;
+	int data;
 
 	va_start(ap, flags);
-	data = va_arg(ap, mode_t);
+	data = va_arg(ap, int);
 	va_end(ap);
 
 	if (strcmp(path,TUNTAPPATH)==0 && tapfd[0] == -1) {

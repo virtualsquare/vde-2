@@ -611,11 +611,13 @@ static int portremove(int val)
 
 static int portcreate(int val)
 {
+	int port;
 	if (val <0 || val>=numports)
 		return EINVAL;
 	if (portv[val] != NULL)
 		return EEXIST;
-	alloc_port(val);
+	port=alloc_port(val);
+	if (port > 0) portv[port]->flag |= NOTINPOOL;
 	return 0;
 }
 
@@ -973,7 +975,7 @@ static struct comlist cl[]={
 	/*{"port/setmacaddr","MAC","set the switch MAC address",setmacaddr,STRARG},*/
 	{"port/sethub","0/1","1=HUB 0=switch",portsethub,INTARG},
 	{"port/setvlan","N VLAN","set port VLAN (untagged)",portsetvlan,STRARG},
-	{"port/create","N","create the port N (inactive)",portcreate,INTARG},
+	{"port/create","N","create the port N (inactive|notallocatable)",portcreate,INTARG},
 	{"port/remove","N","remove the port N",portremove,INTARG},
 	{"port/allocatable","N 0/1","Is the port allocatable as unnamed? 1=Y 0=N",portallocatable,STRARG},
 	{"port/epclose","N ID","remove the endpoint port N/id ID",epclose,STRARG},

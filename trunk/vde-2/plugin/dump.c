@@ -2,6 +2,10 @@
 #include "vdeplugin.h"
 #include <stdio.h>
 
+#ifndef HAVE_OPEN_MEMSTREAM
+#include <utils/open_memstream.h>
+#endif
+
 int testevent(struct dbgcl *tag,va_list v);
 struct plugin vde_plugin_data={
 	.name="dump",
@@ -40,10 +44,10 @@ int testevent(struct dbgcl *event,va_list v)
 		case D_PACKET|D_IN: 
 			{
 				int port=va_arg(v,int);
-				unsigned char *buf=va_arg(v,char *);
+				char *buf=va_arg(v,char *);
 				int len=va_arg(v,int);
 				char *pktdump;
-				int dumplen;
+				size_t dumplen;
 				FILE *out=open_memstream(&pktdump,&dumplen);
 				if (out) {
 					int i;

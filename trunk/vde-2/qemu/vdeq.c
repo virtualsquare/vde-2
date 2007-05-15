@@ -3,7 +3,6 @@
  * Licensed under the GPL
  */
 
-#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -18,10 +17,14 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pwd.h>
 
+#include <config.h>
 #include <vde.h>
 #include <libvdeplug/libvdeplug.h>
 

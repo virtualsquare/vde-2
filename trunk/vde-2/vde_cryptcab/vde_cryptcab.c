@@ -135,7 +135,7 @@ static void handover(struct peer *p)
  */
 static void send_id(struct peer *p)
 {
-	send_udp(p->id,FILENAMESIZE,p,CMD_IDENTIFY);
+	send_udp((unsigned char *)p->id,FILENAMESIZE,p,CMD_IDENTIFY);
 }
 
 /*
@@ -143,7 +143,7 @@ static void send_id(struct peer *p)
  */
 static void send_handover(struct peer *p)
 {
-	send_udp(p->id,FILENAMESIZE,p,CMD_HANDOVER);
+	send_udp((unsigned char *)p->id,FILENAMESIZE,p,CMD_HANDOVER);
 }
 
 /*
@@ -152,7 +152,7 @@ static void send_handover(struct peer *p)
  */
 static int valid_handover(struct datagram *pkt, struct peer *p)
 {
-	return (pkt->len!=16)||(strncmp(pkt->data,p->id,FILENAMESIZE))?0:1;
+	return (pkt->len!=16)||(strncmp((char *)pkt->data,p->id,FILENAMESIZE))?0:1;
 }
 
 /*

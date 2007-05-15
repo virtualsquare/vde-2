@@ -2,8 +2,8 @@
  * Licensed under the GPL
  */
 
-#ifndef __TUNTAP_H__
-#define __TUNTAP_H__
+#ifndef __CONSMGMT_H__
+#define __CONSMGMT_H__
 #include <stdarg.h>
 
 struct comlist {

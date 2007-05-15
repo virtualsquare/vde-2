@@ -1,18 +1,21 @@
 /* Copyright 2004 Renzo Davoli
  * Reseased under the GPLv2 */
 
-#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <sys/select.h>
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <pwd.h>
 #include <vde.h>
 #include <libvdeplug/libvdeplug.h>
-#include <pwd.h>
+#include <config.h>
 
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048

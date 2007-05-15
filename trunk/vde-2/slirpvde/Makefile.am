@@ -42,7 +42,7 @@ slirpvde_SOURCES = \
 		   tcp2unix.h \
 		   slirpvde.c
 
-slirpvde_LDADD = ../libvdeplug/libvdeplug.la
+slirpvde_LDADD = $(LIBOBJS) ../libvdeplug/libvdeplug.la
 
 INCLUDES = -DVDE 
 

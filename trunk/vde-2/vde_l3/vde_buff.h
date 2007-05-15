@@ -7,9 +7,11 @@
  *
  */
 
+#include <netinet/in.h>
+#include <netinet/in_systm.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
-#include "libvdeplug.h"
+#include <libvdeplug/libvdeplug.h>
 
 #define PTYPE_IP 0x0800
 #define PTYPE_ARP 0x0806
@@ -18,6 +20,28 @@
 #define PROTO_TCP 6
 #define PROTO_UDP 17
 
+#if defined(VDE_FREEBSD) || defined(VDE_DARWIN)
+struct iphdr
+{
+#if BYTE_ORDER == LITTLE_ENDIAN
+	unsigned int ihl:4;
+	unsigned int version:4;
+#elif BYTE_ORDER == BIG_ENDIAN
+	unsigned int version:4;
+	unsigned int ihl:4;
+#endif
+	u_int8_t tos;
+	u_int16_t tot_len;
+	u_int16_t id;
+	u_int16_t frag_off;
+	u_int8_t ttl;
+	u_int8_t protocol;
+	u_int16_t check;
+	u_int32_t saddr;
+	u_int32_t daddr;
+	/*The options start here. */
+};
+#endif
 
 struct 
 __attribute__ ((__packed__)) 
@@ -36,7 +60,7 @@ vde_buff
 	struct vde_buff *next;
 //	struct vde_ethernet_header eth_h;
 //	struct iphdr 	ip_h;
-	uint8_t	*data;
+	char	*data;
 	unsigned long	len;
 };
 
