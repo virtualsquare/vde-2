@@ -105,7 +105,7 @@ struct peer
  */
 struct datagram
 {
-	char data[MAXPKT];
+	unsigned char data[MAXPKT];
 	int len;
 	int src;
 	struct peer *orig;
@@ -135,7 +135,7 @@ void
 blowfish_login(struct peer *p);
 
 void 
-send_udp( char *data, size_t len, struct peer *p, unsigned char flags );
+send_udp(unsigned char *data, size_t len, struct peer *p, unsigned char flags );
 
 void
 send_vde( const char *data, size_t len, struct peer *p);

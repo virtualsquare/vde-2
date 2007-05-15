@@ -21,19 +21,20 @@
 #include <getopt.h>
 #include <vde.h>
 
+#include <port.h>
+#include <switch.h>
+#include <consmgmt.h>
+
+#ifdef HAVE_TUNTAP
+
 #ifdef VDE_LINUX
 #include <net/if.h>
 #include <linux/if_tun.h>
 #endif
 
-#ifdef VDE_DARWIN
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 #define TAP_PREFIX "/dev/"
 #endif
-
-#include <port.h>
-#include <switch.h>
-#include <consmgmt.h>
-
 
 #define MAXCMD 128
 #define MODULENAME "tuntap"
@@ -173,7 +174,7 @@ int open_tap(char *dev)
 }
 #endif
 
-#ifdef VDE_DARWIN
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 int open_tap(char *dev)
 {
 	int fd;
@@ -258,3 +259,5 @@ void start_tuntap(void)
 	modfun.delport=closeport;
 	add_swm(&swmi);
 }
+
+#endif

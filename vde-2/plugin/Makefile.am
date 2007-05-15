@@ -8,3 +8,6 @@ install-data-hook:
 
 mod_LTLIBRARIES = dump.la
 dump_la_SOURCES = dump.c vdeplugin.h
+
+dump_la_LIBADD = $(LTLIBOBJS)
+

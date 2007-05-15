@@ -26,6 +26,9 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <net/if.h>
@@ -38,9 +41,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
-
 #include <sysexits.h>
 
+#include <config.h>
 
 #include "fun.h"
 

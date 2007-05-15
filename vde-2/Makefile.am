@@ -1,10 +1,8 @@
 SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap vde_over_ns vde_l3 plugin
 
 
-if WANT_TUNTAP
 if CAN_MAKE_LIBVDETAP
   SUBDIRS += vdetaplib
-endif
 endif
 
 if ENABLE_CRYPTCAB
@@ -13,7 +11,7 @@ endif
 
 AUTOMAKE_OPTIONS = foreign
 
-EXTRA_DIST = LICENSE VERSION
+EXTRA_DIST = LICENSE VERSION utils/open_memstream.h utils/poll.h
 
 bin_PROGRAMS = vde_switch
 vde_switch_SOURCES = \
@@ -36,19 +34,22 @@ vde_switch_SOURCES = \
 	fstp.h \
 	packetq.c \
 	packetq.h \
-	bitarray.h
-if WANT_TUNTAP
-  vde_switch_SOURCES += tuntap.c tuntap.h
-endif
+	bitarray.h \
+	tuntap.c \
+	tuntap.h
 
-if HAVE_BROKEN_POLL
-  vde_switch_SOURCES += poll2select.c poll2select.h
-endif
+vde_switch_LDADD = $(LIBOBJS)
 
 AM_CFLAGS = -Wall
 
+if DARWIN_GCC
+ EXP_CFLAGS = -dynamic
+else
+ EXP_CFLAGS = -rdynamic
+endif
+
 if ENABLE_EXPERIMENTAL
-  AM_CFLAGS += -rdynamic
+  AM_CFLAGS += $(EXP_CFLAGS)
   AM_CPPFLAGS = -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN
 endif
 

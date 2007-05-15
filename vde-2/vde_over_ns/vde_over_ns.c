@@ -44,7 +44,6 @@
 
 #define DNSTIMEOUT 3
 #define DRQLEN 10
-#define MAX(a,b) ((a>b)?a:b)
 
 #define BUFLEN 2000
 

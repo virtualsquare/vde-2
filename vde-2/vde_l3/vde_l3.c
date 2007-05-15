@@ -7,7 +7,6 @@
  *
  */
 
-#include <poll.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -22,6 +21,9 @@
 #include <stdarg.h>
 #include <sys/time.h>
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -34,6 +36,11 @@
 
 #define MAXCMD 255
 #define DEBUG 0
+
+#if defined(VDE_FREEBSD) || defined(VDE_DARWIN)
+#define ICMP_DEST_UNREACH 3
+#define ICMP_PROT_UNREACH 2
+#endif
 
 /*
  * The main structure. Contains: interfaces, routing table,
@@ -118,7 +125,7 @@ struct vde_buff *buff_clone( struct vde_buff *orig)
 {
 	struct vde_buff *clone = (struct vde_buff *)calloc(1,sizeof(struct vde_buff));
 	memcpy (clone,orig,sizeof(struct vde_buff));
-	clone->data = (uint8_t*)calloc(1,orig->len);
+	clone->data = (char *)calloc(1,orig->len);
 	memcpy(clone->data,orig->data,orig->len);
 	return clone;
 }
@@ -299,7 +306,7 @@ static struct vde_buff *vdebuff_alloc(size_t size)
 
 	ret=(struct vde_buff *)calloc(1,sizeof(struct vde_buff));
 //	fprintf(stderr,"ALLOCATING %lu Bytes of memory: ",size);
-	ret->data=(uint8_t *)calloc(1,size+1);
+	ret->data=(char *)calloc(1,size+1);
 	if(ret==NULL || ret->data==NULL){
 		perror("Out of Memory.\n");
 		exit(1);
@@ -618,7 +625,7 @@ int ip_output(struct vde_buff *vdb, uint32_t dst, uint8_t protocol)
 static int service_unreachable(struct vde_buff *buf_in)
 {
 	struct iphdr *iph_in;
-	struct icmphdr *ich;
+	struct icmp *ich;
 	struct vde_buff *vdb;
 	static uint16_t ident=0;
 	
@@ -626,15 +633,15 @@ static int service_unreachable(struct vde_buff *buf_in)
 	vdb=vdebuff_alloc(sizeof(struct vde_ethernet_header) +
 		sizeof(struct iphdr) + 8);
 
-	ich=(struct icmphdr *)payload(vdb);
-	ich->type = ICMP_DEST_UNREACH;
-	ich->code = ICMP_PROT_UNREACH;
-	ich->un.echo.id = ident++;
-	ich->un.echo.sequence = 0;
+	ich=(struct icmp *)payload(vdb);
+	ich->icmp_type = ICMP_DEST_UNREACH;
+	ich->icmp_code = ICMP_PROT_UNREACH;
+	ich->icmp_hun.ih_idseq.icd_id = ident++;
+	ich->icmp_hun.ih_idseq.icd_seq = 0;
 	if(ident == 0xFFFF)
 		ident = 0;
-	ich->checksum = 0;
-	ich->checksum = htons(checksum(payload(vdb), vdb->len - sizeof(struct iphdr) - 14));
+	ich->icmp_cksum = 0;
+	ich->icmp_cksum = htons(checksum(payload(vdb), vdb->len - sizeof(struct iphdr) - 14));
 	
 	iph_in = iphead(buf_in);
 	return ip_output(vdb,ntohl(iph_in->saddr),PROTO_ICMP); 	
@@ -645,15 +652,15 @@ static int service_unreachable(struct vde_buff *buf_in)
  */
 int parse_icmp(struct vde_buff *vdb)
 {
-	struct icmphdr *ich;
+	struct icmp *ich;
 	struct iphdr *iph;
-	ich = (struct icmphdr *) payload(vdb);
+	ich = (struct icmp *) payload(vdb);
 	iph = iphead(vdb);
-	if (ich->type == ICMP_ECHO){
+	if (ich->icmp_type == ICMP_ECHO){
 		swap_ipaddr(&iph->saddr,&iph->daddr);
-		ich->type = ICMP_ECHOREPLY;
-		ich->checksum = 0;
-		ich->checksum = htons(checksum(payload(vdb), vdb->len - 34));
+		ich->icmp_type = ICMP_ECHOREPLY;
+		ich->icmp_cksum = 0;
+		ich->icmp_cksum = htons(checksum(payload(vdb), vdb->len - 34));
 		iph->check = htons(ip_checksum(iph));
 	}
 		

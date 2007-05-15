@@ -3,7 +3,6 @@
  * Modified by Ludovico Gardenghi 2005
  */
 
-#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -17,11 +16,15 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <sys/utsname.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <pwd.h>
 #include <grp.h>
+#include <config.h>
 #include <vde.h>
 #include <libvdeplug/libvdeplug.h>
 #ifdef VDE_IP_LOG

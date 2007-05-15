@@ -9,8 +9,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
+#endif
 #include <sys/socket.h>
 #include <sys/un.h>
+
+#include <config.h>
 
 #include <vde.h>
 

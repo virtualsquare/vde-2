@@ -84,16 +84,16 @@ struct vde_open_args {
 struct vdepluglib {
 	void *dl_handle;
 	VDECONN * (*vde_open_real)(const char *vde_switch,char *descr,int interface_version, struct vde_open_args *open_args);
-	size_t (* vde_recv)(VDECONN *conn,char *buf,size_t len,int flags);
-	size_t (* vde_send)(VDECONN *conn,const char *buf,size_t len,int flags);
+	size_t (* vde_recv)(VDECONN *conn,void *buf,size_t len,int flags);
+	size_t (* vde_send)(VDECONN *conn,const void *buf,size_t len,int flags);
 	int (* vde_datafd)(VDECONN *conn);
 	int (* vde_ctlfd)(VDECONN *conn);
 	int (* vde_close)(VDECONN *conn);
 };
 
 typedef VDECONN * (* VDE_OPEN_REAL_T)(const char *vde_switch,char *descr,int interface_version, struct vde_open_args *open_args);
-typedef size_t (* VDE_RECV_T)(VDECONN *conn,char *buf,size_t len,int flags);
-typedef size_t (* VDE_SEND_T)(VDECONN *conn,const char *buf,size_t len,int flags);
+typedef size_t (* VDE_RECV_T)(VDECONN *conn,void *buf,size_t len,int flags);
+typedef size_t (* VDE_SEND_T)(VDECONN *conn,const void *buf,size_t len,int flags);
 typedef int (* VDE_INT_FUN)(VDECONN *conn);
 #define libvdeplug_dynopen(x) ({ \
 	(x).dl_handle=dlopen("libvdeplug.so",RTLD_NOW); \

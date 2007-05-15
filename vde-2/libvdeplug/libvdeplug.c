@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <string.h>
 
 #ifndef VDESTDSOCK
 #define VDESTDSOCK  "/var/run/vde.ctl"
@@ -101,7 +102,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 		errno=err;
 		return NULL;
 	}
-	if (sockname == NULL || *sockname == NULL)
+	if (sockname == NULL || *sockname == '\0')
 		sockname=VDESTDSOCK;
 	else {
 		char *split;
@@ -174,8 +175,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 			gid=gs->gr_gid;
 		chown(conn->inpath.sun_path,-1,gid);
 	}
-	if (mode>=0)
-		chmod(conn->inpath.sun_path,mode);
+	chmod(conn->inpath.sun_path,mode);
 
 	snprintf(req.description,MAXDESCR,"%s user=%s PID=%d %s SOCK=%s",
 			descr,(callerpwd != NULL)?callerpwd->pw_name:"??",
@@ -212,7 +212,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 	return conn;
 }
 
-ssize_t vde_recv(VDECONN *conn,char *buf,size_t len,int flags)
+ssize_t vde_recv(VDECONN *conn,void *buf,size_t len,int flags)
 {
 	if (__builtin_expect(conn!=0,1))
 		return recv(conn->fddata,buf,len,0);
@@ -222,7 +222,7 @@ ssize_t vde_recv(VDECONN *conn,char *buf,size_t len,int flags)
 	}
 }
 
-ssize_t vde_send(VDECONN *conn,const char *buf,size_t len,int flags)
+ssize_t vde_send(VDECONN *conn,const void *buf,size_t len,int flags)
 {
 	if (__builtin_expect(conn!=0,1)) 
 		return send(conn->fddata,buf,len,0);

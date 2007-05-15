@@ -50,6 +50,8 @@
 #include <unistd.h>
 #include <stdint.h>
 
+#include <config.h>
+
 #define SWITCH_MAGIC 0xfeedface
 
 //#define VDE_VIRTUAL_HW_ADDR             0xDEADBEEF

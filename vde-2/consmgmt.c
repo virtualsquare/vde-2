@@ -36,6 +36,10 @@
 
 #define MAXCMD 128
 
+#ifndef HAVE_OPEN_MEMSTREAM
+#include <utils/open_memstream.h>
+#endif
+
 static struct swmodule swmi;
 
 static int logok=0;

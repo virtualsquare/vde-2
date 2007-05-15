@@ -3,9 +3,10 @@
 
 AC_PREREQ(2.59)
 AC_INIT(vde2, [2.1.6], renzo@cs.unibo.it)
-AM_INIT_AUTOMAKE([foreign dist-bzip2])
+AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects])
 AC_CONFIG_SRCDIR([vde.h])
 AC_CONFIG_HEADER([config.h])
+AC_CONFIG_LIBOBJ_DIR(utils)
 
 # Checks for programs.
 AC_PROG_CXX
@@ -51,7 +52,19 @@ AC_FUNC_REALLOC
 AC_FUNC_SELECT_ARGTYPES
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([atexit dup2 gethostbyname gethostname gettimeofday inet_ntoa memmove memset putenv select setenv socket strchr strdup strndup strerror strstr uname inet_aton sprintf readv random srandom index bcmp drand48 memmove gethostid revoke fchmod getopt_long_only])
+AC_CHECK_FUNCS([atexit dup2 gethostbyname gethostname gettimeofday inet_ntoa memmove memset putenv select setenv socket strchr strdup strndup strerror strstr uname inet_aton sprintf readv random srandom index bcmp drand48 memmove gethostid revoke fchmod getopt_long_only funopen])
+AC_REPLACE_FUNCS([open_memstream])
+AC_MSG_CHECKING([for broken poll()])
+	if expr "$build_os" : "darwin8\..*" > /dev/null; then
+		AC_MSG_RESULT([yes, emulating with select()])
+		AC_DEFINE([HAVE_POLL], 0, [Define to 1 if your system has a working poll() function.])
+		AC_LIBOBJ([poll])
+		AC_DEFINE([poll], [rpl_poll], [Define to rpl_poll if the replacement function should be used.])
+
+	else
+		AC_DEFINE([HAVE_POLL], 1, [Define to 1 if your system has a working poll() function.])
+		AC_MSG_RESULT([no])
+	fi
 
 # All other nice checks I have to make for recostructing missing parts of
 # slirp's config.h file
@@ -67,10 +80,14 @@ case "$build_os" in
 		;;
 	darwin*)
 		AC_DEFINE([VDE_DARWIN], 1, [If defined, this is a Darwin system])
+		darwin_gcc=yes
+		;;
+	freebsd*)
+		AC_DEFINE([VDE_FREEBSD], 1, [If defined, this is a FreeBSD system])
 		;;
 	*)
 		AC_MSG_ERROR([Unsupported architecture: $build_os. At the moment, only
-Linux and Darwin are supported. Contributions are appreciated! :-)])
+Linux, Darwin and FreeBSD are supported. Contributions are appreciated! :-)])
 		;;
 esac
 
@@ -89,17 +106,12 @@ AC_ARG_ENABLE([cryptcab],
 # Check of tuntap device
 AC_ARG_ENABLE([tuntap],
     AS_HELP_STRING([--disable-tuntap],
-      [Disable tuntap compilation]),
-    [if test $enableval != "no" ; then add_tuntap_support=yes ; else add_tuntap_support=no ; fi],
-    [add_tuntap_support=yes])
-
-# Check for tuntap support for Linux and OSX
-if test "$add_tuntap_support" = yes ; then
-	case "$build_os" in
+      [Disable tuntap compilation]), [:],
+	[case "$build_os" in
 		linux*)
 			AC_CHECK_HEADER([linux/if_tun.h],
-				[AC_DEFINE([TUNTAP], 1, [If defined, tuntap support is compiled in])],
-				[AC_MSG_ERROR([Tuntap support seem to be not enabled on your kernel])])
+				[AC_DEFINE([HAVE_TUNTAP], 1, [If defined, tuntap support is compiled in])],
+				[AC_MSG_WARN([Tuntap support seem to be not enabled on your kernel])])
 			can_make_libvdetap=yes
 			;;
 		darwin*)
@@ -117,32 +129,27 @@ if test "$add_tuntap_support" = yes ; then
 			done
 			
 			if test "$HAVE__DEV_TAP0_" ; then
-				AC_DEFINE([TUNTAP], 1, [If defined, tuntap support is compiled in])
+				AC_DEFINE([HAVE_TUNTAP], 1, [If defined, tuntap support is compiled in])
 				if ! test "$HAVE__LIBRARY_EXTENSIONS_TAP_KEXT_" -o "$HAVE__SYSTEM_LIBRARY_EXTENSIONS_TAP_KEXT_" ; then
 					AC_MSG_WARN([/dev/tap0 exists, but the kext cannot be found. Let's hope your
 configuration does work...])
 				fi
-				AC_MSG_CHECKING([for broken poll() support in Tiger])
-				if expr "$build_os" : "darwin8\..*" > /dev/null; then
-					AC_MSG_RESULT([yes, emulating with select()])
-					AC_DEFINE([HAVE_BROKEN_POLL], 1, [If defined, use poll2select])
-					have_broken_poll=yes
-				else
-					AC_MSG_RESULT([no])
-				fi
 			else
-				AC_MSG_ERROR([You do not have tuntap support. You can get it here:
+				AC_MSG_WARN([You do not have tuntap support. You can get it here:
 http://www-user.rhrk.uni-kl.de/~nissler/tuntap/])
 			fi
 			;;
-	esac
-fi
+		freebsd*)
+			AC_CHECK_HEADER([net/if_tun.h],
+				[AC_DEFINE([HAVE_TUNTAP], 1, [If defined, tuntap support is compiled in])],
+				[AC_MSG_WARN([Tuntap support seem to be not enabled on your kernel])])
+			;;
+	esac])
 
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
-AM_CONDITIONAL(WANT_TUNTAP, test "$add_tuntap_support" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
-AM_CONDITIONAL(HAVE_BROKEN_POLL, test "$have_broken_poll" = yes)
 AM_CONDITIONAL(ENABLE_EXPERIMENTAL, test "$enable_experimental" = yes)
+AM_CONDITIONAL(DARWIN_GCC, test "$darwin_gcc" = yes)
 
 AC_CONFIG_FILES([Makefile]
                 [doc/Makefile]
