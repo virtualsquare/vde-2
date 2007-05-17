@@ -556,6 +556,8 @@ void fstaddport(int vlan,int port,int tagged)
 	}
 	BA_CLR(fsttab[vlan]->backup,port);
 	BA_CLR(fsttab[vlan]->edge,port);
+	BA_CLR(fsttab[vlan]->rcvhist[0],port);
+	BA_CLR(fsttab[vlan]->rcvhist[1],port);
 	fst_sendbpdu(vlan,port,0,0,0);
 	topology_change(vlan,port);
 }
@@ -563,6 +565,10 @@ void fstaddport(int vlan,int port,int tagged)
 void fstdelport(int vlan,int port)
 {
 	/*printf("F delport V %d  - P %d\n",vlan,port);*/
+	if (FSTP_ACTIVE(vlan,port)) {
+		 DBGOUT(DBGFSTPMINUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
+		 EVENTOUT(DBGFSTPMINUS,port,vlan);
+	}
 	BA_CLR(fsttab[vlan]->untag,port);
 	BA_CLR(fsttab[vlan]->tagged,port);
 	BA_CLR(fsttab[vlan]->backup,port);
