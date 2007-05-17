@@ -41,9 +41,13 @@ static int numports;
 #ifdef DEBUGOPT
 #define DBGFSTPSTATUS (dl) 
 #define DBGFSTPROOT (dl+1) 
+#define DBGFSTPPLUS (dl+2) 
+#define DBGFSTPMINUS (dl+3) 
 static struct dbgcl dl[]= {
 	  {"fstp/status","fstp: status change",D_FSTP|D_STATUS},
 	  {"fstp/root","fstp: rootswitch/port change",D_FSTP|D_ROOT},
+	  {"fstp/+","fstp: port becomes active",D_FSTP|D_PLUS},
+	  {"fstp/-","fstp: port becomes inactive",D_FSTP|D_MINUS},
 };
 static char *fstpdecodestatus[]={
 	"discarding",
@@ -324,6 +328,18 @@ static void fst_updatebackup(int vlan,int index)
 				port_set_status(port,vlan,FORWARDING);
 				}
 				}), port);
+#ifdef DEBUGOPT
+	BA_FORALL(fsttab[vlan]->untag,numports,({
+				if (BA_CHECK(fsttab[(vlan)]->rcvhist[index],(port)) && !(BA_CHECK(fsttab[(vlan)]->rcvhist[1-index],(port)))) {
+				DBGOUT(DBGFSTPMINUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
+				EVENTOUT(DBGFSTPMINUS,port,vlan); }
+				}), port);
+	BA_FORALL(fsttab[vlan]->tagged,numports,({
+				if (BA_CHECK(fsttab[(vlan)]->rcvhist[index],(port)) && !(BA_CHECK(fsttab[(vlan)]->rcvhist[1-index],(port)))) {
+				DBGOUT(DBGFSTPMINUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
+				EVENTOUT(DBGFSTPMINUS,port,vlan); }
+				}), port);
+#endif
 	BA_ZAP(fsttab[vlan]->rcvhist[index],numports);
 }
 
@@ -438,6 +454,12 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 	int val,valroot;  
 	if (!(pflag & FSTP_TAG) || (BA_CHECK(fsttab[vlan]->edge,port))) 
 		return; /*FST IS TURNED OFF or EDGE*/
+#ifdef DEBUGOPT
+	if (!FSTP_ACTIVE(vlan,port)) {
+		 DBGOUT(DBGFSTPPLUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
+		 EVENTOUT(DBGFSTPPLUS,port,vlan); 
+	}
+#endif
 	BA_SET(fsttab[vlan]->rcvhist[rcvhistindex],port);
 
 	if (tagged) {
