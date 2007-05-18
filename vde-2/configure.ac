@@ -52,8 +52,8 @@ AC_FUNC_REALLOC
 AC_FUNC_SELECT_ARGTYPES
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([atexit dup2 gethostbyname gethostname gettimeofday inet_ntoa memmove memset putenv select setenv socket strchr strdup strndup strerror strstr uname inet_aton sprintf readv random srandom index bcmp drand48 memmove gethostid revoke fchmod getopt_long_only funopen])
-AC_REPLACE_FUNCS([open_memstream])
+AC_CHECK_FUNCS([atexit dup2 gethostbyname gethostname gettimeofday inet_ntoa memmove memset putenv select setenv socket strchr strdup strerror strstr uname inet_aton sprintf readv random srandom index bcmp drand48 memmove gethostid revoke fchmod getopt_long_only funopen])
+AC_REPLACE_FUNCS([open_memstream strndup])
 AC_MSG_CHECKING([for broken poll()])
 	if expr "$build_os" : "darwin8\..*" > /dev/null; then
 		AC_MSG_RESULT([yes, emulating with select()])
@@ -151,23 +151,32 @@ AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
 AM_CONDITIONAL(ENABLE_EXPERIMENTAL, test "$enable_experimental" = yes)
 AM_CONDITIONAL(DARWIN_GCC, test "$darwin_gcc" = yes)
 
+if test "x${prefix}" = "xNONE"; then
+	AC_DEFINE_UNQUOTED(INSTALLPATH, "${ac_default_prefix}",[PREFIX])
+else
+	AC_DEFINE_UNQUOTED(INSTALLPATH, "${prefix}",[PREFIX])
+fi
+
+
 AC_CONFIG_FILES([Makefile]
-                [doc/Makefile]
-                [qemu/Makefile]
-                [slirpvde/Makefile]
-                [vdetaplib/Makefile]
-                [libvdeplug/Makefile]
-                [vde_plug/Makefile]
-                [vde_plug2tap/Makefile]
-                [vde_cryptcab/Makefile]
-                [bochs/Makefile]
-                [dpipe/Makefile]
-                [unixterm/Makefile]
-                [wirefilter/Makefile]
-                [vde_over_ns/Makefile]
-                [plugin/Makefile]
+		[doc/Makefile]
+		[qemu/Makefile]
+		[slirpvde/Makefile]
+		[vdetaplib/Makefile]
+		[libvdeplug/Makefile]
+		[vde_plug/Makefile]
+		[vde_plug2tap/Makefile]
+		[vde_cryptcab/Makefile]
+		[bochs/Makefile]
+		[dpipe/Makefile]
+		[unixterm/Makefile]
+		[wirefilter/Makefile]
+		[vde_over_ns/Makefile]
+		[plugin/Makefile]
 		[vde_l3/Makefile]
-                [uml/Makefile])
+		[uml/Makefile]
+		[libvdemgmt/Makefile]
+		[unixcmd/Makefile])
 AC_OUTPUT
 
 if test x$warn_cryptcab = "xyes"

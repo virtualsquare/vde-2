@@ -27,6 +27,10 @@
 #include <signal.h>
 #include "vde.h"
 
+#ifndef HAVE_STRNDUP
+#include <utils/strndup.h>
+#endif
+
 #define PORTNO 7667
 static char *plugname;
 static char *programname;
@@ -36,25 +40,6 @@ static int localport;
 static int remoteport;
 static int may_login=1;
 static struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
-
-
-#ifndef HAVE_STRNDUP
-/*
- * This could be written in a more efficient way. No time to do it now.
- */
-static char *strndup(const char *s, size_t n)
-{
-	size_t len = MIN(n, strlen(s));
-	char *new = (char *) malloc (len + 1);
-
-	if (new == NULL)
-		return NULL;
-
-	new[len] = '\0';
-	return (char *) memcpy (new, s, len);
-}
-#endif
-
 
 /*
  * Manage dead children, avoid zombies.
