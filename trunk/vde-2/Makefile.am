@@ -1,4 +1,4 @@
-SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap vde_over_ns vde_l3 plugin
+SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap vde_over_ns vde_l3 plugin libvdemgmt unixcmd
 
 
 if CAN_MAKE_LIBVDETAP
@@ -11,7 +11,7 @@ endif
 
 AUTOMAKE_OPTIONS = foreign
 
-EXTRA_DIST = LICENSE VERSION utils/open_memstream.h utils/poll.h
+EXTRA_DIST = LICENSE VERSION utils/open_memstream.h utils/poll.h utils/strndup.h utils/cmdparse.h
 
 bin_PROGRAMS = vde_switch
 vde_switch_SOURCES = \
