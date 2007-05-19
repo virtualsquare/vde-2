@@ -52,7 +52,7 @@ static unsigned int mgmt_ctl=-1;
 static unsigned int mgmt_data=-1;
 static int mgmt_mode = 0600;
 static char *mgmt_socket = NULL;
-static char header[]="VDE switch V.%s\n(C) Virtual Square Team (leader: R. Davoli) 2005,2006,2007 - GPLv2\n";
+static char header[]="VDE switch V.%s\n(C) Virtual Square Team (coord. R. Davoli) 2005,2006,2007 - GPLv2\n";
 static char prompt[]="\nvde: ";
 
 static struct comlist *clh=NULL;
