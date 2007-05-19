@@ -38,7 +38,7 @@ void usage(char *progname){
 	/* TODO: write it better */
 	printf("Usage: %s OPTIONS command\n", progname);
 	printf("\t-s sockname : management socket path\n");
-	printf("\t-f rcfile   : configuration path (default is %s/%s)\n", STD_RC_DIR, progname);
+	printf("\t-f rcfile   : configuration path (default is %s/%s)\n", STD_RC_DIR, basename(progname));
 	printf("\t-v          : run parse machine in debug mode\n");
 }
 
