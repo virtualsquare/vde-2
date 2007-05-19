@@ -1,5 +1,5 @@
 TIMEOUT 1000
-1 IN ': ' 100
+1 IN '$ ' 100
 2 COPY
 3 EXIT 0
 

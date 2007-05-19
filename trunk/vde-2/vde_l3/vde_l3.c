@@ -994,7 +994,7 @@ static int handle_cmd(int fd,char *inbuf)
 }
 
 static char header[]="\nVDE Layer 3 Switch  V.%s\n(C) D.Lacamera 2007 - GPLv2\n";
-static char prompt[]="\nVDE-L3: ";
+static char prompt[]="\nVDE-L3$ ";
 
 static int mgmtcommand(int fd)
 {

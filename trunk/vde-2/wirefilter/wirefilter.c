@@ -658,7 +658,7 @@ static int openmgmt(char *mgmt)
 }
 
 static char header[]="\nVDE wirefilter V.%s\n(C) R.Davoli 2005,2006 - GPLv2\n";
-static char prompt[]="\nVDEwf: ";
+static char prompt[]="\nVDEwf$ ";
 static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 {
 	int new;

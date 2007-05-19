@@ -1,6 +1,5 @@
-STDSOCKET /var/run/vde.mgmt/mgmt
 TIMEOUT 1000
-1 IN ': ' 100
+1 IN '$ ' 100
 3 SEND '$*\n'
 5 THROW
 6 IN '\n' 100
