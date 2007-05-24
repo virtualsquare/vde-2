@@ -11,5 +11,7 @@ dump_la_SOURCES = dump.c vdeplugin.h
 
 dump_la_LIBADD = $(LTLIBOBJS)
 
+if ENABLE_PCAP
 pdump_la_SOURCES = pdump.c vdeplugin.h
 pdump_la_LIBADD = $(LTLIBOBJS) -lpcap
+endif

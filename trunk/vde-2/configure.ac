@@ -20,6 +20,9 @@ AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([crypto], [EVP_EncryptInit],
 		[add_cryptcab_support=yes],
 		[add_cryptcab_support=no ; warn_cryptcab=yes])
+AC_CHECK_LIB([pcap], [pcap_open_dead],
+		[add_pcap=yes],
+		[add_pcap=no ; warn_pcap=yes])
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -147,6 +150,7 @@ http://www-user.rhrk.uni-kl.de/~nissler/tuntap/])
 	esac])
 
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
+AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
 AM_CONDITIONAL(ENABLE_EXPERIMENTAL, test "$enable_experimental" = yes)
 AM_CONDITIONAL(DARWIN_GCC, test "$darwin_gcc" = yes)
@@ -184,4 +188,11 @@ then
 	AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
 not installed on your system, or because openssl/blowfish.h could not be
 found. Please install them if you want CryptCab to be compiled and installed.])
+fi
+
+if test x$warn_pcap = "xyes"
+then
+	AC_MSG_WARN([VDE packet dump plugin has been disabled because libpcap is
+not installed on your system, or because it's too old.
+Please install it if you want pdump to be compiled and installed.])
 fi
