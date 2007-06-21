@@ -1,12 +1,18 @@
 .TH VDEQ 1 "December 6, 2006" "Virtual Distributed Ethernet"
 .SH NAME
-vdeq \- Virtual Distributed Ethernet wrapper for QEMU virtual machines
+vdeq \- Virtual Distributed Ethernet wrapper for QEMU/KVM virtual machines
 .SH SYNOPSIS
 .B vdeq
 .B qemu
 .I ... qemu options ...
 .B -net vde[,vlan=n][,sock=socketpath][,port=n]
 .I ... other qemu options ...
+.br
+.B vdeq
+.B kvm
+.I ... kvm options ...
+.B -net vde[,vlan=n][,sock=socketpath][,port=n]
+.I ... other kvm options ...
 .br
 .B vde\fP{\fIqemu_name\fP}
 .I ... qemu options ...
@@ -49,8 +55,8 @@ vdeq \- Virtual Distributed Ethernet wrapper for QEMU virtual machines
 .br
 .SH DESCRIPTION
 \fBvdeq\fP 
-is a wrapper to start a QEMU virtual machine connected to a VDE network.
-It uses the qemu \fB \-tun-fd \fP parameter to set up the connection with
+is a wrapper to start a QEMU/KVM virtual machine connected to a VDE network.
+It uses the qemu/kvm \fB \-tun-fd \fP parameter to set up the connection with
 a vde_switch.
 
 The command
@@ -60,6 +66,14 @@ The command
 vdeq qemu -b c -hda=sampledisk
 .RE
 starts a qemu machine which boots from the sampledisk image and
+has a ne2000 ethernet interface connected to the standard vde_switch.
+The command
+.RS
+.br
+.B 
+vdeq kvm -b c -hda=sampledisk
+.RE
+starts a kvm machine which boots from the sampledisk image and
 has a ne2000 ethernet interface connected to the standard vde_switch.
 .br
 
@@ -72,7 +86,13 @@ vdeqemu:
 .B 
 vdeqemu -b c -hda=sampledisk
 .RE
-starts qemu as above.
+starts qemu as above. If vdeq is linked to vdekvm:
+.RS
+.br
+.B
+vdekvm -b c -hda=sampledisk
+.RE
+starts kvm with the same parameters.
 
 The new syntax is consistent with the new Qemu 0.8.0 network parameters.
 Using vdeq is possible to specify a vde interface in the same way as
@@ -94,6 +114,19 @@ vde qemu -net nic,vlan=0 -net nic,vlan=1 -net vde,vlan=0 -net vde,vlan=1,sock=/t
 .br
 .B
 vdeqemu -net nic,vlan=0 -net nic,vlan=1 -net vde,vlan=0 -net vde,vlan=1,sock=/tmp/my.ctl,port=10
+.RE
+The following command run a kvm VM with two ethernet interface
+connected to the standard switch and
+to the switch with local socket "/tmp/my.ctl", port 10, respectively
+.RS
+.br
+.B
+vde kvm -net nic,vlan=0 -net nic,vlan=1 -net vde,vlan=0 -net vde,vlan=1,sock=/tmp/my.ctl,port=10
+.RE
+.RS
+.br
+.B
+vdekvm -net nic,vlan=0 -net nic,vlan=1 -net vde,vlan=0 -net vde,vlan=1,sock=/tmp/my.ctl,port=10
 .RE
 
 The old syntax can be used with Qemu 0.8.0 but all the vde interfaces are assigned to
@@ -133,6 +166,15 @@ print a Usage help.
 Qemu has changed its syntax for networking (cvs Nov.15 2005).
 As a temporary solution use vdeoq and vdeoqemu instead of vdeq and vdeqemu
 if you are running a qemu with the old syntax.
+.br
+By default qemu uses the same MAC address for every virtual machine, so if
+you plan to use several instances of qemu be sure to explicitly set a different
+MAC address for each virtual machine. While generating your address beware to
+not use broadcast/multicast reserved MACs, ethernet rules say: the multicast
+bit is the low-order bit of the first byte, which is "the first bit on the wire".
+For example \fI34:12:de:ad:be:ef\fP is an unicast address, \fI35:12:de:ad:be:ef\fP
+is a multicast address (see ETHERNET MULTICAST ADDRESSES section in
+http://www.iana.org/assignments/ethernet-numbers for more informations).
 .br
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
