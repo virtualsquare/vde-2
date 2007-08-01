@@ -253,7 +253,7 @@ int main(int argc, char **argv)
 	int oldsyntax=0;
 	int newsyntax=0;
 	int ver;
-  mode_t mode;
+  mode_t mode = 0700;
 
   vdeqname=basename(argv[0]);
 	//callerpwd=getpwuid(getuid());
@@ -294,8 +294,7 @@ int main(int argc, char **argv)
   } else if (argc > 2 && (
 		  (strcmp(argv[1],"-vdesock")==0) ||
 		  (strcmp(argv[1],"-sock")==0) ||
-		  (strcmp(argv[1],"-unix")==0) ||
-		  (strcmp(argv[1],"-s")==0))
+		  (strcmp(argv[1],"-unix")==0))
 	    ){
 	  argsock=argv[2];
 	  argv+=2;
@@ -303,9 +302,7 @@ int main(int argc, char **argv)
   } else
 	  argsock=NULL;
 
-    if (argc > 2 && (
-		  (strcmp(argv[1],"--mod")==0) ||
-		  (strcmp(argv[1],"-m")==0))
+    if (argc > 2 && ((strcmp(argv[1],"--mod")==0))
 	    ){
 	sscanf(argv[2],"%o",&mode);
 	argv+=2;
