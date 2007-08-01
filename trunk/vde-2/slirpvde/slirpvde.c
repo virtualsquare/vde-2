@@ -358,7 +358,7 @@ struct option slirpvdeopts[] = {
 	{"pidfile", 1, 0, 'p'},
 	{"dhcp",0,NULL,'D'},
 	{"daemon",0,NULL,'d'},
-	{"network",0,NULL,'n'},
+	{"network",1,NULL,'n'},
 	{"mod",1,0,'m'},
 	{"group",1,0,'g'},
 	{"port",1,0,'P'},
