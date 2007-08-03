@@ -181,7 +181,8 @@ AC_CONFIG_FILES([Makefile]
 		[uml/Makefile]
 		[libvdemgmt/Makefile]
 		[unixcmd/Makefile]
-		[tunctl/Makefile])
+		[tunctl/Makefile]
+		[vde_autolink/Makefile])
 AC_OUTPUT
 
 if test x$warn_cryptcab = "xyes"
