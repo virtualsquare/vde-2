@@ -37,7 +37,7 @@
 void usage(char *progname){
 	/* TODO: write it better */
 	printf("Usage: %s OPTIONS command\n", progname);
-	printf("\t-s sockname : management socket path\n");
+	printf("\t-s sockname : management socket path (default is %s/%s)\n", STD_SOCK_DIR, basename(progname));
 	printf("\t-f rcfile   : configuration path (default is %s/%s)\n", STD_RC_DIR, basename(progname));
 	printf("\t-v          : run parse machine in debug mode\n");
 }
@@ -89,6 +89,7 @@ int main(int argc,char *argv[])
 	rv=utm_run(utm,&parsebuf,fd,argc-optind,argv+optind,outbuf,debug);
 	if(outbuf->sz) write(1, outbuf->buf, outbuf->sz);
 	utmout_free(outbuf);
+	close(fd);
 
 	return rv;
 }

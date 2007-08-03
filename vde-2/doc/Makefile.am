@@ -7,7 +7,7 @@ dist_libvdemgmt_DATA = libvdemgmt/asyncrecv.rc libvdemgmt/closemachine.rc \
 		       libvdemgmt/openmachine.rc libvdemgmt/sendcmd.rc
 
 
-EXTRA_DIST = $(static_mans) vdetaplib.1.in freebsd_tap
+EXTRA_DIST = $(static_mans) vdetaplib.1.in freebsd_tap vde_autolink-howto
 
 
 vdetaplib.1: vdetaplib.1.in

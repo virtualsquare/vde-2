@@ -32,7 +32,7 @@ struct vdemgmt;
  * @brief vdemgmt_open - Connect to console management socket.
  *
  * @param path of console management socket
- * @return pointer to a stuct vdemgmt, NULL if error
+ * @return pointer to a struct vdemgmt, NULL if error
  */
 extern struct vdemgmt *vdemgmt_open(const char *path);
 
@@ -48,7 +48,7 @@ extern void vdemgmt_close(struct vdemgmt *conn);
  * 
  * @param conn structure of connection
  * 
- * @return integet representing file descriptor, -1 if error
+ * @return integer representing file descriptor, -1 if error
  */
 extern int vdemgmt_getfd(struct vdemgmt *conn);
 
@@ -77,7 +77,7 @@ extern void vdemgmt_rstout(struct vdemgmt_out *out);
  * 
  * @param conn structure of connection to send command to
  * @param cmd command to send
- * @param out pointer to an output container, can be NULL
+ * @param out pointer to an output container, if NULL the output is discarded
  * 
  * @return the same return value of command executed
  */

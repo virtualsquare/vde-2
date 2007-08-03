@@ -41,8 +41,9 @@
 #define DEBUGADD "debug/add"
 #define DEBUGDEL "debug/del"
 
-#define CHECK(expr, errval)  { if ((expr) == (errval)) { perror(__func__); goto error; } }
-#define CHECKNOT(expr, retval)  { if ((expr) != (retval)) { perror(__func__); goto error; } }
+#define CHECK(expr, errval)  { char errstr[1024]; if ((expr) == (errval)) { sprintf(errstr, "%s %d %d", __func__, __LINE__, errval); goto error; } }
+#define CHECKNOT(expr, errval)  { char errstr[1024]; if ((expr) != (errval)) { sprintf(errstr, "%s %d %d", __func__, __LINE__, errval); perror(errstr); goto error; } }
+
 
 #define DATATAG 1
 #define ASYNTAG 3
@@ -124,7 +125,7 @@ struct vdemgmt *vdemgmt_open(const char *path)
 {
 
 	struct sockaddr_un sun;
-	struct vdemgmt *conn;
+	struct vdemgmt *conn = NULL;
 	struct utm_out *out;
 	int myargc=0;
 	char *myargv = NULL, *sep;
@@ -155,7 +156,7 @@ struct vdemgmt *vdemgmt_open(const char *path)
 
 	/* get welcome data */
 	out=utmout_alloc();
-	CHECKNOT( utm_run(open_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM), 0 );
+	CHECK( utm_run(open_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM), -1 );
 
 	/* split banner / prompt and extract version */
 	for( sep=out->buf+out->sz ; ! strstr(sep, "\n") ; sep--);
@@ -250,8 +251,8 @@ int vdemgmt_sendcmd(struct vdemgmt *conn, const char *cmd, struct vdemgmt_out *o
 			memcpy(out->buf, p->buf, p->sz);
 		}
 		if( p->tag == ASYNTAG ){
-			t=atab_find(conn->atab, out->buf+SKIPHEAD);
-			if(t) t->callback(t->event, out->buf+strlen(t->event)+SKIPHEAD+1);
+			t=atab_find(conn->atab, p->buf+SKIPHEAD);
+			if(t) t->callback(t->event, p->buf+strlen(t->event)+SKIPHEAD+1);
 		}
 		p=p->next;
 	}
@@ -336,9 +337,10 @@ void vdemgmt_asyncrecv(struct vdemgmt *conn)
 	
 	/* run async machine and call the handler for the event */
 	do {
-		CHECKNOT( utm_run(asyncrecv_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM), 0 );
+		CHECK( utm_run(asyncrecv_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM), -1 );
 		t=atab_find(conn->atab, out->buf+SKIPHEAD);
 		if(t) t->callback(t->event, out->buf+strlen(t->event)+SKIPHEAD+1);
+		free(out->buf) ; out->buf = NULL ; out->sz = 0;
 	} while ( conn->pbuf->len > conn->pbuf->pos );
 
 error:
