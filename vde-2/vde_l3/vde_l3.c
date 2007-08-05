@@ -33,6 +33,7 @@
 #include "vde_buff.h"
 
 #include <vde.h>
+#include <dlfcn.h>
 
 #define MAXCMD 255
 #define DEBUG 0
@@ -47,6 +48,144 @@
  * arp pending, etc.
  */
 struct vde_router VDEROUTER; 
+
+
+
+/* This is the default routing policy ( Unlimited fifo )
+ *
+ *
+ */
+int ufifo_enqueue(struct vde_buff *vdb, struct vde_iface *vif)
+{
+	struct vde_buff *qo = vif->q_out;
+	if (qo == NULL){
+		vif->q_out=vdb;
+		return;
+	}
+	while (qo->next!=NULL){
+		qo=qo->next;
+	}
+	qo->next = vdb;
+	return 1;
+}
+
+int ufifo_dequeue(struct vde_iface *vif){
+	struct vde_buff *vdb_out=vif->q_out;
+	raw_send(vif,vdb_out);
+	vif->q_out=vdb_out->next;
+	return (vif->q_out?1:0);
+}
+
+int ufifo_init(struct vde_iface *vif, char *args)
+{
+	vif->policy_name = "ufifo";
+	return (strlen(args) == 0);
+}
+
+char *nostats(struct vde_iface *vif)
+{
+	return "No Statistics Available.";
+}
+
+
+struct routing_policy unlimited_fifo_routing_policy ={
+	.name = "ufifo",
+	.help = "Unlimited FIFO (Default)\nUsage: tc set <dev> ufifo\n",
+	.enqueue = ufifo_enqueue,
+	.dequeue = ufifo_dequeue,
+	.tc_stats = nostats,
+	.policy_init = ufifo_init
+};
+
+
+inline struct vde_ethernet_header *ethhead(struct vde_buff *vdb)
+{
+	return (struct vde_ethernet_header*)(vdb->data);
+}
+
+inline struct iphdr *iphead(struct vde_buff *vdb)
+{
+	return (struct iphdr*)(vdb->data + 14);
+}
+
+inline void *payload(struct vde_buff *vdb)
+{
+	return (uint8_t*)(vdb->data + 14 + sizeof(struct iphdr));
+}
+
+void *
+tcpriv(struct vde_iface *vi)
+{
+	return (void *)(vi->tc_priv);
+}
+
+void policy_register(struct routing_policy *r)
+{
+	struct routing_policy *p = VDEROUTER.modlist;
+	if(p==NULL){
+		VDEROUTER.modlist = r;
+		return;
+	}
+	while (p->next!=NULL){
+		p=p->next;
+	}
+	r->next=NULL;
+	p->next=r;
+}
+
+struct routing_policy *getpolicy(char *name)
+{
+	struct routing_policy *p = VDEROUTER.modlist;
+	struct routing_policy *new;
+	void *di;
+	char libname[300],libname2[300],libname3[300];
+	snprintf(libname,255,"%s.so",name);
+	snprintf(libname2,255,"/usr/lib/vde2/vde_l3/%s.so",name);
+	snprintf(libname3,255,"/usr/local/lib/vde2/vde_l3/%s.so",name);
+
+	while (p){
+		if (!strncmp(name,p->name,255))
+			return p;
+		p=p->next;
+	}
+	
+
+	di = dlopen(libname,RTLD_LAZY);
+	if (di == NULL)
+		di = dlopen(libname2,RTLD_LAZY);
+	if (di == NULL)
+		di = dlopen(libname3,RTLD_LAZY);
+
+	if (di == NULL){
+		fprintf(stderr,"Error loading module %s: %s\n",libname,dlerror());
+		return NULL;
+	}else{
+		new = (struct routing_policy *) dlsym(di,"module_routing_policy");
+		if(new!=NULL){
+			policy_register(new);
+			return new;
+		}else{
+			fprintf(stderr,"Error registering module %s: %s\n",libname,dlerror());
+			return NULL;
+		}
+
+	}	
+}
+
+
+void set_interface_policy (struct vde_iface *vif, struct routing_policy *rp)
+{
+	vif->enqueue = rp->enqueue;
+	vif->dequeue = rp->dequeue;
+
+	if (rp->tc_stats)
+		vif->tc_stats = rp->tc_stats;
+	else
+		vif->tc_stats = nostats;
+
+	vif->policy_init = rp->policy_init;
+
+}
 
 
 static const int mgmtmode=0700;
@@ -130,6 +269,17 @@ struct vde_buff *buff_clone( struct vde_buff *orig)
 	return clone;
 }
 
+/** 
+ * Send a packet directly using the ethernet
+ */
+size_t raw_send(struct vde_iface *of,struct vde_buff *vdb)
+{
+#if(DEBUG)
+	fprintf(stderr,"Sending a %luB packet. VDECONN@%p. Protocol = %d through iface %d.\n",vdb->len,&(of->vdec),ntohs(*((uint16_t *)(vdb->data+12))),of->id);
+#endif
+	return vde_send(of->vdec,vdb->data,vdb->len,0);
+}
+
 
 int ip_input(struct vde_buff *vdb);
 int ip_output(struct vde_buff *vdb, uint32_t dst, uint8_t protocol);
@@ -173,18 +323,6 @@ static struct arp_entry *add_arp_entry(struct arp_entry *new, struct arp_entry *
 	
 	list->next=add_arp_entry(new,list->next);
 	return list;
-}
-
-/* 
- * this one in particular, is used to enqueue packets
- */
-static struct vde_buff *enqueue(struct vde_buff *vdb, struct vde_buff *q)
-{
-	if (q == NULL)
-		return vdb;
-
-	q->next=enqueue(vdb,q->next);
-	return q;
 }
 
 
@@ -234,19 +372,20 @@ int neightbor_send(struct vde_iface *to, struct vde_buff *vdb)
 	struct arp_entry *ae;
 	struct vde_ethernet_header *he;
 	struct iphdr *iph = iphead(vdb);
+	int packets_in = 0;
 	ae = get_arp_entry(iph->daddr);	
 	he=ethhead(vdb);
 	if(ae){
 		memcpy(he->src,to->mac, 6);
 		memcpy(he->dst,ae->mac, 6);
-		to->q_out=enqueue(vdb,to->q_out);
+		packets_in = to->enqueue(vdb,to);
 		
 	}else{	
 		memset(he->src,0,6);
 //		VDEROUTER.arp_pending=enqueue(vdb,VDEROUTER.arp_pending);
 		arp_query(to, ntohl(iph->daddr));	
 	}
-	return 0;
+	return packets_in;
 }
 
 /* Prepare a vde_buff to be sent through a gateway 
@@ -256,12 +395,13 @@ int gateway_send(struct vde_buff *vdb, uint32_t gw)
 	struct arp_entry *ae;
 	struct vde_ethernet_header *he;
 	struct vde_iface *to = is_neightbor(gw);
+	int packets_in = 0;
 	ae = get_arp_entry(htonl(gw));	
 	he=ethhead(vdb);
 	if(ae){
 		memcpy(he->src,to->mac, 6);
 		memcpy(he->dst,ae->mac, 6);
-		to->q_out=enqueue(vdb,to->q_out);
+		packets_in = to->enqueue(vdb,to);
 		
 	}else{	
 		memset(he->dst, 0, 6);
@@ -269,7 +409,7 @@ int gateway_send(struct vde_buff *vdb, uint32_t gw)
 		arp_query(to, gw);	
 	}
 
-	return 0;
+	return packets_in;
 }
 
 /* 
@@ -344,16 +484,6 @@ int is_arp_pending(struct vde_iface *of, uint8_t *mac){return 0;}
 
 
 
-/** 
- * Send a packet directly using the ethernet
- */
-size_t raw_send(struct vde_iface *of,struct vde_buff *vdb)
-{
-#if(DEBUG)
-	fprintf(stderr,"Sending a %luB packet. VDECONN@%p. Protocol = %d through iface %d.\n",vdb->len,&(of->vdec),ntohs(*((uint16_t *)(vdb->data+12))),of->id);
-#endif
-	return vde_send(of->vdec,vdb->data,vdb->len,0);
-}
 
 
 /**
@@ -665,7 +795,7 @@ int parse_icmp(struct vde_buff *vdb)
 	}
 		
 	ip_output_ready(vdb);
-	return 0;
+	return 1;
 		
 }
 
@@ -747,6 +877,8 @@ static int help(int fd,char *s)
 	printoutc(fd, "route list					Print out the routing table");
 	printoutc(fd, "route net ADDRESS/NETMASK gw GATEWAY     	Add static route");
 	printoutc(fd, "route default gw GATEWAY     			Add default route");
+	printoutc(fd, "tc ls     					Show each interface routing policy");
+	printoutc(fd, "tc set DEV POLICY ARGS     			Change interface routing policy");
 	printoutc(fd, "shutdown:  					shut the channel down");
 	printoutc(fd, "logout:    					log out from this mgmt session");
 	return 0;
@@ -871,6 +1003,7 @@ static int if_display(int fd, char *iface){
 
 }
 
+
 static int ifconfig(int fd, char *s)
 {
 	int arglen=strlen(s)-1;
@@ -941,6 +1074,80 @@ cmdfail:
 	return 0;	
 }
 
+static int traffic_control(int fd, char *s)
+{
+	int arglen=strlen(s)-1;
+	struct vde_iface *pi;
+	struct routing_policy *pp;
+	char *iface, *policy, *args; 
+	int ifnum;
+	s[arglen]='\0';
+	if(arglen==1){
+		goto tccmdfail;
+	}
+
+	//tc ls
+	if (arglen == 2 && strncmp(s,"ls",2)==0){
+		pi = VDEROUTER.interfaces;
+		while (pi){
+			printoutc(fd, "vd%d: %s. %s", pi->id, pi->policy_name, pi->tc_stats(pi));
+			pi=pi->next;
+		}
+	return 0;
+	}
+	
+	//tc set 
+	if (arglen > 4 && strncmp(s,"set",3) == 0){
+		iface = s+4;
+		policy=index(iface,' ');
+		if(policy)
+			*(policy++)=(char)0;
+		if((strncmp(iface,"vd",2)) || (sscanf(iface+2,"%d",&ifnum)<1))
+			goto tccmdfail;
+		args=index(policy,' ');
+		if(args){
+			*(args++)=(char)0;
+		}else{
+			args="";
+		}
+
+		if(strlen(policy)<1)
+			goto tccmdfail;
+		
+		// check interface existstence
+		pi = VDEROUTER.interfaces;
+		while (pi && pi->id != ifnum){
+			pi=pi->next;
+			if (!pi){
+				printoutc(fd, "tc: Device vd%d not found.",ifnum);
+				goto tccmdfail;
+			}
+		}
+		// try to get module
+		pp=getpolicy(policy);
+		if(!pp){
+			printoutc(fd, "Cannot load rp module %s.so",policy);
+			goto tccmdfail;
+		}else{
+			set_interface_policy(pi, pp);
+			if (!pi->policy_init(pi,args)){
+				printoutc(fd, "%s: syntax error.\n%s",pp->name,pp->help);
+				return 0;
+			}
+		
+		}
+		printoutc(fd, "vd%d: queuing discipline set to %s.", pi->id, pi->policy_name);
+		return 0;	
+	} 
+
+tccmdfail:
+	printoutc(fd, "'tc' command usage:");
+	printoutc(fd, "tc ls					Print out the routing policy for each interface");
+	printoutc(fd, "tc set <DEV> <policy> <arguments>     	Change routing policy");
+	return -1;
+
+}
+
 static int logout(int fd,char *s)
 {
 	return -1;
@@ -963,7 +1170,8 @@ static struct comlist {
 	{"ifconfig",ifconfig, 0},
 	{"route",route, 0},
 	{"logout",logout, 0},
-	{"shutdown",doshutdown, 0}
+	{"shutdown",doshutdown, 0},
+	{"tc",traffic_control,0}
 };
 
 #define NCL sizeof(commandlist)/sizeof(struct comlist)
@@ -1095,15 +1303,17 @@ static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 int main(int argc, char *argv[])
 {
 	struct vde_iface *vif;
-	struct pollfd *pfd;
+	struct pollfd *pfd, *pfdout;
 	struct vde_buff *vdb_in, *vdb_out;
 	struct vde_route *vr;
-	int i,pr;
+	int i,pr,pktin;
 	int numif=0,npfd=0;
 	struct vde_ethernet_header *eh;
 	char *vdesock,*argp, *ipaddr, *nm, *gw, *mgmt=NULL;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 	int option_index;
+	struct routing_policy *rp;
+	uint32_t rp_arg = 30;
 
 	int mgmtindex;
 
@@ -1119,7 +1329,9 @@ int main(int argc, char *argv[])
 	VDEROUTER.route_table = NULL;
 	VDEROUTER.arp_table = NULL;
 	VDEROUTER.arp_pending = NULL;
+	VDEROUTER.modlist = NULL;
 	VDEROUTER.default_gw = 0U;
+	policy_register(&unlimited_fifo_routing_policy);
 	
 	while(1) {
 		int c;
@@ -1221,6 +1433,28 @@ int main(int argc, char *argv[])
 				vif->q_in = NULL;
 				vif->q_out = NULL;
 				vif->next = NULL;
+			/*
+				rp = getpolicy("pfifo");
+				if (!rp)
+					fprintf(stderr,"Error getting policy pfifo: %s",dlerror());
+				set_interface_policy(vif, rp);
+				
+				if(vif->policy_init(vif,"limit 30"))
+					fprintf(stderr,"PFIFO policy set.",dlerror());
+				else
+					fprintf(stderr,"Error setting policy.\n");
+*/
+				rp = getpolicy("ufifo");
+				if (!rp)
+					fprintf(stderr,"Error getting policy ufifo: %s",dlerror());
+				set_interface_policy(vif,rp);
+				if(vif->policy_init(vif,""))
+					fprintf(stderr,"Default 'ufifo' routing  policy set.\n",dlerror());
+				else{
+					fprintf(stderr,"Error setting default policy.\n");
+					exit(1);
+				}
+				
 				VDEROUTER.interfaces = add_iface(vif, VDEROUTER.interfaces);
 				break;
 				
@@ -1253,12 +1487,12 @@ int main(int argc, char *argv[])
 	
 for(;;)
   {	
-	pr = poll(pfd,npfd,100);
+	pr = poll(pfd,npfd,10);
 	if (pr < 0){
 		perror("poll");
 		exit(2);
 	}	
-	
+	pktin = 0;
 	if(pr > 0){
 		for(i=0,vif=VDEROUTER.interfaces; i<numif && vif!=NULL; i++, vif = vif->next){
 			if(pfd[i].revents == POLLIN){
@@ -1274,15 +1508,15 @@ for(;;)
 				//Next line is a mac address filter.
 				if((memcmp(eh->dst,vif->mac,6) == 0) || (is_multicast_mac(eh->dst)) && (memcmp(eh->src,vif->mac,6)!=0)){
 					if(eh->buftype == ntohs(PTYPE_ARP)){
-						parse_arp(vdb_in);
+						pktin += parse_arp(vdb_in);
 					}
 					if(eh->buftype == ntohs(PTYPE_IP)){
-						parse_ip(vdb_in);
+						pktin += parse_ip(vdb_in);
 					}
 				}
 			}
 		}
-		if (pr>0) { // if there are already events to handle (performance: packet switching first)
+		if (pr>0) { // if there are still events to handle (performance: packet switching first)
 			int mgmtfdstart=numif;
 			if (mgmtindex >= 0) {
 				if (pfd[mgmtindex].revents != 0) {
@@ -1300,27 +1534,40 @@ for(;;)
 					if (pfd[i].revents) pr--;
 				}
 			} 
-/*			if (pr>0) // if there are already pending events, it means that a ctlfd has hunged up
-				exit(0);*/
 		}
 
 	}// END POLLRET > 0 
+	int outqueues = 0, outloop = 0;
+	pfdout = (struct pollfd *) malloc ((max_total_sockets) * sizeof(struct pollfd));
+	vif=VDEROUTER.interfaces;
+	while (vif){ 
+		pfdout[outqueues].fd = vde_datafd(vif->vdec);
+		pfdout[outqueues++].events = POLLOUT;
+		vif = vif->next;
+	}
+
+	if(pktin == 0){
+		vif=VDEROUTER.interfaces;
+		if (poll(pfdout,outqueues,0) > 0){
+			for(outloop = 0; outloop < outqueues; outloop++){
+				if(pfdout[outloop].revents&POLLOUT && vif->q_out){
+					vif->dequeue(vif);
+				}
+				vif=vif->next; 
+			}
+		}
+	}
+
 	while(VDEROUTER.arp_pending){
 		vdb_out=VDEROUTER.arp_pending;
 		ip_output_ready(vdb_out);
 		VDEROUTER.arp_pending=vdb_out->next;
 		//free(vdb_out);
 	}
-	vif=VDEROUTER.interfaces;
-	while(vif){
-		while(vif->q_out){
-			vdb_out=vif->q_out;
-			raw_send(vif,vdb_out);
-			vif->q_out=vdb_out->next;
-			//free(vdb_out);
-		}				
-		vif = vif->next;
-	}
+//	vif=VDEROUTER.interfaces;
+//	while (vif && ((!vif->q_out) || (!vif->dequeue(vif)))){
+//			vif = vif->next;
+//	}// POLLRET = 0
   }	
 }
 

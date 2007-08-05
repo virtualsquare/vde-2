@@ -7,6 +7,9 @@
  *
  */
 
+#ifndef __VDE_BUFF_H
+#define __VDE_BUFF_H
+
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
@@ -74,18 +77,44 @@ vde_route
 };
 
 
+
+
+
 struct vde_iface
 {
 	uint8_t id; 	// Interface number
-
 	VDECONN *vdec;		// vde connector
 	uint8_t mac[6];	// 6-byte unicast mac address
 	uint32_t ipaddr;	// 4-byte ip address
 	uint32_t nm;		// netmask
 	struct vde_buff *q_in;	
 	struct vde_buff *q_out;	
+	
+	/* Routing policy options */
+	char *policy_name;
+	int (*policy_init)(struct vde_iface *vif, char *args);
+	int (*enqueue)(struct vde_buff *vdb, struct vde_iface *vif);
+	int (*dequeue)(struct vde_iface *vif);
+	char *(*tc_stats)(struct vde_iface *vif);
+	uint32_t tc_priv[16];
+
+	
 	struct vde_iface *next;
 	
+};
+
+#define TC_PRIV_SIZE 16 * sizeof(uint32_t)
+
+struct
+routing_policy	
+{
+	char *name;
+	char *help;
+	int (*policy_init)(struct vde_iface *vif, char *args);
+	int (*enqueue)(struct vde_buff *vdb, struct vde_iface *vif);
+	int (*dequeue)(struct vde_iface *vif);
+	char *(*tc_stats)(struct vde_iface *vif);
+	struct routing_policy *next;
 };
 
 
@@ -98,7 +127,6 @@ arp_entry
 };
 
 
-
 struct 
 vde_router
 {
@@ -106,25 +134,10 @@ vde_router
 	struct vde_route *route_table;
 	struct arp_entry *arp_table;
 	struct vde_buff *arp_pending;
+	struct routing_policy *modlist;
 	uint32_t default_gw;
-	
 };
 
-
-inline struct vde_ethernet_header *ethhead(struct vde_buff *vdb)
-{
-	return (struct vde_ethernet_header*)(vdb->data);
-}
-
-inline struct iphdr *iphead(struct vde_buff *vdb)
-{
-	return (struct iphdr*)(vdb->data + 14);
-}
-
-inline void *payload(struct vde_buff *vdb)
-{
-	return (uint8_t*)(vdb->data + 14 + sizeof(struct iphdr));
-}
 
 
 
@@ -152,3 +165,13 @@ arp_header
 	uint8_t d_mac[6];
 	uint32_t d_addr;	
 };
+
+/*
+ * The main structure. Contains: interfaces, routing table,
+ * arp pending, etc.
+ */
+extern struct vde_router VDEROUTER; 
+void policy_register(struct routing_policy *r);
+size_t raw_send(struct vde_iface *of,struct vde_buff *vdb);
+
+#endif
