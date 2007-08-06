@@ -29,12 +29,10 @@ int pfifo_enqueue(struct vde_buff *vdb, struct vde_iface *vif)
 	if (pfifo->qlen < pfifo->limit){
 		pfifo->qlen++;
 		ufifo_enqueue(vdb,vif);
-		fprintf(stderr,"pfifo: queue = %lu limit = %lu\n",pfifo->qlen, pfifo->limit);
 		return 1;
 	}else{
 		/* Queue Full: dropping. */
 		free(vdb);
-		fprintf(stderr,"pfifo: queue full. dropping.\n");
 		pfifo->dropped++;
 		return 0;
 	}
@@ -49,7 +47,6 @@ int pfifo_dequeue(struct vde_iface *vif)
 	int not_empty = ufifo_dequeue(vif);
 	if(pfifo->qlen > 0)
 		pfifo->qlen--;
-	fprintf(stderr,"pfifo: dequeuing 1, queue = %lu limit = %lu\n",pfifo->qlen, pfifo->limit);
 	return (pfifo->qlen > 0);
 }
 
@@ -61,7 +58,6 @@ int pfifo_init(struct vde_iface *vif, char *args)
 {
 	struct tc_pfifo *pfifo=(struct tc_pfifo *)malloc(sizeof(struct tc_pfifo));
 	int arglen = strlen(args) - 1;
-	fprintf(stderr,"pfifo: initializing. args = %s\n",args);
 	
 	if ((arglen < 6) || strncmp(args,"limit ",6) || (sscanf(args+6, "%lu",&(pfifo->limit)) < 1) )
 		return 0;
@@ -77,7 +73,6 @@ char *pfifo_tc_stats(struct vde_iface *vif)
 {
 	struct tc_pfifo *pfifo = tcpriv(vif);
 	char *statistics=(char*)malloc(256);
-	snprintf(statistics,255," Queue len: %lu, Dropped: %lu",pfifo->limit, pfifo->dropped);
 	return statistics;
 	
 }

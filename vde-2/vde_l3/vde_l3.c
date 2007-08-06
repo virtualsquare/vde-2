@@ -1433,24 +1433,11 @@ int main(int argc, char *argv[])
 				vif->q_in = NULL;
 				vif->q_out = NULL;
 				vif->next = NULL;
-			/*
-				rp = getpolicy("pfifo");
-				if (!rp)
-					fprintf(stderr,"Error getting policy pfifo: %s",dlerror());
-				set_interface_policy(vif, rp);
-				
-				if(vif->policy_init(vif,"limit 30"))
-					fprintf(stderr,"PFIFO policy set.",dlerror());
-				else
-					fprintf(stderr,"Error setting policy.\n");
-*/
 				rp = getpolicy("ufifo");
 				if (!rp)
 					fprintf(stderr,"Error getting policy ufifo: %s",dlerror());
 				set_interface_policy(vif,rp);
-				if(vif->policy_init(vif,""))
-					fprintf(stderr,"Default 'ufifo' routing  policy set.\n",dlerror());
-				else{
+				if(!vif->policy_init(vif,"")){
 					fprintf(stderr,"Error setting default policy.\n");
 					exit(1);
 				}
