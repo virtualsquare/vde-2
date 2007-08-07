@@ -1533,15 +1533,13 @@ for(;;)
 		vif = vif->next;
 	}
 
-	if(pktin == 0){
-		vif=VDEROUTER.interfaces;
-		if (poll(pfdout,outqueues,0) > 0){
-			for(outloop = 0; outloop < outqueues; outloop++){
-				if(pfdout[outloop].revents&POLLOUT && vif->q_out){
-					vif->dequeue(vif);
-				}
-				vif=vif->next; 
+	vif=VDEROUTER.interfaces;
+	if (poll(pfdout,outqueues,0) > 0){
+		for(outloop = 0; outloop < outqueues; outloop++){
+			if(pfdout[outloop].revents&POLLOUT && vif->q_out){
+				vif->dequeue(vif);
 			}
+			vif=vif->next; 
 		}
 	}
 
@@ -1551,10 +1549,6 @@ for(;;)
 		VDEROUTER.arp_pending=vdb_out->next;
 		//free(vdb_out);
 	}
-//	vif=VDEROUTER.interfaces;
-//	while (vif && ((!vif->q_out) || (!vif->dequeue(vif)))){
-//			vif = vif->next;
-//	}// POLLRET = 0
   }	
 }
 
