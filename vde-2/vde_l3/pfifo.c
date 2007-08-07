@@ -16,6 +16,7 @@ struct tc_pfifo
 	uint32_t dropped;
 };
 
+#define pfifo_tcpriv(x) (struct tc_pfifo*)(tcpriv(x))
 
 /*
  * Enqueue function. Try to add the packet 'vdb' to the output queue
@@ -25,7 +26,7 @@ struct tc_pfifo
  */
 int pfifo_enqueue(struct vde_buff *vdb, struct vde_iface *vif)
 {
-	struct tc_pfifo *pfifo = tcpriv(vif); 
+	struct tc_pfifo *pfifo = pfifo_tcpriv(vif); 
 	if (pfifo->qlen < pfifo->limit){
 		pfifo->qlen++;
 		ufifo_enqueue(vdb,vif);
@@ -43,7 +44,7 @@ int pfifo_enqueue(struct vde_buff *vdb, struct vde_iface *vif)
  */
 int pfifo_dequeue(struct vde_iface *vif)
 {
-	struct tc_pfifo *pfifo = tcpriv(vif);
+	struct tc_pfifo *pfifo = pfifo_tcpriv(vif);
 	int not_empty = ufifo_dequeue(vif);
 	if(pfifo->qlen > 0)
 		pfifo->qlen--;
@@ -71,8 +72,9 @@ int pfifo_init(struct vde_iface *vif, char *args)
 
 char *pfifo_tc_stats(struct vde_iface *vif)
 {
-	struct tc_pfifo *pfifo = tcpriv(vif);
+	struct tc_pfifo *pfifo = pfifo_tcpriv(vif);
 	char *statistics=(char*)malloc(256);
+	snprintf(statistics,255,"Limit: %lu packets. Dropped: %lu packets.", pfifo->limit, pfifo->dropped);
 	return statistics;
 	
 }
