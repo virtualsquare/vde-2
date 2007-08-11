@@ -73,7 +73,7 @@
 #define ST_WAIT_AUTH 5
 #define ST_IDSENT 6
 
-#define SESSION_TIMEOUT 10
+#define SESSION_TIMEOUT 120
 #define time_now(x) gettimeofday(x,NULL)
 
 
@@ -123,7 +123,7 @@ void
 removepeer(struct peer *np);
 
 struct peer 
-*generate_key (struct peer*);
+*generate_key (struct peer*, char*);
 
 void 
 blowfish_init(int);
@@ -147,7 +147,7 @@ void
 deny_access(struct peer *p);
 
 void
-rcv_login(struct datagram *pkt, struct peer *p);
+rcv_login(struct datagram *pkt, struct peer *p, char *);
 
 struct peer
 *getpeerbynewaddr(struct sockaddr_in saddr);

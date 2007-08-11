@@ -40,7 +40,7 @@ static int localport;
 static int remoteport;
 static int may_login=1;
 static struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
-
+static char *pre_shared;
 /*
  * Manage dead children, avoid zombies.
  */
@@ -59,13 +59,8 @@ static struct peer *generate_and_xmit(struct peer *ret){
 	int res;
 	struct hostent *target;
 
-	//fprintf(stderr,"Generating new key..\n");
-	ret=generate_key(ret);
-	/*fprintf(stderr,"Key:");
-	for(i=0;i<16;i++)
-		fprintf(stderr,"%02X",ret->key[i]);
-	fprintf(stderr,"\n");
-	*/
+
+	ret=generate_key(ret,pre_shared);
 
 	if(!ret){
 		fprintf(stderr,"Couldn't create the secret key.\n");
@@ -81,19 +76,20 @@ static struct peer *generate_and_xmit(struct peer *ret){
 	ret->in_a.sin_family = AF_INET;
 	ret->in_a.sin_port = htons(remoteport);
 	ret->in_a.sin_addr.s_addr=((struct in_addr *)(target->h_addr))->s_addr;
+	if(!pre_shared){		
+		if(remoteusr)
+			sprintf(command,"scp /tmp/.blowfish.key %s@%s:/tmp/.%s.key\0", remoteusr, remotehost, ret->id);	
+		else
+			sprintf(command,"scp /tmp/.blowfish.key %s:/tmp/.%s.key\0", remotehost, ret->id);
+		//fprintf(stderr,"Contacting host: %s ",remotehost);
+		res=system(command);
 		
-	if(remoteusr)
-		sprintf(command,"scp /tmp/.blowfish.key %s@%s:/tmp/.%s.key\0", remoteusr, remotehost, ret->id);
-	else
-		sprintf(command,"scp /tmp/.blowfish.key %s:/tmp/.%s.key\0", remotehost, ret->id);
-	//fprintf(stderr,"Contacting host: %s ",remotehost);
-	res=system(command);
-	
-	if(res==0){
-	//	fprintf(stderr,"Key successfully transferred using a secure channel.\n");
-	}else{
-		fprintf(stderr,"Couldn't transfer the secret key.\n");
-		exit(253);
+		if(res==0){
+		//	fprintf(stderr,"Key successfully transferred using a secure channel.\n");
+		}else{
+			fprintf(stderr,"Couldn't transfer the secret key.\n");
+			exit(253);
+		}
 	}
 	return ret;
 }
@@ -189,7 +185,7 @@ vde_plug(struct peer *p)
 static void Usage(void)
 {
 
-	fprintf(stderr,"Usage: %s [-s socketname] [-c [remoteuser@]remotehost[:remoteport]] [-p localport] [-d] \n",programname);
+	fprintf(stderr,"Usage: %s [-s socketname] [-c [remoteuser@]remotehost[:remoteport]] [-p localport] [-P pre-shared/key/path] [-d] \n",programname);
 	exit(1);
 }
 
@@ -228,6 +224,7 @@ int main(int argc, char **argv)
 
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
+	pre_shared=NULL;
 
 	programname=argv[0];		
 	plugname="/tmp/vde.ctl";
@@ -249,11 +246,11 @@ int main(int argc, char **argv)
 			  {"unix", 1, 0, 's'},
 			  {"localport", 1, 0, 'p'},
 			  {"connect",1,0,'c'},
-			  {"mod",1,0,'m'},
+			  {"preshared ",1,0,'P'},
 			  {"help",0,0,'h'},
 			  {0, 0, 0, 0}
 		  };
-		  c = GETOPT_LONG (argc, argv, "s:p:c:h",
+		  c = GETOPT_LONG (argc, argv, "s:p:c:P:h",
 				  long_options, &option_index);
 		  if (c == -1)
 			  break;
@@ -299,8 +296,9 @@ int main(int argc, char **argv)
 				localport=atoi(optarg);
 				break;
 				
-			  case 'm': 
-				sscanf(optarg,"%o",&(open_args.mode));
+			  case 'P': 
+				pre_shared=strdup(optarg);
+				fprintf(stderr,"Using pre-shared key %s\n",pre_shared);
 				break;
 
 			  case 'h':
@@ -311,6 +309,13 @@ int main(int argc, char **argv)
 	  if(optind < argc)
 		  Usage();
   }
+	if(pre_shared && access(pre_shared,R_OK)!=0){
+		fprintf(stderr,"Error accessing pre-shared key %s\n",pre_shared);
+		perror ("access");
+		exit(1);
+	}
+		
+		
 
 	memset ((char *)&myaddr, 0, sizeof(myaddr));
 	myaddr.sin_family = AF_INET;
@@ -376,7 +381,7 @@ int main(int argc, char **argv)
 							p1->state=ST_OPENING;
 						}
 						p1->counter=0;
-						rcv_login(pkt,p1);
+						rcv_login(pkt,p1,pre_shared);
 						break;
 						
 					case CMD_RESPONSE:
@@ -429,7 +434,7 @@ int main(int argc, char **argv)
 							addpeer(p1);
 							p1->state=ST_OPENING;
 							p1->counter=0;
-							rcv_login(pkt,p1);
+							rcv_login(pkt,p1,pre_shared);
 						}
 						break;
 						
