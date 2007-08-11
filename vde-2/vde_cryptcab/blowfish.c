@@ -548,19 +548,25 @@ send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
  * Client only.
  */
 struct peer
-*generate_key (struct peer *ret)
+*generate_key (struct peer *ret, char *pre_shared)
 {
 	int i, fd=-1, od=-1, createnow=0;
 	unsigned char key[16];
 	unsigned char iv[8];
 	unsigned char c;
+	char *path;
+	char random[]="/dev/urandom";
+	if (pre_shared)
+		path=pre_shared;
+	else
+		path=random;
 	
 	if(!ret){
 		ret=malloc(sizeof(struct peer));
 		bzero(ret,sizeof(struct peer));
 		createnow=1;
 	}
-	if ( ((fd = open ("/dev/random", O_RDONLY)) == -1)||
+	if ( ((fd = open (path, O_RDONLY)) == -1)||
 			 ((read (fd, key, 16)) == -1) ||
 			 ((read (fd, iv, 8)) == -1) )
 	{
@@ -612,7 +618,7 @@ static void
 send_challenge(struct peer *p)
 {
 	int fd;
-	if ( ((fd = open ("/dev/random", O_RDONLY)) == -1)||
+	if ( ((fd = open ("/dev/urandom", O_RDONLY)) == -1)||
 			 ((read (fd, p->challenge, 128)) != -1))
 	{	
 		send_udp((unsigned char *)p->challenge,128,p,PKT_CTL|CMD_CHALLENGE);
@@ -648,11 +654,16 @@ rcv_challenge(struct datagram *pkt, struct peer *p)
  * Receive a login request. Send challenge.
  */
 void
-rcv_login(struct datagram *pkt, struct peer *p)
+rcv_login(struct datagram *pkt, struct peer *p, char *pre_shared)
 {
 	int fd;
 	char filename[128];
-	snprintf(filename,127,"/tmp/.%s.key\0",pkt->data+1);
+	if(!pre_shared)
+		snprintf(filename,127,"/tmp/.%s.key\0",pkt->data+1);
+	else
+		snprintf(filename,127,"%s",pre_shared);
+
+		
 //	fprintf(stderr,"Filename:%s\n",filename);
 	if (((fd = open (filename, O_RDONLY)) == -1)||
  			((read (fd, p->key, 16)) == -1) ||
