@@ -75,12 +75,26 @@ static int countnewnics(int argc,char *argv[])
 static int isdaemonize(int argc,char *argv[])
 {
 	register int daemonize=0;
-	while (argc > 0 && !daemonize) {
-		if (strcmp(argv[0],"-daemonize")==0)
-			daemonize=1;
-		else {
+	if(strcmp(filename,"qemu")==0){
+		int daemonadds=0;
+		while (argc > 0) {
+			if (strcmp(argv[0],"-daemonize")==0)
+				daemonize=1;
+			if ((strcmp(argv[0],"-vnc")==0) || (strcmp(argv[0],"-nographic")==0))
+				daemonadds=1;
 			argv++;
 			argc--;
+		}
+		if(daemonize && !daemonadds) daemonize = 0;
+	}
+	else {
+		while (argc > 0 && !daemonize) {
+			if (strcmp(argv[0],"-daemonize")==0)
+				daemonize=1;
+			else {
+				argv++;
+				argc--;
+			}
 		}
 	}
 	return daemonize;
