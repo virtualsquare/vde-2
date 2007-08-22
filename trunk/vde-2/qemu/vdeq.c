@@ -72,6 +72,21 @@ static int countnewnics(int argc,char *argv[])
 	return nics;
 }
 
+static int isdaemonize(int argc,char *argv[])
+{
+	register int daemonize=0;
+	while (argc > 0 && !daemonize) {
+		if (strcmp(argv[0],"-daemonize")==0)
+			daemonize=1;
+		else {
+			argv++;
+			argc--;
+		}
+	}
+	return daemonize;
+}
+
+
 static void usage(void) 
 {
 	if (strcmp(vdeqname,"vdeq") != 0 && strncmp(vdeqname,"vde",3)==0) {
@@ -148,11 +163,10 @@ static void setsighandlers()
 					strerror(errno));
 }
 
-static void leave(int sig)
+static void sigchld_handler(int sig)
 {
-	fprintf(stderr,"qemu exited: %s quits\n", vdeqname);
-	cleanup();
-	exit(0);
+	int exit_value;
+	wait(&exit_value);
 }
 
 static int checkver(char *prog)
@@ -246,6 +260,7 @@ int main(int argc, char **argv)
   int result;
   register ssize_t nx;
   int newargc;
+	int daemonize;
   char **newargv;
   typedef int pair[2];
   pair *sp;
@@ -274,6 +289,7 @@ int main(int argc, char **argv)
   } else {
 	  usage();
   }
+	daemonize=isdaemonize(argc-1,argv+1);
 	if ((ver=checkver(filename)) < 0x800) 
 		oldsyntax=1;
 	if (!oldsyntax) {
@@ -437,54 +453,61 @@ int main(int argc, char **argv)
 
   if (fork()) {
 	  close(0); 
-	  signal(SIGCHLD, leave);
+	  signal(SIGCHLD, sigchld_handler);
 	  for (i=0; i<nb_nics; i++) 
 		  close(sp[i][0]);
+		if (daemonize)
+			daemon(1,1);
 	  for(;;) {
-	    if ((result=poll(pollv,2*nb_nics,-1)) < 0) {
-	      perror("poll");
-	      cleanup();
-	      exit(1);
-	    }
-	    for (i=0; i<nb_nics; i++) {
-	      if (pollv[2*i].revents & POLLHUP || pollv[2*i+1].revents & POLLHUP)
-		break;
-	      if (pollv[2*i].revents & POLLIN) {
-		if ((nx=read(sp[i][1],bufin,sizeof(bufin))) < 0) {
-		  perror("read");
-		  cleanup();
-		  exit(1);
+			if ((result=poll(pollv,2*nb_nics,-1)) < 0) {
+				if (errno != EINTR) {
+					perror("poll");
+					cleanup();
+					exit(1);
+				}
+			} else {
+				for (i=0; i<nb_nics; i++) {
+					if (pollv[2*i].revents & POLLHUP || pollv[2*i+1].revents & POLLHUP)
+						break;
+					if (pollv[2*i].revents & POLLIN) {
+						if ((nx=read(sp[i][1],bufin,sizeof(bufin))) <= 0) {
+							if (nx < 0) 
+								perror("read");
+							cleanup();
+							exit(nx < 0);
+						}
+						//fprintf(stderr,"RX from qemu %d\n",nx);
+						if (vde_send(conn[i],bufin,nx,0) < 0) {
+							perror("sendto");
+							cleanup();
+							exit(1);
+						}
+					}
+					if (pollv[2*i+1].revents & POLLIN) {
+						if ((nx=vde_recv(conn[i],bufin,BUFSIZE,0)) < 0) {
+							perror("recvfrom");
+							cleanup();
+							exit(1);
+						}
+						//fprintf(stderr,"TX to qemu %d\n",nx);
+						if (write(sp[i][1],bufin,nx) < 0) {
+							if (errno != ECONNREFUSED)
+								perror("write");
+							cleanup();
+							exit(errno != ECONNREFUSED);
+						}
+					}
+				}
+			}
 		}
-		//fprintf(stderr,"RX from qemu %d\n",nx);
-		if (vde_send(conn[i],bufin,nx,0) < 0) {
-		  perror("sendto");
-		  cleanup();
-		  exit(1);
+	} else {
+		for (i=0; i<nb_nics; i++) {
+			close(sp[i][1]);
+			close(vde_datafd(conn[i]));
+			close(vde_ctlfd(conn[i]));
 		}
-	      }
-	      if (pollv[2*i+1].revents & POLLIN) {
-		if ((nx=vde_recv(conn[i],bufin,BUFSIZE,0)) < 0) {
-		  perror("recvfrom");
-		  cleanup();
-		  exit(1);
-		}
-		//fprintf(stderr,"TX to qemu %d\n",nx);
-		if (write(sp[i][1],bufin,nx) < 0) {
-		  perror("write");
-		  cleanup();
-		  exit(1);
-		}
-	      }
-	    }
-	  }
-  } else {
-	  for (i=0; i<nb_nics; i++) {
-		  close(sp[i][1]);
-		  close(vde_datafd(conn[i]));
-		  close(vde_ctlfd(conn[i]));
-	  }
-	  execvp(filename,newargv);
-  }  
+		execvp(filename,newargv);
+	}  
 	cleanup();
-  return(0);
+	return(0);
 }
