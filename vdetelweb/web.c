@@ -510,7 +510,7 @@ static char authmsg2[]= "\"\r\n"
 "</HEAD><BODY>\r\n"
 "<H1>Authorization Required</H1>\r\n"
 "Login and Password required\r\n"
-"<hr>\r\nVDE 2.0 WEB MGMT INTERFACE</H1>\r\n"
+"<hr>\r\nVDE 2.0 WEB MGMT INTERFACE\r\n"
 "</BODY></HTML>\r\n";
 
 
