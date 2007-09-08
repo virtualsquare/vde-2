@@ -25,7 +25,7 @@ password=piripicchio
 
 VDETELWEB creates a telnet and/or web interface to a running VDE switch.
 The switch must have been started with the remote mgmt option (-m).
-% vde_switch -m /tmp/vde.mgmt -daemon
+% vde_switch -M /tmp/vde.mgmt -daemon
 
 Launch the tool:
 
