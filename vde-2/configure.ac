@@ -63,7 +63,6 @@ AC_MSG_CHECKING([for broken poll()])
 		AC_DEFINE([HAVE_POLL], 0, [Define to 1 if your system has a working poll() function.])
 		AC_LIBOBJ([poll])
 		AC_DEFINE([poll], [rpl_poll], [Define to rpl_poll if the replacement function should be used.])
-
 	else
 		AC_DEFINE([HAVE_POLL], 1, [Define to 1 if your system has a working poll() function.])
 		AC_MSG_RESULT([no])
@@ -114,7 +113,7 @@ AC_ARG_ENABLE([tuntap],
 		linux*)
 			AC_CHECK_HEADER([linux/if_tun.h],
 				[AC_DEFINE([HAVE_TUNTAP], 1, [If defined, tuntap support is compiled in])],
-				[AC_MSG_WARN([Tuntap support seem to be not enabled on your kernel])])
+				[warn_tuntap=yes])
 			can_make_libvdetap=yes
 			;;
 		darwin*)
@@ -128,6 +127,7 @@ AC_ARG_ENABLE([tuntap],
 					eval HAVE_$definename=yes
 				else
 					AC_MSG_RESULT([no])
+					warn_tuntap=yes
 				fi
 			done
 			
@@ -138,6 +138,7 @@ AC_ARG_ENABLE([tuntap],
 configuration does work...])
 				fi
 			else
+				warn_tuntap=yes
 				AC_MSG_WARN([You do not have tuntap support. You can get it here:
 http://www-user.rhrk.uni-kl.de/~nissler/tuntap/])
 			fi
@@ -145,7 +146,7 @@ http://www-user.rhrk.uni-kl.de/~nissler/tuntap/])
 		freebsd*)
 			AC_CHECK_HEADER([net/if_tun.h],
 				[AC_DEFINE([HAVE_TUNTAP], 1, [If defined, tuntap support is compiled in])],
-				[AC_MSG_WARN([Tuntap support seem to be not enabled on your kernel])])
+				[warn_tuntap=yes])
 			;;
 	esac])
 
@@ -160,7 +161,6 @@ if test "x${prefix}" = "xNONE"; then
 else
 	AC_DEFINE_UNQUOTED(INSTALLPATH, "${prefix}",[PREFIX])
 fi
-
 
 AC_CONFIG_FILES([Makefile]
 		[doc/Makefile]
@@ -185,16 +185,40 @@ AC_CONFIG_FILES([Makefile]
 		[vde_autolink/Makefile])
 AC_OUTPUT
 
-if test x$warn_cryptcab = "xyes"
-then
-	AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
+
+echo
+echo
+echo "Configure results:"
+echo
+if test x$add_cryptcab_support = "xyes" ; then
+	echo " vde_cryptcab : enabled"
+else
+	echo " vde_cryptcab : disabled"
+	if test x$warn_cryptcab = "xyes" ; then
+		AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
 not installed on your system, or because openssl/blowfish.h could not be
 found. Please install them if you want CryptCab to be compiled and installed.])
+	fi
 fi
-
-if test x$warn_pcap = "xyes"
-then
+if test x$warn_tuntap = "xyes" ; then
+	echo " tuntap support : disabled"
+else
+	echo " tuntap support : enabled"
+fi
+if test x$warn_pcap = "xyes" ; then
+	echo " pcap support : disabled"
 	AC_MSG_WARN([VDE packet dump plugin has been disabled because libpcap is
 not installed on your system, or because it's too old.
 Please install it if you want pdump to be compiled and installed.])
+else
+	echo " pcap support : enabled"
 fi
+if test x$enable_experimental = "xyes" ; then
+	echo " experimental features : enabled"
+else
+	echo " experimental features : disabled"
+fi
+echo
+echo "Type 'make' to compile $PACKAGE $VERSION"
+echo "and then type 'make install' to install it into $prefix"
+echo

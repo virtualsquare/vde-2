@@ -4,8 +4,8 @@ moddir = $(pkglibdir)/vde_l3
 AM_LDFLAGS = -module -avoid-version -export-dynamic
 AM_LIBTOOLFLAGS = --tag=disable-static
 
-install-data-hook:
-	cd "$(DESTDIR)/$(moddir)" && rm -f $(mod_LTLIBRARIES)
+#install-data-hook:
+#	cd "$(DESTDIR)/$(moddir)" && rm -f $(mod_LTLIBRARIES)
 
 mod_LTLIBRARIES = pfifo.la tbf.la
 pfifo_la_SOURCES = pfifo.c  vde_buff.h
