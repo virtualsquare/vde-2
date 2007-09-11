@@ -6,3 +6,5 @@ install-exec-hook:
 	rm -f $(DESTDIR)$(bindir)/vdecmd
 	(cd $(DESTDIR)$(bindir) && $(LN_S) unixcmd vdecmd)
 
+uninstall-local:
+	rm -f $(bindir)/vdecmd
