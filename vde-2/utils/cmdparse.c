@@ -181,7 +181,7 @@ struct utm *utm_alloc(char *conf)
 				*s=c;
 				s=blankskip(s);
 				currfield=s;
-				if (*currfield=='\'') {
+				if (*currfield=='\'') { /* first argument is a string */
 					char *t;
 					char skip=0; /*not escaped*/
 					t=currfield=++s; /* skip ' */
@@ -344,8 +344,17 @@ int utm_run(struct utm *utm, struct utm_buf *buf, int fd, int argc, char **argv,
 				else
 					status=status->next;
 				break;
-			case RVATOI: /* remember current number as return value */
-				rv = linebuf ? atoi(linebuf+curr) : -1;
+			case RVATOI: /* remember current number as return value the
+						optional argument is the base to convert from*/
+				if(!linebuf){
+					rv = -1;
+				}else if( status->nextnum <= 0 ){
+					rv = strtol(linebuf+curr, NULL, 10);
+				}else if( status->nextnum >= 2 && status->nextnum <= 36 ){
+					rv = strtol(linebuf+curr, NULL, status->nextnum);
+				}else{
+					rv = -1;
+				}
 				status=status->next;
 				break;
 			case OUTSHIFT: /* alloc another output buffer and use it */
