@@ -31,6 +31,8 @@
 static int pflag=0;
 static int numports;
 
+static struct port **portv;
+
 #ifdef DEBUGOPT
 #define DBGPORTNEW (dl) 
 #define DBGPORTDEL (dl+1) 
@@ -111,7 +113,6 @@ bitarray validvlan;
 
 #define IS_BROADCAST(addr) ((addr[0] & 1) == 1)
 
-static struct port **portv;
 
 static int alloc_port(unsigned int portno)
 {
@@ -521,8 +522,8 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 				else                               /* UNTAG->TAG */
 					SEND_PACKET_PORT(portv[tarport],tarport,UNTAG2TAG(packet,vlan,len),len);
 			}
-		}
-	}
+		} /* if(BROADCAST) */
+	} /* if(PACKETFILTER) */
 }
 
 /**************************************** COMMAND MANAGEMENT ****************************************/
@@ -531,6 +532,11 @@ static int showinfo(FILE *fd)
 {
 	printoutc(fd,"Numports=%d",numports);
 	printoutc(fd,"HUB=%s",(pflag & HUB_TAG)?"true":"false");
+#ifdef PORTCOUNTERS
+	printoutc(fd,"counters=true");
+#else
+	printoutc(fd,"counters=false");
+#endif
 	return 0;
 }
 
@@ -970,7 +976,7 @@ static int setmacaddr(char *strmac)
 
 static struct comlist cl[]={
 	{"port","============","PORT STATUS MENU",NULL,NOARG},
-	{"port/showinfo","","show hash info",showinfo,NOARG|WITHFILE},
+	{"port/showinfo","","show port info",showinfo,NOARG|WITHFILE},
 	{"port/setnumports","N","set the number of ports",portsetnumports,INTARG},
 	/*{"port/setmacaddr","MAC","set the switch MAC address",setmacaddr,STRARG},*/
 	{"port/sethub","0/1","1=HUB 0=switch",portsethub,INTARG},
