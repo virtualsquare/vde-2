@@ -75,7 +75,7 @@ int packetfilter(struct dbgcl* cl, ...);
 #define DBGOUT(CL, ...) 
 #define EVENTOUT(CL, ...) 
 #define PACKETFILTER(CL, PORT, BUF, LEN)  (LEN)  
-#endif
+#endif /* DEBUGOPT */
 
 #endif
 

@@ -56,6 +56,8 @@ static int setfname(FILE *fd, char *arg)
 			pcap_dump_close(dumper);	
 
 		dumpfile = strdup(arg);
+		if(!desc)
+			desc = pcap_open_dead(DLT_EN10MB, 96);
 		dumper = pcap_dump_open(desc, dumpfile);
 	}
 	
