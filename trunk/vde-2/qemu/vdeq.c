@@ -33,6 +33,7 @@
 #define ETH_ALEN 6
 #define MAXDESCR 128
 
+int exit_value = 256; /* out of range for exit status possible values */
 static int nb_nics;
 VDECONN **conn;
 
@@ -179,8 +180,12 @@ static void setsighandlers()
 
 static void sigchld_handler(int sig)
 {
-	int exit_value;
-	wait(&exit_value);
+	int ev;
+	wait(&ev);
+	if (WIFEXITED(ev))
+		exit_value=WEXITSTATUS(ev);
+	else
+		exit_value=255;
 }
 
 static int checkver(char *prog)
@@ -211,8 +216,8 @@ static int checkver(char *prog)
 				}
 			}
 		}
-		waitpid(f,&status,0);
 		close(fd[0]);
+		waitpid(f,&status,0);
 	}
 	else if (f==0) {
 		close(fd[0]);
@@ -478,6 +483,9 @@ int main(int argc, char **argv)
 					perror("poll");
 					cleanup();
 					exit(1);
+				} else {
+					if ((exit_value < 256) || !daemonize)
+						exit(exit_value);
 				}
 			} else {
 				for (i=0; i<nb_nics; i++) {
