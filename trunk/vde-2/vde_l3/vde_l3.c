@@ -873,7 +873,7 @@ static int showinfo(int fd,char *s)
 static int help(int fd,char *s)
 {
 	printoutc(fd, "help      					Display this inline help");
-	printoutc(fd, "ifconfig [veN [ADDRESS [netmask NETMASK]]]   	Display virtual ethernet options/configure virtual ethernet N");
+	printoutc(fd, "ifconfig [vdN [ADDRESS [netmask NETMASK]]]   	Display virtual ethernet options/configure virtual ethernet N");
 	printoutc(fd, "route list					Print out the routing table");
 	printoutc(fd, "route net ADDRESS/NETMASK gw GATEWAY     	Add static route");
 	printoutc(fd, "route default gw GATEWAY     			Add default route");
@@ -900,19 +900,19 @@ static int route(int fd,char *s)
 		printoutc(fd,"Destination\tGateway\t\tGenmask\t\tIface");
 		pi = VDEROUTER.interfaces;
 		while(pi){
-			printoutc(fd,"%s\t%s\t\t%s\t\tve%d",ip2ascii(pi->ipaddr&pi->nm),ip2ascii(0),ip2ascii(pi->nm),pi->id);
+			printoutc(fd,"%s\t%s\t\t%s\t\tvd%d",ip2ascii(pi->ipaddr&pi->nm),ip2ascii(0),ip2ascii(pi->nm),pi->id);
 			pi=pi->next;
 		}
 		pr = VDEROUTER.route_table;
 		while(pr){
 			pi=is_neightbor(pr->gw);
 			if(pi)
-				printoutc(fd,"%s\t%s\t\t%s\t\tve%d",ip2ascii(pr->network&pr->nm),ip2ascii(pr->gw),ip2ascii(pr->nm),pi->id);
+				printoutc(fd,"%s\t%s\t\t%s\t\tvd%d",ip2ascii(pr->network&pr->nm),ip2ascii(pr->gw),ip2ascii(pr->nm),pi->id);
 			pr=pr->next;
 		}
 		pi=is_neightbor(VDEROUTER.default_gw);
 		if(VDEROUTER.default_gw)
-			printoutc(fd,"%s\t\t%s\t\t%s\t\tve%d",ip2ascii(0),ip2ascii(VDEROUTER.default_gw),ip2ascii(0),pi->id);
+			printoutc(fd,"%s\t\t%s\t\t%s\t\tvd%d",ip2ascii(0),ip2ascii(VDEROUTER.default_gw),ip2ascii(0),pi->id);
 	}
 	//Route default
 	if(strncmp(s,"default gw ",11)==0){
@@ -980,7 +980,7 @@ static int if_display(int fd, char *iface){
 		pi=VDEROUTER.interfaces;
 	}else{
 
-		if(strncmp(iface,"ve",2)!=0){
+		if(strncmp(iface,"vd",2)!=0){
 			return -1;
 		}
 	
@@ -993,7 +993,7 @@ static int if_display(int fd, char *iface){
 		showone = 1;
 	}
 	while(pi){
-		printoutc(fd, "ve%d\tLink encap: vde HWaddr %s",pi->id, mac2ascii(pi->mac));
+		printoutc(fd, "vd%d\tLink encap: vde HWaddr %s",pi->id, mac2ascii(pi->mac));
 		printoutc(fd, "\tinet addr:%s Netmask:%s", ip2ascii(pi->ipaddr),  ip2ascii(pi->nm));
 		printoutc(fd,"");			
 		if(showone) return 0;
@@ -1043,7 +1043,7 @@ static int ifconfig(int fd, char *s)
 		mode = IF_CHALL;
 	}
 	
-	if(strncmp(iface,"ve",2)!=0){
+	if(strncmp(iface,"vd",2)!=0){
 		goto cmdfail;
 	}
 	
@@ -1070,7 +1070,7 @@ static int ifconfig(int fd, char *s)
 
 cmdfail:
 	printoutc(fd, "'ifconfig' command usage:");
-	printoutc(fd, "ifconfig [veN [ADDRESS [netmask NETMASK]]]");
+	printoutc(fd, "ifconfig [vdN [ADDRESS [netmask NETMASK]]]");
 	return 0;	
 }
 
@@ -1087,7 +1087,7 @@ static int traffic_control(int fd, char *s)
 	}
 
 	//tc ls
-	if (arglen == 2 && strncmp(s,"ls",2)==0){
+	if (arglen == 2 && (strncmp(s,"ls",2)==0)){
 		pi = VDEROUTER.interfaces;
 		while (pi){
 			printoutc(fd, "vd%d: %s. %s", pi->id, pi->policy_name, pi->tc_stats(pi));
@@ -1097,7 +1097,7 @@ static int traffic_control(int fd, char *s)
 	}
 	
 	//tc set 
-	if (arglen > 4 && strncmp(s,"set",3) == 0){
+	if (arglen > 4 && (strncmp(s,"set",3) == 0)){
 		iface = s+4;
 		policy=index(iface,' ');
 		if(policy)
@@ -1132,7 +1132,7 @@ static int traffic_control(int fd, char *s)
 			set_interface_policy(pi, pp);
 			if (!pi->policy_init(pi,args)){
 				printoutc(fd, "%s: syntax error.\n%s",pp->name,pp->help);
-				return 0;
+				goto tccmdfail;
 			}
 		
 		}
@@ -1144,7 +1144,7 @@ tccmdfail:
 	printoutc(fd, "'tc' command usage:");
 	printoutc(fd, "tc ls					Print out the routing policy for each interface");
 	printoutc(fd, "tc set <DEV> <policy> <arguments>     	Change routing policy");
-	return -1;
+	return 0;
 
 }
 
