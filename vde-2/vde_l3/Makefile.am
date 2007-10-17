@@ -7,11 +7,13 @@ AM_LIBTOOLFLAGS = --tag=disable-static
 #install-data-hook:
 #	cd "$(DESTDIR)/$(moddir)" && rm -f $(mod_LTLIBRARIES)
 
-mod_LTLIBRARIES = pfifo.la tbf.la
+mod_LTLIBRARIES = pfifo.la tbf.la bfifo.la
 pfifo_la_SOURCES = pfifo.c  vde_buff.h
 tbf_la_SOURCES = tbf.c  vde_buff.h
+bfifo_la_SOURCES = bfifo.c  vde_buff.h
 
 pfifo_la_LIBADD = $(LTLIBOBJS)
+bfifo_la_LIBADD = $(LTLIBOBJS)
 tbf_la_LIBADD = $(LTLIBOBJS)
 
 bin_PROGRAMS = vde_l3
