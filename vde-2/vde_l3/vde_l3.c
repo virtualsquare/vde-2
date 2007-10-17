@@ -1212,10 +1212,12 @@ static int mgmtcommand(int fd)
 	n = read(fd, buf, MAXCMD);
 	if (n<0) {
 		fprintf(stderr,"%s: read from mgmt %s",progname,strerror(errno));
-		return 0;
-	}
-	else if (n==0) 
 		return -1;
+	}
+	else if (n==0){ 
+		return -1;
+		/* Remote end has closed connection. */
+	}
 	else {
 		if (fd==STDIN_FILENO)
 			outfd=STDOUT_FILENO;
