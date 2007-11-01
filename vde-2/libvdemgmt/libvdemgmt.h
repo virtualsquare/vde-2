@@ -92,7 +92,7 @@ extern int vdemgmt_sendcmd(struct vdemgmt *conn, const char *cmd, struct vdemgmt
  * 
  * @return 0 on success, error code otherwise
  */
-extern int vdemgmt_asyncreg(struct vdemgmt *conn, const char *event, void (*callback)(const char *event, const char *data) );
+extern int vdemgmt_asyncreg(struct vdemgmt *conn, const char *event, void (*callback)(const char *event, const int tag, const char *data) );
 
 /** 
  * @brief vdemgmt_asyncunreg - Unregister func handler for async output from debug events

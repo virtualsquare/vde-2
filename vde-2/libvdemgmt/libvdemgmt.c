@@ -59,7 +59,7 @@ static struct utm* asyncrecv_utm=NULL;
 
 struct asynctab {
 	const char *event;
-	void (*callback)(const char *event, const char *data);
+	void (*callback)(const char *event, const int tag, const char *data);
 	struct asynctab *next;
 };
 
@@ -252,7 +252,7 @@ int vdemgmt_sendcmd(struct vdemgmt *conn, const char *cmd, struct vdemgmt_out *o
 		}
 		if( p->tag == ASYNTAG ){
 			t=atab_find(conn->atab, p->buf+SKIPHEAD);
-			if(t) t->callback(t->event, p->buf+strlen(t->event)+SKIPHEAD+1);
+			if(t) t->callback(t->event, rv, p->buf+strlen(t->event)+SKIPHEAD+1);
 		}
 		p=p->next;
 	}
@@ -282,7 +282,7 @@ void vdemgmt_rstout(struct vdemgmt_out *out)
 }
 
 /* register func as handler for asyncronous output received with command cmd */
-int vdemgmt_asyncreg(struct vdemgmt *conn, const char *event, void (*callback)(const char *event, const char *data) )
+int vdemgmt_asyncreg(struct vdemgmt *conn, const char *event, void (*callback)(const char *event, const int tag, const char *data) )
 {
 
 	struct asynctab *new = NULL;
@@ -329,6 +329,8 @@ error:
 void vdemgmt_asyncrecv(struct vdemgmt *conn)
 {
 	int myargc=0;
+	int prevpos=0;
+	int outtag=0;
 	char *myargv=NULL;
 	struct utm_out *out;
 	struct asynctab *t;
@@ -337,9 +339,11 @@ void vdemgmt_asyncrecv(struct vdemgmt *conn)
 	
 	/* run async machine and call the handler for the event */
 	do {
-		CHECK( utm_run(asyncrecv_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM), -1 );
+		outtag=utm_run(asyncrecv_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM);
+		CHECK( outtag, -1 );
 		t=atab_find(conn->atab, out->buf+SKIPHEAD);
-		if(t) t->callback(t->event, out->buf+strlen(t->event)+SKIPHEAD+1);
+		if(t) t->callback(t->event, outtag, out->buf+strlen(t->event)+SKIPHEAD+1+prevpos);
+		prevpos = conn->pbuf->pos;
 		free(out->buf) ; out->buf = NULL ; out->sz = 0;
 	} while ( conn->pbuf->len > conn->pbuf->pos );
 
