@@ -5,7 +5,7 @@ vdeq_LDADD = $(LIBOBJS) ../libvdeplug/libvdeplug.la
 
 INCLUDES = -I$(top_srcdir)
 
-EXTRA_DIST = README
+EXTRA_DIST = README qemu-vde-HOWTO
 
 install-exec-hook:
 	rm -f $(DESTDIR)$(bindir)/vdeqemu $(DESTDIR)$(bindir)/vdekvm
