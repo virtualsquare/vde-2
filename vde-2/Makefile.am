@@ -1,4 +1,4 @@
-SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap vde_over_ns vde_l3 plugin libvdemgmt unixcmd tunctl vde_autolink
+SUBDIRS = libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_plug vde_plug2tap vde_over_ns vde_l3 plugin libvdemgmt unixcmd tunctl vde_autolink libvdesnmp
 
 
 if CAN_MAKE_LIBVDETAP
