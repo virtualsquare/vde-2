@@ -182,7 +182,8 @@ AC_CONFIG_FILES([Makefile]
 		[libvdemgmt/Makefile]
 		[unixcmd/Makefile]
 		[tunctl/Makefile]
-		[vde_autolink/Makefile])
+		[vde_autolink/Makefile]
+		[libvdesnmp/Makefile])
 AC_OUTPUT
 
 
