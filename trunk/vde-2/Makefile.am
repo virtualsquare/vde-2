@@ -11,7 +11,7 @@ endif
 
 AUTOMAKE_OPTIONS = foreign
 
-EXTRA_DIST = LICENSE VERSION utils/open_memstream.h utils/poll.h utils/strndup.h utils/cmdparse.h
+EXTRA_DIST = LICENSE Changelog utils/open_memstream.h utils/poll.h utils/strndup.h utils/cmdparse.h
 
 bin_PROGRAMS = vde_switch
 vde_switch_SOURCES = \
