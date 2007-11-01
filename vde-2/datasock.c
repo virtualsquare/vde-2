@@ -317,12 +317,22 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 static void cleanup(unsigned char type,int fd,int arg)
 {
 	struct sockaddr_un clun;
+	int test_fd;
+
 	if (fd < 0) {
+		if((test_fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
+			printlog(LOG_ERR,"socket %s",strerror(errno));
+		}
+		clun.sun_family=AF_UNIX;
 		snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/ctl",ctl_socket);
-		if(unlink(clun.sun_path) < 0)
-			printlog(LOG_WARNING,"Couldn't remove ctl socket '%s' : %s", ctl_socket, strerror(errno));
-		else if(rmdir(ctl_socket) < 0)
-			printlog(LOG_WARNING,"Couldn't remove ctl dir '%s' : %s", ctl_socket, strerror(errno));
+		if(connect(test_fd, (struct sockaddr *) &clun, sizeof(clun))){
+			close(test_fd);
+			if(unlink(clun.sun_path) < 0)
+				printlog(LOG_WARNING,"Couldn't remove ctl socket '%s' : %s", ctl_socket, strerror(errno));
+			else if(rmdir(ctl_socket) < 0)
+				printlog(LOG_WARNING,"Couldn't remove ctl dir '%s' : %s", ctl_socket, strerror(errno));
+		}
+		else printlog(LOG_WARNING,"cleanup not removing files");
 	} else {
 		if (type == data_type && arg>=0) {
 			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d",ctl_socket,arg);
@@ -397,29 +407,34 @@ static void init(void)
 		printlog(LOG_ERR,"Setting O_NONBLOCK on connection fd: %s",strerror(errno));
 		return;
 	}
-	if (mkdir(ctl_socket, 0777) < 0) {
+	if (((mkdir(ctl_socket, 0777) < 0) && (errno != EEXIST))){
 		printlog(LOG_ERR,"creating vde ctl dir: %s",strerror(errno));
-		return;
+		exit(-1);
 	}
-	chmod(ctl_socket, 02000 | (mode & 0700 ? 0700 : 0) |
-				(mode & 0070 ? 0070 : 0) | (mode & 0007 ? 0005 : 0));
+	if ((chmod(ctl_socket, 02000 | (mode & 0700 ? 0700 : 0) | (mode & 0070 ? 0070 : 0) | (mode & 0007 ? 0005 : 0)) < 0)) {
+		printlog(LOG_ERR,"setting up vde ctl dir: %s",strerror(errno));
+		exit(-1);
+	}
 	sun.sun_family = AF_UNIX;
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-		if((errno == EADDRINUSE) && still_used(&sun)) return;
+		if((errno == EADDRINUSE) && still_used(&sun)){
+			printlog(LOG_ERR, "bind %s", strerror(errno));
+			exit(-1);
+		}
 		else if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 			printlog(LOG_ERR,"bind %s",strerror(errno));
-			return;
-		}
-	}
+			exit(-1);
+	 	}
+	} 
 	chmod(sun.sun_path,mode);
 	if(chown(sun.sun_path,-1,grp_owner) < 0) {
 		printlog(LOG_ERR, "chown: %s", strerror(errno));
-		return;
+		exit(-1);
 	}
 	if(listen(connect_fd, 15) < 0){
 		printlog(LOG_ERR,"listen: %s",strerror(errno));
-		return;
+		exit(-1);
 	}
 	ctl_type=add_type(&swmi,0);
 	wd_type=add_type(&swmi,0);
