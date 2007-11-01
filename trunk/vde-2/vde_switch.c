@@ -539,8 +539,8 @@ static void start_modules(void)
 	void start_consmgmt(void);
 	void start_datasock(void);
 	void start_tuntap(void);
-	start_consmgmt();
 	start_datasock();
+	start_consmgmt();
 #ifdef HAVE_TUNTAP
 	start_tuntap();
 #endif

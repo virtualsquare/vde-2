@@ -237,36 +237,36 @@ static char *parsevdearg(char *arg,char **sock,int *pport, int fd)
 	int vlan=0;
 	*sock=VDESTDSOCK;
 	*pport=0;
-	while (*arg==',') arg++;
-	if (strncmp(arg,"vlan=",5)==0) {
-		vlan=atoi(arg+5);
-		while (*arg != 0 && *arg != ',')
-			arg++;
-	}
-	while (*arg==',') arg++;
-	if (strncmp(arg,"sock=",5)==0) {
-		arg+=5;
-		if (*arg=='\"') {
-			arg++;
-			*sock=arg;
-			while (*arg != 0 && *arg != '\"')
-				arg++;
-		} else {
-			*sock=arg;
+	printf("arg %s\n", arg);
+	while(*arg){
+		while (*arg==',') arg++;
+		if (strncmp(arg,"vlan=",5)==0) {
+			vlan=atoi(arg+5);
 			while (*arg != 0 && *arg != ',')
 				arg++;
 		}
-		if (*arg != 0) {
-			*arg=0; arg++;
+		else if (strncmp(arg,"sock=",5)==0) {
+			arg+=5;
+			if (*arg=='\"') {
+				arg++;
+				*sock=arg;
+				while (*arg != 0 && *arg != '\"')
+					arg++;
+			} else {
+				*sock=arg;
+				while (*arg != 0 && *arg != ',')
+					arg++;
+			}
+			if (*arg != 0) {
+				*arg=0; arg++;
+			}
+		}
+		else if (strncmp(arg,"port=",5)==0) {
+			*pport=atoi(arg+5);
+			while (*arg != 0 && *arg != ',')
+				arg++;
 		}
 	}
-	while (*arg==',') arg++;
-	if (strncmp(arg,"port=",5)==0) {
-		*pport=atoi(arg+5);
-		while (*arg != 0 && *arg != ',')
-			arg++;
-	}
-	while (*arg==',') arg++;
 
 	snprintf(newarg,128,"tap,vlan=%d,fd=%d%s%s",vlan,fd,(*arg == 0)?"":",",arg);
 	return strdup(newarg);
@@ -469,6 +469,15 @@ int main(int argc, char **argv)
 	  pollv[2*i].fd=sp[i][1];
 	  pollv[2*i].events= pollv[2*i+1].events=POLLIN|POLLHUP;
   }
+
+#if 0
+  {
+	  int i=0;
+	  while(newargv[i])
+		  printf("%s ", newargv[i++]);
+	  printf("\n");
+  }
+#endif
 
   if (fork()) {
 	  close(0); 
