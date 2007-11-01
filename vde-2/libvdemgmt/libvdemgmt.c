@@ -33,10 +33,10 @@
 #include <utils/strndup.h>
 #endif
 
-#define OPENMACHINE_RC INSTALLPATH"/etc/libvdemgmt/openmachine.rc"
-#define CLOSEMACHINE_RC INSTALLPATH"/etc/libvdemgmt/closemachine.rc"
-#define SENDCMD_RC INSTALLPATH"/etc/libvdemgmt/sendcmd.rc"
-#define ASYNCRECV_RC INSTALLPATH"/etc/libvdemgmt/asyncrecv.rc"
+#define OPENMACHINE_RC INSTALLPATH"/etc/vde2/libvdemgmt/openmachine.rc"
+#define CLOSEMACHINE_RC INSTALLPATH"/etc/vde2/libvdemgmt/closemachine.rc"
+#define SENDCMD_RC INSTALLPATH"/etc/vde2/libvdemgmt/sendcmd.rc"
+#define ASYNCRECV_RC INSTALLPATH"/etc/vde2/libvdemgmt/asyncrecv.rc"
 
 #define DEBUGADD "debug/add"
 #define DEBUGDEL "debug/del"

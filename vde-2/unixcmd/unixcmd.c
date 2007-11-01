@@ -31,7 +31,7 @@
 #include <config.h>
 #include <utils/cmdparse.h>
 
-#define STD_RC_DIR INSTALLPATH"/etc"
+#define STD_RC_DIR INSTALLPATH"/etc/vde2"
 #define STD_SOCK_DIR "/var/run"
 
 void usage(char *progname){
