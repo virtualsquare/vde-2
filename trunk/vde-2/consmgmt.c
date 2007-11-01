@@ -365,7 +365,7 @@ void loadrcfile(void)
 		runscript(-1,rcfile);
 	else {
 		char path[PATH_MAX];
-		snprintf(path,PATH_MAX,"%s/.vderc",getenv("HOME"));
+		snprintf(path,PATH_MAX,"%s/.vde2/vde_switch.rc",getenv("HOME"));
 		if (access(path,R_OK) == 0)
 			runscript(-1,path);
 		else {

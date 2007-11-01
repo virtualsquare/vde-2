@@ -42,7 +42,7 @@
 #include <utils/strndup.h>
 #endif
 
-#define STDRCFILE "/etc/vde_autolink.rc"
+#define STDRCFILE "/etc/vde2/vde_autolink.rc"
 
 #define MAXCONS 4
 #define MGMTMODEARG 129
@@ -1253,7 +1253,7 @@ static void loadrcfile(void)
 		runscript(-1,rcfile);
 	else {
 		char path[PATH_MAX];
-		snprintf(path,PATH_MAX,"%s/.vde_autolinkrc",getenv("HOME"));
+		snprintf(path,PATH_MAX,"%s/.vde2/vde_autolink.rc",getenv("HOME"));
 		if (access(path,R_OK) == 0)
 			runscript(-1,path);
 		else {

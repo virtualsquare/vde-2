@@ -48,7 +48,7 @@ void del_type(unsigned char type);
 void add_fd(int fd,unsigned char type,int arg);
 void remove_fd(int fd);
 
-#define STDRCFILE "/etc/vde.rc"
+#define STDRCFILE "/etc/vde2/vde_switch.rc"
 
 #define ETH_ALEN 6
 
