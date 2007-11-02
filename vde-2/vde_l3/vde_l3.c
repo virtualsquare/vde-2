@@ -31,6 +31,7 @@
 #include <config.h>
 #include <libvdeplug/libvdeplug.h>
 #include "vde_buff.h"
+#include "vde_l3.h"
 
 #include <vde.h>
 #include <dlfcn.h>
@@ -60,7 +61,7 @@ int ufifo_enqueue(struct vde_buff *vdb, struct vde_iface *vif)
 	struct vde_buff *qo = vif->q_out;
 	if (qo == NULL){
 		vif->q_out=vdb;
-		return;
+		return 1;
 	}
 	while (qo->next!=NULL){
 		qo=qo->next;
@@ -963,7 +964,8 @@ routecmdfail:
 	printoutc(fd, "route list					Print out the routing table");
 	printoutc(fd, "route net ADDRESS/NETMASK:GATEWAY     	Add/change static route");
 	printoutc(fd, "route default gw GATEWAY     			Change default route");
-		
+	
+	return 1;
 }
 
 #define IF_SHALL 0
@@ -1317,7 +1319,7 @@ int main(int argc, char *argv[])
 	struct routing_policy *rp;
 	uint32_t rp_arg = 30;
 
-	int mgmtindex;
+	int mgmtindex = -1;
 
 	static struct option long_options[] = {
 		{"help",0 , 0, 'h'},
@@ -1374,7 +1376,7 @@ int main(int argc, char *argv[])
 				if(!vr->nm){
 					fprintf(stderr,"route: Cannot set netmask to '%s'\n",nm);
 					if(nm!=NULL && nm[0]=='0'){
-						fprintf(stderr,"(Did you mean to set default gateway? then -G)\n",nm);
+						fprintf(stderr,"(Did you mean to set default gateway? then -G)\n");
 					}
 					usage(progname);
 				}
@@ -1425,7 +1427,7 @@ int main(int argc, char *argv[])
 				if(!vif->nm){
 					fprintf(stderr,"vdeplug %s: Cannot set netmask to '%s'\n",vdesock,nm);
 					if(nm!=NULL && nm[0]=='0'){
-						fprintf(stderr,"(Did you mean to set default gateway? then -G)\n",vdesock,nm);
+						fprintf(stderr,"(Did you mean to set default gateway? then -G)\n");
 					}
 					usage(progname);
 				}

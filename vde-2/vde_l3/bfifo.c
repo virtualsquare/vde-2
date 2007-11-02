@@ -3,10 +3,11 @@
  * Usage: tc set <dev> bfifo limit <bytes>	
  *
  * */ 
-#include "vde_buff.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "vde_buff.h"
+#include "vde_l3.h"
 
 /** Private per-interface structure
  *
@@ -62,7 +63,7 @@ int bfifo_init(struct vde_iface *vif, char *args)
 	struct tc_bfifo *bfifo=(struct tc_bfifo *)malloc(sizeof(struct tc_bfifo));
 	int arglen = strlen(args) - 1;
 	
-	if ((arglen < 6) || strncmp(args,"limit ",6) || (sscanf(args+6, "%lu",&(bfifo->limit)) < 1) )
+	if ((arglen < 6) || strncmp(args,"limit ",6) || (sscanf(args+6, "%u",&(bfifo->limit)) < 1) )
 		return 0;
 
 	bfifo->qlen = 0;
@@ -76,7 +77,7 @@ char *bfifo_tc_stats(struct vde_iface *vif)
 {
 	struct tc_bfifo *bfifo = bfifo_tcpriv(vif);
 	char *statistics=(char*)malloc(256);
-	snprintf(statistics,255,"Limit: %lu bytes. Dropped: %lu packets.", bfifo->limit, bfifo->dropped);
+	snprintf(statistics,255,"Limit: %u bytes. Dropped: %u packets.", bfifo->limit, bfifo->dropped);
 	return statistics;
 	
 }
