@@ -101,7 +101,7 @@ static inline char *fieldskip(char *s)
 	return s;
 }
 
-static int readchar(int fd, struct utm_buf *inbuf, int timeout)
+static int readchar(int fd, struct utm_buf *inbuf, char *out, int timeout)
 {
 	if (!inbuf->buf) {
 		inbuf->buf=(char *)malloc(sizeof(char)*BUFSIZE);
@@ -120,7 +120,8 @@ static int readchar(int fd, struct utm_buf *inbuf, int timeout)
 		else
 			inbuf->pos=0;
 	}
-	return(inbuf->buf[(inbuf->pos)++]);
+	*out = (inbuf->buf[(inbuf->pos)++]);
+	return 0;
 }
 
 struct utmstate *sgoto(struct utmstate *head,int nextnum)
@@ -250,7 +251,7 @@ int utm_run(struct utm *utm, struct utm_buf *buf, int fd, int argc, char **argv,
 							linebuf=realloc(linebuf,sizeof(char)*(linebufsize+1));
 							if(!linebuf){ perror("utm_run"); exit(-1); }
 						}
-						if ((linebuf[len]=readchar(fd,buf,utm->timeout)) < 0)
+						if (readchar(fd, buf, &linebuf[len], utm->timeout) < 0)
 							ltimeout=1;
 						else
 							len++;
