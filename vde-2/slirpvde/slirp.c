@@ -520,7 +520,7 @@ static void client_eth_get_ip(unsigned char *eth_addr, const uint8_t *pkt, int p
 
 void arp_input(const uint8_t *pkt, int pkt_len)
 {
-    struct ethhdr *eh = (struct ethhdr *)pkt;
+    /* struct ethhdr *eh = (struct ethhdr *)pkt; */
     struct arphdr *ah = (struct arphdr *)(pkt + ETH_HLEN);
     uint8_t arp_reply[ETH_HLEN + sizeof(struct arphdr)];
     struct ethhdr *reh = (struct ethhdr *)arp_reply;

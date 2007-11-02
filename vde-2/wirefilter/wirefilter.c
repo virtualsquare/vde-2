@@ -184,7 +184,7 @@ int writepacket(int dir,const unsigned char *buf,int size)
 	if (noise[dir]+noiseplus[dir] > 0) {
 		double noiseval=noise[dir];
 		int nobit=0;
-		if (noiseplus) noiseval+=((drand48()*2.0)-1.0)*noiseplus[dir];
+		if (noiseplus[dir]) noiseval+=((drand48()*2.0)-1.0)*noiseplus[dir];
 		while ((drand48()*8*MEGA) < (size-2)*8*noiseval)
 			nobit++;
 		if (nobit>0) {

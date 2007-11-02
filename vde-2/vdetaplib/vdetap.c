@@ -27,10 +27,11 @@ static unsigned char bufin[BUFSIZE];
 
 static struct pollfd pollv[]={{0,POLLIN|POLLHUP,0},{0,POLLIN|POLLHUP,0}};
 
-main(int argc,char *argv[])
+int main(int argc,char *argv[])
 {
 	int fd,fddata;
-	struct sockaddr_un dataout,datain;
+	struct sockaddr_un datain;
+	/*struct sockaddr_un dataout;*/
 	socklen_t datainsize;
 	int result,nx;
 	register int i;
@@ -75,5 +76,6 @@ main(int argc,char *argv[])
 		}
 	}
 	vde_close(conn);
+	return 0;
 }
 
