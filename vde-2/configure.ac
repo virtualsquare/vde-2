@@ -162,6 +162,9 @@ else
 	AC_DEFINE_UNQUOTED(INSTALLPATH, "${prefix}",[PREFIX])
 fi
 
+CFLAGS="-Wall -O2 $CFLAGS"
+AC_SUBST(CFLAGS)
+
 AC_CONFIG_FILES([Makefile]
 		[doc/Makefile]
 		[qemu/Makefile]
