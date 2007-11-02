@@ -78,9 +78,9 @@ static struct peer *generate_and_xmit(struct peer *ret){
 	ret->in_a.sin_addr.s_addr=((struct in_addr *)(target->h_addr))->s_addr;
 	if(!pre_shared){		
 		if(remoteusr)
-			sprintf(command,"scp /tmp/.blowfish.key %s@%s:/tmp/.%s.key\0", remoteusr, remotehost, ret->id);	
+			sprintf(command,"scp /tmp/.blowfish.key %s@%s:/tmp/.%s.key", remoteusr, remotehost, ret->id);	
 		else
-			sprintf(command,"scp /tmp/.blowfish.key %s:/tmp/.%s.key\0", remotehost, ret->id);
+			sprintf(command,"scp /tmp/.blowfish.key %s:/tmp/.%s.key", remotehost, ret->id);
 		//fprintf(stderr,"Contacting host: %s ",remotehost);
 		res=system(command);
 		

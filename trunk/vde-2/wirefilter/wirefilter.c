@@ -173,9 +173,9 @@ static int nextms()
 static inline int outpacket(int dir,const unsigned char *buf,int size)
 {
 	if (vdeplug[1-dir]) 
-		vde_send(vdeplug[1-dir],buf+2,size-2,0);
+		return vde_send(vdeplug[1-dir],buf+2,size-2,0);
 	else
-		write(outfd[dir],buf,size);
+		return write(outfd[dir],buf,size);
 }
 
 int writepacket(int dir,const unsigned char *buf,int size)

@@ -6,13 +6,14 @@
  *
  *
  * */ 
-#include "vde_buff.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/time.h>
 #include <time.h>
+#include "vde_buff.h"
+#include "vde_l3.h"
 
 struct timeval add_t(struct timeval x, struct timeval y) 
 { 
@@ -111,7 +112,7 @@ int tbf_init(struct vde_iface *vif, char *args)
 	args=index(args,' ');
 	if(args) *(args++)=(char)0;
 	rate=args;
-	if(!args || sscanf(args, "%lu",&(tbf->rate)) < 1)
+	if(!args || sscanf(args, "%u",&(tbf->rate)) < 1)
 		goto fail;
 	args=index(args,' ');
 	if(args) *(args++)=(char)0;
@@ -124,12 +125,12 @@ int tbf_init(struct vde_iface *vif, char *args)
 	if(strncmp(args,"latency",7)==0){
 		args=index(args,' ');
 		if(args) *(args++)=(char)0;
-		if(!args || sscanf(args, "%lu",&latency) < 1)
+		if(!args || sscanf(args, "%u",&latency) < 1)
 			goto fail;
 	} else if (strncmp(args,"limit",5)==0){
 		args=index(args,' ');
 		if(args) *(args++)=(char)0;
-		if(!args || sscanf(args, "%lu",&(tbf->limit)) < 1)
+		if(!args || sscanf(args, "%u",&(tbf->limit)) < 1)
 			goto fail;
 
 
@@ -163,7 +164,7 @@ char *tbf_tc_stats(struct vde_iface *vif)
 {
 	struct tc_tbf *tbf = tbf_tcpriv(vif);
 	char *statistics=(char*)malloc(256);
-	snprintf(statistics,255,"Shaping at Rate = %lu Bytes/s, bucket limit: %lu bytes. Overlimits: %lu packets. MTU=%lu", tbf->rate, tbf->limit, tbf->dropped, tbf->mtu);
+	snprintf(statistics,255,"Shaping at Rate = %u Bytes/s, bucket limit: %u bytes. Overlimits: %u packets. MTU=%u", tbf->rate, tbf->limit, tbf->dropped, tbf->mtu);
 	return statistics;
 	
 }
