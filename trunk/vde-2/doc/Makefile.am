@@ -16,10 +16,16 @@ vdetaplib.1: vdetaplib.1.in
 
 install-data-hook:
 	rm -f $(DESTDIR)$(mandir)/man1/vdeqemu.1
+	rm -f $(DESTDIR)$(mandir)/man1/vdekvm.1
+	rm -f $(DESTDIR)$(mandir)/man1/vdecmd.1
 	(cd $(DESTDIR)$(mandir)/man1 && $(LN_S) vdeq.1 vdeqemu.1)
+	(cd $(DESTDIR)$(mandir)/man1 && $(LN_S) vdeq.1 vdekvm.1)
+	(cd $(DESTDIR)$(mandir)/man1 && $(LN_S) unixcmd.1 vdecmd.1)
 
 uninstall-local:
 	rm -f $(DESTDIR)$(mandir)/man1/vdeqemu.1
+	rm -f $(DESTDIR)$(mandir)/man1/vdekvm.1
+	rm -f $(DESTDIR)$(mandir)/man1/vdecmd.1
 
 clean:
 	rm -f vdetaplib.1
