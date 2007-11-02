@@ -22,6 +22,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <poll.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include <libvdesnmp.h>
 #include <libvdemgmt.h>
@@ -64,11 +66,11 @@ int stats_init(){
         debug("  phyaddr: %s", pl->phyaddress); \
         debug("  adminstatus: %d", pl->adminstatus); \
         debug("  operstatus: %d", pl->operstatus); \
-		debug("  lastchange: %d", pl->time_lastchange); \
-		debug("   in->ucastpkts: %d", pl->in->ucastpkts); \
-		debug("   in->octects: %d", pl->in->octects); \
-		debug("   out->ucastpkts: %d", pl->out->ucastpkts); \
-		debug("   out->octects: %d", pl->out->octects); 
+		debug("  lastchange: %ld", pl->time_lastchange); \
+		debug("   in->ucastpkts: %ld", pl->in->ucastpkts); \
+		debug("   in->octects: %ld", pl->in->octects); \
+		debug("   out->ucastpkts: %ld", pl->out->ucastpkts); \
+		debug("   out->octects: %ld", pl->out->octects); 
 
 /* ths of second between a and b (both struct timeval*) assuming a > b */
 #define CSECDIFF(a, b) (   (((a)->tv_sec - (b)->tv_sec) * 100) + (( (a)->tv_usec > (b)->tv_usec ? (a)->tv_usec - (b)->tv_usec : 1000000 - (b)->tv_usec + (a)->tv_usec ) / 10000 )    )
@@ -228,10 +230,10 @@ int counters_parse(void){
 				inport=1;
 			
 			if( inport ){
-				if( sscanf(q, " IN: pkts %d bytes %d\n", &inpkts, &inbytes) == 2 )
+				if( sscanf(q, " IN: pkts %ld bytes %ld\n", &inpkts, &inbytes) == 2 )
 					inok = 1;
 
-				if( sscanf(q, " OUT: pkts %d bytes %d\n", &outpkts, &outbytes) == 2 )
+				if( sscanf(q, " OUT: pkts %ld bytes %ld\n", &outpkts, &outbytes) == 2 )
 					outok = 1;
 
 				/*   -- endpoint ID 0005 module unix prog   : vde_plug: user=godog PID=22006  SOCK=/tmp/vde.ctl.22006-00000 */
@@ -336,7 +338,7 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 }
 
 int vde_snmp_reset_lastchange(){
-	return gettimeofday(&init_tv, NULL);
+	return gettimeofday(init_tv, NULL);
 }
 
 int vde_snmp_update(){
@@ -344,10 +346,6 @@ int vde_snmp_update(){
 }
 
 int vde_snmp_init(char *sockpath){
-    int mgmt_fd, cmd_fd; 
-	char *p;
-
-	fd_set *readfds;
 
 	if( !stats_init() ){
 		debug("couldn't stats_init\n");

@@ -409,7 +409,8 @@ int tcp_fconnect(so)
 			(ntohl(so->so_faddr.s_addr) & 0xff) == CTL_ALIAS &&
 			(path=tcp2unix_search(ntohs(so->so_fport)))!=NULL ) {
 		if ( (ret=so->s=socket(AF_UNIX,SOCK_STREAM,0)) >= 0) {
-			int opt, s=so->s;
+			/*int opt;*/
+			int s=so->s;
 			struct sockaddr_un addr;
 
 			fd_nonblock(s);

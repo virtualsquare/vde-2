@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "vdeplugin.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifndef HAVE_OPEN_MEMSTREAM
 #include <utils/open_memstream.h>

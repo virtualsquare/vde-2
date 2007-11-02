@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <pcap.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* usage:
  *
@@ -100,7 +101,7 @@ int pktevent(struct dbgcl *event,va_list v)
 	switch (event->tag) {
 		case D_PACKET|D_OUT: 
 		case D_PACKET|D_IN: {
-							int port=va_arg(v,int);
+							va_arg(v,int); /* port */
 							unsigned char *buf=va_arg(v,char *);
 							int len=va_arg(v,int);
 

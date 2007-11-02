@@ -369,7 +369,7 @@ int main(int argc, char **argv)
   char *sockname=NULL;
   int result,nfds;
   register ssize_t nx;
-  register int i;
+  /*register int i;*/
   fd_set rs,ws,xs;
   int opt,longindx;
   char *netw=NULL;

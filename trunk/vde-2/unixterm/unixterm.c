@@ -35,11 +35,11 @@ int main(int argc,char *argv[])
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",argv[1]);
 	if((fd=socket(PF_UNIX,SOCK_STREAM,0))<0) {
 		perror("Socket opening error");
-		exit -1;
+		exit(-1);
 	}
 	if ((rv=connect(fd,(struct sockaddr *)(&sun),sizeof(sun))) < 0) {
 		perror("Socket connecting error");
-		exit -1;
+		exit(-1);
 	}
 	pfd[1].fd=fileout[0]=fd;
 	while(1) {
