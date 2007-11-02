@@ -4,6 +4,8 @@
  *
  * */ 
 #include "vde_buff.h"
+#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 
 /** Private per-interface structure
