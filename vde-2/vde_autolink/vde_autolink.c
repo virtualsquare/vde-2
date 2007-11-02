@@ -508,7 +508,7 @@ void alink_try(struct autolink *al)
 	insert_job(alink_check, al, SCHED_CHECK);
 }
 
-void ah_padd(const char *event, const char *data)
+void ah_padd(const char *event, int tag, const char *data)
 {
 
 	int port; char *s;
@@ -529,7 +529,7 @@ void ah_padd(const char *event, const char *data)
 	}
 }
 
-void ah_pdel(const char *event, const char *data)
+void ah_pdel(const char *event, int tag, const char *data)
 {
 
 	int port; char *s;
@@ -554,7 +554,7 @@ void ah_pdel(const char *event, const char *data)
 	}
 }
 
-void ah_state(const char *event, const char *data)
+void ah_state(const char *event, int tag, const char *data)
 {
 	int port; char *s;
 	struct autolink *al;
