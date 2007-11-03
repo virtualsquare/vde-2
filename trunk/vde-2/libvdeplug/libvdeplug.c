@@ -116,7 +116,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 	sockun.sun_family = AF_UNIX;
 	snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s/ctl", sockname);
 	if(connect(conn->fdctl, (struct sockaddr *) &sockun, sizeof(sockun))){
-		if (sockname == VDESTDSOCK) {
+		if (!strcmp(sockname, VDESTDSOCK)) {
 			sockname=VDETMPSOCK;
 			snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s/ctl", sockname);
 			if(connect(conn->fdctl, (struct sockaddr *) &sockun, sizeof(sockun))){

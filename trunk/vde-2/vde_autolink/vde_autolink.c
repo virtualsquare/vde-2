@@ -24,6 +24,7 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <string.h>
+#include <time.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -897,7 +898,6 @@ int alinkaddlink(int fd, char *arg)
 int alinkrunninglinks(int fd, char *arg)
 {
 	struct autolink *curlink;
-	struct alwire *curalwire = NULL;
 	time_t now;
 
 	if(!alinks) return 0;

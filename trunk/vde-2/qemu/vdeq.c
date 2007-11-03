@@ -274,7 +274,7 @@ static char *parsevdearg(char *arg,char **sock,int *pport, int fd)
 
 int main(int argc, char **argv)
 {
-  char *argsock,**sockname;
+  char *argsock=NULL,**sockname;
 	int *ports;
   int result;
   register ssize_t nx;
