@@ -41,8 +41,8 @@
 #define DEBUGADD "debug/add"
 #define DEBUGDEL "debug/del"
 
-#define CHECK(expr, errval)  { char errstr[1024]; if ((expr) == (errval)) { sprintf(errstr, "%s %d %d", __func__, __LINE__, errval); goto error; } }
-#define CHECKNOT(expr, errval)  { char errstr[1024]; if ((expr) != (errval)) { sprintf(errstr, "%s %d %d", __func__, __LINE__, errval); perror(errstr); goto error; } }
+#define CHECK(expr, errval)  { char errstr[1024]; if ((expr) == (errval)) { sprintf(errstr, "%s %d %d", __func__, __LINE__, (int)errval); goto error; } }
+#define CHECKNOT(expr, errval)  { char errstr[1024]; if ((expr) != (errval)) { sprintf(errstr, "%s %d %d", __func__, __LINE__, (int)errval); perror(errstr); goto error; } }
 
 
 #define DATATAG 1
