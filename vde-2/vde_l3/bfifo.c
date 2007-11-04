@@ -48,7 +48,7 @@ int bfifo_enqueue(struct vde_buff *vdb, struct vde_iface *vif)
 int bfifo_dequeue(struct vde_iface *vif)
 {
 	struct tc_bfifo *bfifo = bfifo_tcpriv(vif);
-	int not_empty = ufifo_dequeue(vif);
+	(void)ufifo_dequeue(vif);
 	if(bfifo->qlen > 0)
 		bfifo->qlen -= vif->q_out->len;
 	return (bfifo->qlen > 0);

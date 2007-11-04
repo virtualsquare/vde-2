@@ -814,7 +814,10 @@ uint32_t ascii2ip(char *c){
 	uint8_t *z=(uint8_t *)malloc(4);
 	if(!index(c,'.'))
 		return 0;
-	if(sscanf(c,"%hu.%hu.%hu.%hu",z,z+1,z+2,z+3) < 0)
+	if(sscanf(c,"%hu.%hu.%hu.%hu",(unsigned short*)z,
+			(unsigned short*)z+1,
+			(unsigned short*)z+2,
+			(unsigned short*)z+3) < 0)
 		return 0;
 	return ntohl(*((uint32_t *)z));
 }
@@ -1010,7 +1013,7 @@ static int ifconfig(int fd, char *s)
 {
 	int arglen=strlen(s)-1;
 	struct vde_iface *pi;
-	char *addr,*nmtag,*nm,*iface;
+	char *addr,*nmtag,*nm=NULL,*iface;
 	int iface_id;
 	int mode;
 	uint32_t tmp;
@@ -1313,11 +1316,10 @@ int main(int argc, char *argv[])
 	int i,pr,pktin;
 	int numif=0,npfd=0;
 	struct vde_ethernet_header *eh;
-	char *vdesock,*argp, *ipaddr, *nm, *gw, *mgmt=NULL;
+	char *vdesock,*argp, *ipaddr, *nm=NULL, *gw, *mgmt=NULL;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 	int option_index;
 	struct routing_policy *rp;
-	uint32_t rp_arg = 30;
 
 	int mgmtindex = -1;
 
@@ -1497,7 +1499,7 @@ for(;;)
 #endif
 				eh=ethhead(vdb_in);
 				//Next line is a mac address filter.
-				if((memcmp(eh->dst,vif->mac,6) == 0) || (is_multicast_mac(eh->dst)) && (memcmp(eh->src,vif->mac,6)!=0)){
+				if((memcmp(eh->dst,vif->mac,6) == 0) || ((is_multicast_mac(eh->dst)) && (memcmp(eh->src,vif->mac,6)!=0))){
 					if(eh->buftype == ntohs(PTYPE_ARP)){
 						pktin += parse_arp(vdb_in);
 					}
