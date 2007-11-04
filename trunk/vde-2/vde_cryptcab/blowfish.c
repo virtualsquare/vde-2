@@ -659,7 +659,7 @@ rcv_login(struct datagram *pkt, struct peer *p, char *pre_shared)
 	int fd;
 	char filename[128];
 	if(!pre_shared)
-		snprintf(filename,127,"/tmp/.%s.key\0",pkt->data+1);
+		snprintf(filename,127,"/tmp/.%s.key",pkt->data+1);
 	else
 		snprintf(filename,127,"%s",pre_shared);
 
