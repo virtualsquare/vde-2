@@ -241,32 +241,32 @@ void fstsetnumports (int val)
 	/*printf("F numports %d\n",val);*/
 	for (i=0;i<NUMOFVLAN;i++) {
 		if (fsttab[i]) {
-			BA_REALLOC(fsttab[i]->untag,numports,val);
+			fsttab[i]->untag=BA_REALLOC(fsttab[i]->untag,numports,val);
 			if (fsttab[i]->untag == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/untag %s",strerror(errno));
 				exit(1);
 			}
-			BA_REALLOC(fsttab[i]->tagged,numports,val);
+			fsttab[i]->tagged=BA_REALLOC(fsttab[i]->tagged,numports,val);
 			if (fsttab[i]->tagged == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/tagged %s",strerror(errno));
 				exit(1);
 			}
-			BA_REALLOC(fsttab[i]->backup,numports,val);
+			fsttab[i]->backup=BA_REALLOC(fsttab[i]->backup,numports,val);
 			if (fsttab[i]->backup == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/backup %s",strerror(errno));
 				exit(1);
 			}
-			BA_REALLOC(fsttab[i]->edge,numports,val);
+			fsttab[i]->edge=BA_REALLOC(fsttab[i]->edge,numports,val);
 			if (fsttab[i]->edge == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/edge %s",strerror(errno));
 				exit(1);
 			}
-			BA_REALLOC(fsttab[i]->rcvhist[0],numports,val);
+			fsttab[i]->rcvhist[0]=BA_REALLOC(fsttab[i]->rcvhist[0],numports,val);
 			if (fsttab[i]->rcvhist[0] == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/rcvhist0 %s",strerror(errno));
 				exit(1);
 			}
-			BA_REALLOC(fsttab[i]->rcvhist[1],numports,val);
+			fsttab[i]->rcvhist[1]=BA_REALLOC(fsttab[i]->rcvhist[1],numports,val);
 			if (fsttab[i]->rcvhist[1] == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/rcvhist1 %s",strerror(errno));
 				exit(1);
