@@ -555,21 +555,21 @@ static int portsetnumports(int val)
 		}
 		for (i=0;i<NUMOFVLAN;i++) { 
 			if (vlant[i].table) {
-				BA_REALLOC(vlant[i].table,numports,val);
+				vlant[i].table=BA_REALLOC(vlant[i].table,numports,val);
 				if (vlant[i].table == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan table %s",strerror(errno));
 					exit(1);
 				}
 			}
 			if (vlant[i].bctag) {
-				BA_REALLOC(vlant[i].bctag,numports,val);
+				vlant[i].bctag=BA_REALLOC(vlant[i].bctag,numports,val);
 				if (vlant[i].bctag == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan bctag %s",strerror(errno));
 					exit(1);
 				}
 			}
 			if (vlant[i].notlearning) {
-				BA_REALLOC(vlant[i].notlearning,numports,val);
+				vlant[i].notlearning=BA_REALLOC(vlant[i].notlearning,numports,val);
 				if (vlant[i].notlearning == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan notlearning %s",strerror(errno));
 					exit(1);

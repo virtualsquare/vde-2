@@ -85,6 +85,7 @@ typedef unsigned long bitarrayelem;
 typedef bitarrayelem *bitarray;
 
 /* Simple Bit Array */
+
 #define BA_ALLOC(N) (calloc(__WORDSIZEROUND(N),sizeof(unsigned long)))
 
 #define BA_REALLOC(B,N,M) \
@@ -94,7 +95,7 @@ typedef bitarrayelem *bitarray;
 	 for(__i=__WORDSIZEROUND(N);__i<__WORDSIZEROUND(M);__i++) \
 	 nb[__i]=0; \
 	 nb[__WORDSIZEROUND(N)-1] &= (1<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
-	 (B)=nb;})
+	 nb;})
 
 #define BA_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1 << ((I) & __WORDSIZEMASK)))) 
 
@@ -183,7 +184,7 @@ typedef bitarrayelem *bitarray;
 	 for(__i=__WORDSIZEROUND(N);__i<__WORDSIZEROUND(M);__i++) \
 	 nb[__i]=0; }\
 	 nb[__WORDSIZEROUND(N)-1] &= (1<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
-	 (B)=nb;})
+	 nb;})
 
 /* BA_CHECK and BAC_CHECK are the same */
 #define BAC_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1 << ((I) & __WORDSIZEMASK))))
@@ -231,7 +232,7 @@ typedef bitarrayelem *bitarray;
 #define BAC_CARD(X,N) ((X)[__WORDSIZEROUND(N)])
 #define BAC_EMPTY(X,N) ((X)[__WORDSIZEROUND(N)]==0)
 
-#define BAC_COPY(DST,SRC,N) memcpy(DST,SRC,sizeof(bitarrayelem) * __WORDSIZEROUND(N))
+#define BAC_COPY(DST,SRC,N) memcpy(DST,SRC,sizeof(bitarrayelem) * (__WORDSIZEROUND(N)+1))
 
 #if 0
 /* usage example */
