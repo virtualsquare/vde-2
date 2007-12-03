@@ -32,8 +32,8 @@
 #include <string.h>
 
 /* IPNVDE - Kernel VDE 
-#define USE_IPNVDE
 */
+#undef USE_IPNVDE
 
 #ifdef USE_IPNVDE
 #include <af_ipnvde.h>
@@ -118,8 +118,15 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 	if((conn->fddata = socket(AF_IPNVDE,SOCK_RAW,IPNVDE_ANY)) >= 0) {
 		/* IPNVDE service exists */
 		sockun.sun_family = AF_IPNVDE;
+		if (port != 0)
+			setsockopt(conn->fddata,0,IPNVDE_SO_PORT,&port,sizeof(port));
 		snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s", sockname);
 		if (connect(conn->fddata, (struct sockaddr *) &sockun, sizeof(sockun)) == 0) {
+			snprintf(req.description,MAXDESCR,"%s user=%s PID=%d %s",
+					descr,(callerpwd != NULL)?callerpwd->pw_name:"??",
+					pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"");
+			setsockopt(conn->fddata,0,IPNVDE_SO_DESCR,req.description,
+					strlen(req.description+1));
 			*(conn->inpath.sun_path)=0; /*null string, do not delete "return path"*/
 			return conn;
 		}
