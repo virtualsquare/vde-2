@@ -39,14 +39,14 @@
  *
  * if libvdeplug does exist the library function can be called
  * in this way:
- *         libvde.vde_open(....)
- *         libvde.vde_read(....)
- *         libvde.vde_open(....)
- *         libvde.vde_recv(....)
- *         libvde.vde_send(....)
- *         libvde.vde_datafd(....)
- *         libvde.vde_ctlfd(....)
- *         libvde.vde_close(....)
+ *         vdeplug.vde_open(....)
+ *         vdeplug.vde_read(....)
+ *         vdeplug.vde_open(....)
+ *         vdeplug.vde_recv(....)
+ *         vdeplug.vde_send(....)
+ *         vdeplug.vde_datafd(....)
+ *         vdeplug.vde_ctlfd(....)
+ *         vdeplug.vde_close(....)
  * libvdeplug_dynclose(vdeplug) can be used to deallocate the dynamic library
  * when needed.
  *************************************************/
