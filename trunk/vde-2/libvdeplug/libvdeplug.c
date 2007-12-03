@@ -31,6 +31,14 @@
 #include <unistd.h>
 #include <string.h>
 
+/* IPNVDE - Kernel VDE 
+#define USE_IPNVDE
+*/
+
+#ifdef USE_IPNVDE
+#include <af_ipnvde.h>
+#endif
+
 #ifndef VDESTDSOCK
 #define VDESTDSOCK  "/var/run/vde.ctl"
 #define VDETMPSOCK  "/tmp/vde.ctl"
@@ -89,19 +97,6 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 	}
 	//get the login name
 	callerpwd=getpwuid(getuid());
-	if((conn->fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0){
-		int err=errno;
-		free(conn);
-		errno=err;
-		return NULL;
-	}
-	if((conn->fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
-		int err=errno;
-		close(conn->fddata);
-		free(conn);
-		errno=err;
-		return NULL;
-	}
 	if (sockname == NULL || *sockname == '\0')
 		sockname=VDESTDSOCK;
 	else {
@@ -112,6 +107,30 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 			port=atoi(split);
 			if (*sockname==0) sockname=VDESTDSOCK;
 		}
+	}
+	if((conn->fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
+		int err=errno;
+		free(conn);
+		errno=err;
+		return NULL;
+	}
+#ifdef USE_IPNVDE
+	if((conn->fddata = socket(AF_IPNVDE,SOCK_RAW,IPNVDE_ANY)) >= 0) {
+		/* IPNVDE service exists */
+		sockun.sun_family = AF_IPNVDE;
+		snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s", sockname);
+		if (connect(conn->fddata, (struct sockaddr *) &sockun, sizeof(sockun)) == 0) {
+			*(conn->inpath.sun_path)=0; /*null string, do not delete "return path"*/
+			return conn;
+		}
+	}
+#endif
+	if((conn->fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0){
+		int err=errno;
+		close(conn->fdctl);
+		free(conn);
+		errno=err;
+		return NULL;
 	}
 	sockun.sun_family = AF_UNIX;
 	snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s/ctl", sockname);
@@ -255,7 +274,8 @@ int vde_ctlfd(VDECONN *conn)
 int vde_close(VDECONN *conn)
 {
 	if (__builtin_expect(conn!=0,1)) {
-		unlink(conn->inpath.sun_path);
+		if (*(conn->inpath.sun_path))
+			unlink(conn->inpath.sun_path);
 		close(conn->fddata);
 		close(conn->fdctl);
 		free(conn);
