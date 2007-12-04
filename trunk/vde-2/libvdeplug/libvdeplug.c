@@ -33,7 +33,7 @@
 
 /* IPNVDE - Kernel VDE 
 */
-#define USE_IPNVDE
+#undef USE_IPNVDE
 
 #ifdef USE_IPNVDE
 #include <af_ipnvde.h>
