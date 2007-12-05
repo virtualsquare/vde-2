@@ -12,8 +12,8 @@
 #define IPN_ANY 0
 #define IPN_BROADCAST 1
 #define IPN_HUB 1
-#define IPN_SWITCH 2
-#define IPN_SWITCH_L3 3
+#define IPN_VDESWITCH 2
+#define IPN_VDESWITCH_L3 3
 
 #define IPN_SO_PREBIND 0x80
 #define IPN_SO_PORT 0
@@ -41,7 +41,7 @@
 #define IPN_FLAG_LOSSLESS 1
 
 /*#define IPNTYPE IPN_BROADCAST*/
-#define IPNTYPE IPN_SWITCH
+#define IPNTYPE IPN_VDESWITCH
 
 char buf[256];
 struct sockaddr_un sun={.sun_family=AF_IPN,.sun_path="/tmp/sockipn"};
