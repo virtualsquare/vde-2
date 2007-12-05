@@ -9,8 +9,8 @@
 #define IPN_ANY 0
 #define IPN_BROADCAST 1
 #define IPN_HUB 1
-#define IPN_SWITCH 2
-#define IPN_SWITCH_L3 3
+#define IPN_VDESWITCH 2
+#define IPN_VDESWITCH_L3 3
 
 #define IPN_SO_PREBIND 0x80
 #define IPN_SO_PORT 0
@@ -32,7 +32,7 @@ struct sockaddr_un sun={.sun_family=AF_IPN,.sun_path="/tmp/sockipn"};
 main()
 {
 	//int s=socket(AF_IPN,SOCK_RAW,IPN_BROADCAST);
-	int s=socket(AF_IPN,SOCK_RAW,IPN_SWITCH);
+	int s=socket(AF_IPN,SOCK_RAW,IPN_VDESWITCH);
 	int err;
 	int len;
 	int flags=IPN_FLAG_LOSSLESS;

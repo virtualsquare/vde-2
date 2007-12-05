@@ -97,14 +97,14 @@ static int kvde_switch_init(void)
 		rc=-ENOMEM;
 		goto out;
 	}
-	rc=ipn_proto_register(IPN_SWITCH,&vde_switch_proto);
+	rc=ipn_proto_register(IPN_VDESWITCH,&vde_switch_proto);
 out:
 	return rc;
 }
 
 static void kvde_switch_exit(void)
 {
-	ipn_proto_deregister(IPN_SWITCH);
+	ipn_proto_deregister(IPN_VDESWITCH);
 	if(kvde_net_cache)
 		kmem_cache_destroy(kvde_net_cache);
 }
