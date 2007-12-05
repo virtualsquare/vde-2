@@ -31,11 +31,11 @@
 #include <unistd.h>
 #include <string.h>
 
-/* IPNVDE - Kernel VDE 
+/* IPN - Kernel VDE 
 */
-#undef USE_IPNVDE
+#define USE_IPN
 
-#ifdef USE_IPNVDE
+#ifdef USE_IPN
 #include <af_ipn.h>
 #endif
 
@@ -53,7 +53,7 @@ struct vdeconn {
 #define SWITCH_MAGIC 0xfeedface
 #define MAXDESCR 128
 
-enum request_type { REQ_NEW_CONTROL };
+enum request_type { REQ_NEW_CONTROL, REQ_NEW_PORT0 };
 
 struct request_v3 {
 	uint32_t magic;
@@ -97,6 +97,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 	}
 	//get the login name
 	callerpwd=getpwuid(getuid());
+	req.type = REQ_NEW_CONTROL;
 	if (sockname == NULL || *sockname == '\0')
 		sockname=VDESTDSOCK;
 	else {
@@ -105,21 +106,23 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 			*split=0;
 			split++;
 			port=atoi(split);
+			if (port == 0) 	 
+				req.type = REQ_NEW_PORT0;
 			if (*sockname==0) sockname=VDESTDSOCK;
 		}
 	}
-#ifdef USE_IPNVDE
-	if((conn->fddata = socket(AF_IPNVDE,SOCK_RAW,IPNVDE_ANY)) >= 0) {
-		/* IPNVDE service exists */
-		sockun.sun_family = AF_IPNVDE;
-		if (port != 0)
-			setsockopt(conn->fddata,0,IPNVDE_SO_PORT,&port,sizeof(port));
+#ifdef USE_IPN
+	if((conn->fddata = socket(AF_IPN,SOCK_RAW,IPN_ANY)) >= 0) {
+		/* IPN service exists */
+		sockun.sun_family = AF_IPN;
+		if (port != 0 || req.type == REQ_NEW_PORT0)
+			setsockopt(conn->fddata,0,IPN_SO_PORT,&port,sizeof(port));
 		snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s", sockname);
 		if (connect(conn->fddata, (struct sockaddr *) &sockun, sizeof(sockun)) == 0) {
 			snprintf(req.description,MAXDESCR,"%s user=%s PID=%d %s",
 					descr,(callerpwd != NULL)?callerpwd->pw_name:"??",
 					pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"");
-			setsockopt(conn->fddata,0,IPNVDE_SO_DESCR,req.description,
+			setsockopt(conn->fddata,0,IPN_SO_DESCR,req.description,
 					strlen(req.description+1));
 			*(conn->inpath.sun_path)=0; /*null string, do not delete "return path"*/
 			conn->fdctl=-1;
@@ -161,7 +164,7 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 
 	req.magic=SWITCH_MAGIC;
 	req.version=3;
-	req.type=REQ_NEW_CONTROL+(port << 8);
+	req.type=req.type+(port << 8);
 	req.sock.sun_family=AF_UNIX;
 
 	/* First choice, store the return socket from the switch in the control dir*/
