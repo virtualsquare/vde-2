@@ -36,7 +36,7 @@
 #undef USE_IPNVDE
 
 #ifdef USE_IPNVDE
-#include <af_ipnvde.h>
+#include <af_ipn.h>
 #endif
 
 #ifndef VDESTDSOCK
