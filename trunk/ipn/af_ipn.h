@@ -161,7 +161,7 @@ void ipn_msgpool_put(struct msgpool_item *old, struct ipn_network *ipnn);
 struct ipn_protocol {
 	int refcnt;
 	int (*ipn_p_newport)(struct ipn_node *newport);
-	int (*ipn_p_handlemsg)(struct ipn_node *from,struct msgpool_item *msgitem);
+	int (*ipn_p_handlemsg)(struct ipn_node *from,struct msgpool_item *msgitem, int depth);
 	void (*ipn_p_delport)(struct ipn_node *oldport);
 	void (*ipn_p_postnewport)(struct ipn_node *newport);
 	void (*ipn_p_predelport)(struct ipn_node *oldport);
@@ -178,8 +178,10 @@ struct ipn_protocol {
 int ipn_proto_register(int protocol,struct ipn_protocol *ipn_service);
 int ipn_proto_deregister(int protocol);
 
-int ipn_proto_injectmsg(struct ipn_node *from, struct msgpool_item *msg);
-void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg);
+int ipn_proto_injectmsg(struct ipn_node *from, struct msgpool_item *msg,
+		int depth);
+void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg,
+		int depth);
 
 #endif
 #endif

@@ -79,7 +79,7 @@ main()
 	err=connect(s,NULL,0);
 	*/
 	memset(&ifr, 0, sizeof(ifr));
-	strncpy(ifr.ifr_name, "eth0", IFNAMSIZ);
+	strncpy(ifr.ifr_name, "eth1", IFNAMSIZ);
 	ifr.ifr_flags=IPN_NODEFLAG_GRAB;
 	err=ioctl(s, IPN_CONN_NETDEV, (void *) &ifr);
 	if (err<0)
