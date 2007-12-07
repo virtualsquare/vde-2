@@ -35,6 +35,7 @@
 
 #define DRV_NAME  "ipn"
 #define DRV_VERSION "0.2"
+#define ipn_node_port	br_port
 
 static const struct ethtool_ops ipn_ethtool_ops;
 
@@ -76,7 +77,7 @@ static int ipn_net_xmit(struct sk_buff *skb, struct net_device *dev)
 		goto drop;
 	newmsg->len=skb->len;
 	memcpy(newmsg->data,skb->data,skb->len);
-	ipn_proto_injectmsg(ipntap->ipn_node,newmsg);
+	ipn_proto_injectmsg(ipntap->ipn_node,newmsg,0);
 	ipn_msgpool_put(newmsg,ipn_node->ipn);
 	ipntap->stats.tx_packets++;
 	ipntap->stats.tx_bytes += skb->len;
@@ -96,14 +97,15 @@ struct sk_buff *ipn_handle_hook(struct net_bridge_port *p, struct sk_buff *skb)
 	char *data=(skb->data)-(skb->mac_len);
 	int len=skb->len+skb->mac_len;
 
-	if (ipn_node && ipn_node->ipn && len<=ipn_node->ipn->mtu) {
+	if (ipn_node && 
+			((ipn_node->flags & IPN_NODEFLAG_DEVMASK) == IPN_NODEFLAG_GRAB) &&
+			ipn_node->ipn && len<=ipn_node->ipn->mtu) {
 		struct msgpool_item *newmsg;
 		newmsg=ipn_msgpool_alloc(ipn_node->ipn);
-
 		if (newmsg) {
 			newmsg->len=len;
 			memcpy(newmsg->data,data,len);
-			ipn_proto_injectmsg(ipn_node,newmsg);
+			ipn_proto_injectmsg(ipn_node,newmsg,0);
 			ipn_msgpool_put(newmsg,ipn_node->ipn);
 		}
 	}
@@ -146,7 +148,7 @@ struct net_device *ipn_netdev_alloc(int type, char *name, int *err)
 			if (dev) {
 				if (dev->flags & IFF_LOOPBACK)
 					*err= -EINVAL;
-				else if (rcu_dereference(dev->br_port) != NULL)
+				else if (rcu_dereference(dev->ipn_node_port) != NULL)
 					*err= -EBUSY;
 				if (*err)
 					dev=NULL;
@@ -164,8 +166,9 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 			{
 				struct ipntap *ipntap=netdev_priv(ipn_node->dev);
 				ipntap->ipn_node=ipn_node;
-				rtnl_lock(); /*needed ??*/
-				rv=register_netdevice(ipn_node->dev);
+				rtnl_lock(); 
+				if ((rv=register_netdevice(ipn_node->dev)) == 0)
+					rcu_assign_pointer(ipn_node->dev->ipn_node_port, (struct net_bridge_port *) ipn_node);
 				rtnl_unlock();
 				if (rv) {/* error! */
 					ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
@@ -174,7 +177,7 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 			}
 			break;
 		case IPN_NODEFLAG_GRAB:
-			rcu_assign_pointer(ipn_node->dev->br_port, (struct net_bridge_port *) ipn_node);
+			rcu_assign_pointer(ipn_node->dev->ipn_node_port, (struct net_bridge_port *) ipn_node);
 			dev_set_promiscuity(ipn_node->dev,1);
 			rv=0;
 			break;
@@ -186,7 +189,7 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 {
 	switch (ipn_node->flags & IPN_NODEFLAG_DEVMASK) {
 		case IPN_NODEFLAG_TAP:
-			rtnl_lock(); /*needed ??*/
+			rtnl_lock(); 
 			unregister_netdevice(ipn_node->dev);
 			rtnl_unlock();
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
@@ -194,7 +197,7 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 			break;
 		case IPN_NODEFLAG_GRAB:
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
-			rcu_assign_pointer(ipn_node->dev->br_port, NULL);
+			rcu_assign_pointer(ipn_node->dev->ipn_node_port, NULL);
 			break;
 	}
 }

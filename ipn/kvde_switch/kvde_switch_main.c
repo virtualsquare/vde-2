@@ -20,7 +20,9 @@ static int ipn_kvde_switch_newport(struct ipn_node *newport) {
 	return -1;
 }
 
-static int ipn_kvde_switch_handlemsg(struct ipn_node *from, struct msgpool_item *msgitem){
+static int ipn_kvde_switch_handlemsg(struct ipn_node *from, 
+		struct msgpool_item *msgitem,
+		int depth){
 	struct ipn_network *ipnn=from->ipn;
 	struct ipn_hash *vdeh=(struct ipn_hash *)ipnn->proto_private;
 	int port;
@@ -34,10 +36,10 @@ static int ipn_kvde_switch_handlemsg(struct ipn_node *from, struct msgpool_item 
 		/*printk("SWITCH FROM %d -> BROADCAST\n",from->portno);*/
 		for (port=0; port<ipnn->maxports; port++)
 			if (ipnn->connport[port] && ipnn->connport[port] != from)
-				ipn_proto_sendmsg(ipnn->connport[port],msgitem);
+				ipn_proto_sendmsg(ipnn->connport[port],msgitem,depth);
 	} else {
 		/*printk("SWITCH FROM %d -> %d\n",from->portno,port);*/
-		ipn_proto_sendmsg(ipnn->connport[port],msgitem);
+		ipn_proto_sendmsg(ipnn->connport[port],msgitem,depth);
 	}
 	return 0;
 }

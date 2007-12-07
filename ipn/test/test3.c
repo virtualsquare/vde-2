@@ -44,6 +44,7 @@ char buf[256];
 struct sockaddr_un sun={.sun_family=AF_IPN,.sun_path="/tmp/sockipn"};
 main()
 {
+	//int s=socket(AF_IPN,SOCK_RAW,IPN_BROADCAST);
 	int s=socket(AF_IPN,SOCK_RAW,IPN_BROADCAST);
 	int err;
 	int len;
@@ -54,6 +55,7 @@ main()
 	if (s< 0)
 		perror("socket");
 	printf("s=%d\n",s);
+	/*
 	err=setsockopt(s,0,IPN_SO_FLAGS,&flags,sizeof(flags));
 	if (err<0)
 		perror("setsockopt");
@@ -63,6 +65,7 @@ main()
 	err=setsockopt(s,0,IPN_SO_MODE,&mode,sizeof(mode));
 	if (err<0)
 		perror("setsockopt");
+		*/
 	err=bind(s,(struct sockaddr *)&sun,sizeof(sun));
 	if (err<0)
 		perror("bind");
@@ -70,13 +73,13 @@ main()
 	err=connect(s,NULL,0);
 	*/
 	memset(&ifr, 0, sizeof(ifr));
-	strncpy(ifr.ifr_name, "eth1", IFNAMSIZ);
+	strncpy(ifr.ifr_name, "eth0", IFNAMSIZ);
 	ifr.ifr_flags=IPN_NODEFLAG_GRAB;
 	err=ioctl(s, IPN_CONN_NETDEV, (void *) &ifr);
 	if (err<0)
 		perror("connect");
 	while ((len=read(0,buf,256)) > 0) {
-		err=write(s,buf,len);
+		//err=write(s,buf,len);
 		if (err<0)
 			perror("write sock");
 	}
