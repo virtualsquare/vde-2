@@ -255,6 +255,7 @@ static int ipn_create(struct socket *sock, int protocol)
 	ipn_node->portno=IPN_PORTNO_ANY;
 	ipn_node->dev=NULL;
 	ipn_node->proto_private=NULL;
+	ipn_node->msgcount=0;
 	spin_lock_init(&ipn_node->msglock);
 	INIT_LIST_HEAD(&ipn_node->msgqueue);
 	ipn_node->ipn=NULL;
