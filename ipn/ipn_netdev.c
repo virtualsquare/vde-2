@@ -15,7 +15,7 @@
  *  without placing your module under the GPL.  Please consult a lawyer for
  *  advice before doing this.
  *
- * WARNING: THIS CODE IS ALREADY EXTREEEEMELY EXPERIMENTAL
+ * WARNING: THIS CODE IS ALREADY EXPERIMENTAL
  *
  */
 
@@ -28,14 +28,13 @@
 #include <linux/mount.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
-/* We are stealing bridge structures, just for now */
-#include <linux/if_bridge.h>
+#include <linux/version.h>
 #include <net/sock.h>
 #include "af_ipn.h"
+#include "ipn_netdev.h"
 
 #define DRV_NAME  "ipn"
-#define DRV_VERSION "0.2"
-#define ipn_node_port	br_port
+#define DRV_VERSION "0.3"
 
 static const struct ethtool_ops ipn_ethtool_ops;
 
@@ -44,14 +43,14 @@ struct ipntap {
 	struct net_device_stats stats;
 };
 
-/* Net device open. */
+/* TAP Net device open. */
 static int ipntap_net_open(struct net_device *dev)
 {
 	  netif_start_queue(dev);
 		  return 0;
 }
 
-/* Net device close. */
+/* TAP Net device close. */
 static int ipntap_net_close(struct net_device *dev)
 {
 	  netif_stop_queue(dev);
@@ -72,12 +71,12 @@ static int ipn_net_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct msgpool_item *newmsg;
 	if (!ipn_node || !ipn_node->ipn || skb->len > ipn_node->ipn->mtu)
 		goto drop;
-	newmsg=ipn_msgpool_alloc(ipn_node->ipn);
+	newmsg=ipn_msgpool_alloc(ipn_node->ipn,1);
 	if (!newmsg)
 		goto drop;
 	newmsg->len=skb->len;
 	memcpy(newmsg->data,skb->data,skb->len);
-	ipn_proto_injectmsg(ipntap->ipn_node,newmsg,0);
+	ipn_proto_injectmsg(ipntap->ipn_node,newmsg);
 	ipn_msgpool_put(newmsg,ipn_node->ipn);
 	ipntap->stats.tx_packets++;
 	ipntap->stats.tx_bytes += skb->len;
@@ -91,9 +90,8 @@ drop:
 }
 
 /* receive from a GRAB via interface hook */
-struct sk_buff *ipn_handle_hook(struct net_bridge_port *p, struct sk_buff *skb)
+struct sk_buff *ipn_handle_hook(struct ipn_node *ipn_node, struct sk_buff *skb)
 {
-	struct ipn_node *ipn_node = (struct ipn_node *)p;
 	char *data=(skb->data)-(skb->mac_len);
 	int len=skb->len+skb->mac_len;
 
@@ -101,11 +99,11 @@ struct sk_buff *ipn_handle_hook(struct net_bridge_port *p, struct sk_buff *skb)
 			((ipn_node->flags & IPN_NODEFLAG_DEVMASK) == IPN_NODEFLAG_GRAB) &&
 			ipn_node->ipn && len<=ipn_node->ipn->mtu) {
 		struct msgpool_item *newmsg;
-		newmsg=ipn_msgpool_alloc(ipn_node->ipn);
+		newmsg=ipn_msgpool_alloc(ipn_node->ipn,1);
 		if (newmsg) {
 			newmsg->len=len;
 			memcpy(newmsg->data,data,len);
-			ipn_proto_injectmsg(ipn_node,newmsg,0);
+			ipn_proto_injectmsg(ipn_node,newmsg);
 			ipn_msgpool_put(newmsg,ipn_node->ipn);
 		}
 	}
@@ -115,17 +113,15 @@ struct sk_buff *ipn_handle_hook(struct net_bridge_port *p, struct sk_buff *skb)
 
 static void ipntap_setup(struct net_device *dev)
 {
-	SET_MODULE_OWNER(dev);
 	dev->open = ipntap_net_open;
 	dev->hard_start_xmit = ipn_net_xmit;
 	dev->stop = ipntap_net_close;
 	dev->get_stats = ipntap_net_stats;
 	dev->ethtool_ops = &ipn_ethtool_ops;
-	//dev->destructor = free_netdev;
 }
 
 
-struct net_device *ipn_netdev_alloc(int type, char *name, int *err)
+struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *err)
 {
 	struct net_device *dev=NULL;
 	*err=0;
@@ -144,11 +140,15 @@ struct net_device *ipn_netdev_alloc(int type, char *name, int *err)
 			random_ether_addr((u8 *)&dev->dev_addr);
 			break;
 		case IPN_NODEFLAG_GRAB:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
 			dev=dev_get_by_name(name);
+#else
+			dev=dev_get_by_name(net,name);
+#endif
 			if (dev) {
 				if (dev->flags & IFF_LOOPBACK)
 					*err= -EINVAL;
-				else if (rcu_dereference(dev->ipn_node_port) != NULL)
+				else if (rcu_dereference(dev->ipn_port) != NULL)
 					*err= -EBUSY;
 				if (*err)
 					dev=NULL;
@@ -168,7 +168,11 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 				ipntap->ipn_node=ipn_node;
 				rtnl_lock(); 
 				if ((rv=register_netdevice(ipn_node->dev)) == 0)
-					rcu_assign_pointer(ipn_node->dev->ipn_node_port, (struct net_bridge_port *) ipn_node);
+					rcu_assign_pointer(ipn_node->dev->ipn_port, 
+#ifdef IPN_STEALING 
+							(void *)
+#endif
+							ipn_node);
 				rtnl_unlock();
 				if (rv) {/* error! */
 					ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
@@ -177,8 +181,14 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 			}
 			break;
 		case IPN_NODEFLAG_GRAB:
-			rcu_assign_pointer(ipn_node->dev->ipn_node_port, (struct net_bridge_port *) ipn_node);
+			rtnl_lock(); 
+			rcu_assign_pointer(ipn_node->dev->ipn_port, 
+#ifdef IPN_STEALING 
+					(void *)
+#endif
+					ipn_node);
 			dev_set_promiscuity(ipn_node->dev,1);
+			rtnl_unlock();
 			rv=0;
 			break;
 	}
@@ -189,15 +199,19 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 {
 	switch (ipn_node->flags & IPN_NODEFLAG_DEVMASK) {
 		case IPN_NODEFLAG_TAP:
+			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
 			rtnl_lock(); 
+			rcu_assign_pointer(ipn_node->dev->ipn_port, NULL);
 			unregister_netdevice(ipn_node->dev);
 			rtnl_unlock();
-			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
 			free_netdev(ipn_node->dev);
 			break;
 		case IPN_NODEFLAG_GRAB:
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
-			rcu_assign_pointer(ipn_node->dev->ipn_node_port, NULL);
+			rtnl_lock(); 
+			rcu_assign_pointer(ipn_node->dev->ipn_port, NULL);
+			dev_set_promiscuity(ipn_node->dev,-1);
+			rtnl_unlock();
 			break;
 	}
 }
@@ -219,7 +233,6 @@ void ipn_netdev_sendmsg(struct ipn_node *to,struct msgpool_item *msg)
 	switch (to->flags & IPN_NODEFLAG_DEVMASK) {
 		case IPN_NODEFLAG_TAP:
 			skb->protocol = eth_type_trans(skb, dev);
-			/*netif_rx_ni(skb);*/
 			netif_rx(skb);
 			ipntap->stats.rx_packets++;
 			ipntap->stats.rx_bytes += msg->len;
@@ -258,21 +271,26 @@ static void ipn_get_drvinfo(struct net_device *dev, struct ethtool_drvinfo *info
 static const struct ethtool_ops ipn_ethtool_ops = {
 	.get_settings = ipn_get_settings,
 	.get_drvinfo  = ipn_get_drvinfo,
-	//.get_msglevel = ipn_get_msglevel,
-	//.set_msglevel = ipn_set_msglevel,
-	//.get_link = ipn_get_link,
-	//.get_rx_csum  = ipn_get_rx_csum,
-	//.set_rx_csum  = ipn_set_rx_csum
+	/* not implemented (yet?)
+	.get_msglevel = ipn_get_msglevel,
+	.set_msglevel = ipn_set_msglevel,
+	.get_link = ipn_get_link,
+	.get_rx_csum  = ipn_get_rx_csum,
+	.set_rx_csum  = ipn_set_rx_csum */
 };
 
 int ipn_netdev_init(void)
 {
-	/* for now we are stealing the kernel bridge hook */
-	br_handle_frame_hook=ipn_handle_hook;
+	ipn_handle_frame_hook=
+#ifdef IPN_STEALING
+		(void *)
+#endif
+		ipn_handle_hook;
+
 	return 0;
 }
 
 void ipn_netdev_fini(void)
 {
-	br_handle_frame_hook=NULL;
+	ipn_handle_frame_hook=NULL;
 }

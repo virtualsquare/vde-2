@@ -14,7 +14,7 @@
  *  without placing your module under the GPL.  Please consult a lawyer for
  *  advice before doing this.
  *
- * WARNING: THIS CODE IS ALREADY EXTREEEEMELY EXPERIMENTAL
+ * WARNING: THIS CODE IS ALREADY EXPERIMENTAL
  *
  */
 
@@ -25,20 +25,33 @@
 #include <linux/un.h>
 #include <linux/list.h>
 #include <linux/mount.h>
+#include <linux/version.h>
 #include <net/sock.h>
+/*
+#include <net/af_ipn.h>
+*/
 #include "af_ipn.h"
 #include "ipn_netdev.h"
-#include "ipn_hash.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("VIEW-OS TEAM");
-MODULE_DESCRIPTION("IPN-VDE Kernel Module");
+MODULE_DESCRIPTION("IPN Kernel Module");
 
-#define MAX_PROTO 4
+#define IPN_MAX_PROTO 4
+
+/*extension of RCV_SHUTDOWN defined in include/net/sock.h
+ * when the bit is set recv fails */
+/* NO_OOB: do not send OOB */
+#define RCV_SHUTDOWN_NO_OOB	4
+/* EXTENDED MASK including OOB */
+#define SHUTDOWN_XMASK	(SHUTDOWN_MASK | RCV_SHUTDOWN_NO_OOB)
+/* if XRCV_SHUTDOWN is all set recv fails */
+#define XRCV_SHUTDOWN	(RCV_SHUTDOWN | RCV_SHUTDOWN_NO_OOB)
 
 /* Network table and hash */
 struct hlist_head ipn_network_table[IPN_HASH_SIZE + 1];
 DEFINE_SPINLOCK(ipn_table_lock);
+static struct kmem_cache *ipn_network_cache;
 static struct kmem_cache *ipn_node_cache;
 static struct kmem_cache *ipn_msgitem_cache;
 static DECLARE_MUTEX(ipn_glob_mutex);
@@ -46,15 +59,15 @@ static DECLARE_MUTEX(ipn_glob_mutex);
 /* Protocol 1: HUB/Broadcast default protocol. Function Prototypes */
 static int ipn_bcast_newport(struct ipn_node *newport);
 static int ipn_bcast_handlemsg(struct ipn_node *from, 
-		struct msgpool_item *msgitem,
-		int depth);
+		struct msgpool_item *msgitem);
 
-/* Protocol table */
+/* default protocol IPN_BROADCAST (0) */
 static struct ipn_protocol ipn_bcast = {
 	.refcnt=0,
 	.ipn_p_newport=ipn_bcast_newport, 
 	.ipn_p_handlemsg=ipn_bcast_handlemsg};
-static struct ipn_protocol *ipn_protocol_table[MAX_PROTO]={&ipn_bcast};
+/* Protocol table */
+static struct ipn_protocol *ipn_protocol_table[IPN_MAX_PROTO]={&ipn_bcast};
 
 /* Socket call function prototypes */
 static int ipn_release(struct socket *);
@@ -74,7 +87,8 @@ static int ipn_setsockopt(struct socket *sock, int level, int optname,
 static int ipn_getsockopt(struct socket *sock, int level, int optname,
 		char __user *optval, int __user *optlen);
 
-/* Network table Management */
+/* Network table Management 
+ * inode->ipn_network hash table */
 static inline void ipn_insert_network(struct hlist_head *list, struct ipn_network *ipnn)
 {
 	spin_lock(&ipn_table_lock);
@@ -108,63 +122,50 @@ found:
 	return ipnn;
 }
 
-static int ipn_check_node_connected(struct ipn_node *ipn_node)
-{
-	struct ipn_network *ipnn;
-	struct hlist_node *node;
-	int i,j;
-	spin_lock(&ipn_table_lock);
-	for (i=0;i<IPN_HASH_SIZE;i++)
-	{
-		hlist_for_each_entry(ipnn, node, &ipn_network_table[i], hnode) {
-			for(j=0;j<ipnn->maxports;j++) {
-				if (ipnn->connport[j] == ipn_node) {
-					spin_unlock(&ipn_table_lock);
-					return 1;
-				}
-			}
-		}
-	}
-	spin_unlock(&ipn_table_lock);
-	return 0;
-}
-
-static int ipn_setpersist(struct ipn_node *ipn_node, int persist);
-static void cleanup_persistent_nodes(void)
-{
-	struct ipn_network *ipnn;
-	struct hlist_node *node;
-	int i,j;
-	spin_lock(&ipn_table_lock);
-	for (i=0;i<IPN_HASH_SIZE;i++)
-	{
-		hlist_for_each_entry(ipnn, node, &ipn_network_table[i], hnode) {
-			for(j=0;j<ipnn->maxports;j++) {
-				struct ipn_node *ipn_node=ipnn->connport[j];
-				if (ipn_node && (ipn_node->dev) && (ipn_node->flags & IPN_NODEFLAG_INUSE) == 0)
-					ipn_setpersist(ipn_node,0);
-			}
-		}
-	}
-	spin_unlock(&ipn_table_lock);
-}
-
-/* msgpool management */
+/* msgpool management 
+ * msgpool_item are ipn_network dependent (each net has its own MTU)
+ * for each message sent there is one msgpool_item and many struct msgitem
+ * one for each receipient. 
+ * msgitem are connected to the node's msgqueue or oobmsgqueue.
+ * when a message is delivered to a process the msgitem is deleted and
+ * the count of the msgpool_item is decreased.
+ * msgpool_item elements gets deleted automatically when count is 0*/
 
 struct msgitem {
 	struct list_head list;
 	struct msgpool_item *msg;
 };
 
-struct msgpool_item *ipn_msgpool_alloc(struct ipn_network *ipnn)
+/* alloc a fresh msgpool item. count is set to 1.
+ * the typical use is
+ *  ipn_msgpool_alloc
+ *  for each receipient
+ *    enqueue messages to the process (using msgitem), ipn_msgpool_hold 
+ *  ipn_msgpool_put
+ * The message can be delivered concurrently. init count to 1 guarantees
+ * that it survives at least until is has been enqueued to all
+ * receivers */
+static struct msgpool_item *_ipn_msgpool_alloc(struct ipn_network *ipnn)
 {
 	struct msgpool_item *new;
-	new=kmem_cache_alloc(ipnn->msgpool_cache,GFP_KERNEL);
-	atomic_set(&new->count,1);
-	atomic_inc(&ipnn->msgpool_nelem);
+	if ((new=kmem_cache_alloc(ipnn->msgpool_cache,GFP_KERNEL)) != NULL) {
+		atomic_set(&new->count,1);
+		atomic_inc(&ipnn->msgpool_nelem);
+	}
 	return new;
 }
 
+struct msgpool_item *ipn_msgpool_alloc(struct ipn_network *ipnn,int leaky)
+{
+	  if (leaky && (ipnn->flags & IPN_FLAG_LOSSLESS) &&
+				atomic_read(&ipnn->msgpool_nelem) < ipnn->msgpool_size)
+			return NULL;
+		else 
+			return _ipn_msgpool_alloc(ipnn);
+}
+
+/* If the service il LOSSLESS, this msgpool call waits for an
+ * available msgpool item */
 static struct msgpool_item *ipn_msgpool_alloc_locking(struct ipn_network *ipnn)
 {
 	if (ipnn->flags & IPN_FLAG_LOSSLESS) {
@@ -174,7 +175,7 @@ static struct msgpool_item *ipn_msgpool_alloc_locking(struct ipn_network *ipnn)
 				return NULL;
 		}
 	}
-	return ipn_msgpool_alloc(ipnn);
+	return _ipn_msgpool_alloc(ipnn);
 }
 
 static inline void ipn_msgpool_hold(struct msgpool_item *msg)
@@ -182,6 +183,7 @@ static inline void ipn_msgpool_hold(struct msgpool_item *msg)
 	atomic_inc(&msg->count);
 }
 
+/* decrease count and delete msgpool_item if count == 0 */
 void ipn_msgpool_put(struct msgpool_item *old,
 		struct ipn_network *ipnn)
 {
@@ -221,21 +223,39 @@ static struct proto ipn_proto = {
 	.obj_size = sizeof(struct ipn_sock),
 };
 
+/* create a socket
+ * ipn_node is a separate structure, pointed by ipn_sock -> node
+ * when a node is "persistent", ipn_node survives while ipn_sock gets released*/
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
 static int ipn_create(struct socket *sock, int protocol)
+#else
+static int ipn_create(struct net *net,struct socket *sock, int protocol)
+#endif
 {
 	struct ipn_sock *ipn_sk;
 	struct ipn_node *ipn_node;
-	//printk("IPN create %d\n",protocol);
+	
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+	void *net=NULL;
+#else
+	if (net != &init_net)
+		return -EAFNOSUPPORT;
+#endif
+
 	if (sock->type != SOCK_RAW)
 		return -EPROTOTYPE;
 	if (protocol > 0)
 		protocol=protocol-1;
 	else
 		protocol=IPN_BROADCAST-1;
-	if (protocol < 0 || protocol >= MAX_PROTO ||
+	if (protocol < 0 || protocol >= IPN_MAX_PROTO ||
 			ipn_protocol_table[protocol] == NULL)
 		return -EPROTONOSUPPORT;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
 	ipn_sk = (struct ipn_sock *) sk_alloc(PF_IPN, GFP_KERNEL, &ipn_proto, 1);
+#else
+	ipn_sk = (struct ipn_sock *) sk_alloc(net, PF_IPN, GFP_KERNEL, &ipn_proto);
+#endif
 
 	if (!ipn_sk) 
 		return -ENOMEM;
@@ -248,119 +268,197 @@ static int ipn_create(struct socket *sock, int protocol)
 	sock->state = SS_UNCONNECTED;
 	sock->ops = &ipn_ops;
 	sock->sk=(struct sock *)ipn_sk;
+	INIT_LIST_HEAD(&ipn_node->nodelist);
 	ipn_node->protocol=protocol;
 	ipn_node->flags=IPN_NODEFLAG_INUSE;
-	ipn_node->shutdown=0;
+	ipn_node->shutdown=RCV_SHUTDOWN_NO_OOB;
 	ipn_node->descr[0]=0;
 	ipn_node->portno=IPN_PORTNO_ANY;
+	ipn_node->net=net;
 	ipn_node->dev=NULL;
 	ipn_node->proto_private=NULL;
-	ipn_node->msgcount=0;
+	ipn_node->totmsgcount=0;
+	ipn_node->oobmsgcount=0;
 	spin_lock_init(&ipn_node->msglock);
 	INIT_LIST_HEAD(&ipn_node->msgqueue);
+	INIT_LIST_HEAD(&ipn_node->oobmsgqueue);
 	ipn_node->ipn=NULL;
 	init_waitqueue_head(&ipn_node->read_wait);
 	ipn_node->pbp=NULL;
 	return 0;
 }
 
+/* update # of readers and # of writers counters for an ipn network.
+ * This function sends oob messages to nodes requesting the service */
+static void ipn_net_update_counters(struct ipn_network *ipnn,
+		int chg_readers, int chg_writers) {
+	ipnn->numreaders += chg_readers;
+	ipnn->numwriters += chg_writers;
+	if (ipnn->mtu >= sizeof(struct numnode_oob))
+	{
+		struct msgpool_item *ipn_msg=_ipn_msgpool_alloc(ipnn);
+		if (ipn_msg) {
+			struct numnode_oob *oob_msg=(struct numnode_oob *)(ipn_msg->data);
+			struct ipn_node *ipn_node;
+			ipn_msg->len=sizeof(struct numnode_oob);
+			oob_msg->level=IPN_ANY;
+			oob_msg->tag=IPN_OOB_NUMNODE_TAG;
+			oob_msg->numreaders=ipnn->numreaders;
+			oob_msg->numwriters=ipnn->numwriters;
+			list_for_each_entry(ipn_node, &ipnn->connectqueue, nodelist) {
+				if (ipn_node->flags & IPN_NODEFLAG_OOB_NUMNODES)
+					ipn_proto_oobsendmsg(ipn_node,ipn_msg);
+			}
+			ipn_msgpool_put(ipn_msg,ipnn);
+		}
+	}
+}
+
+/* flush pending messages (for close and shutdown RCV) */
 static void ipn_flush_recvqueue(struct ipn_node *ipn_node)
 {
 	struct ipn_network *ipnn=ipn_node->ipn;
-	/* delete all pending msgs */
 	spin_lock(&ipn_node->msglock);
 	while (!list_empty(&ipn_node->msgqueue)) {
 		struct msgitem *msgitem=
 			list_first_entry(&ipn_node->msgqueue, struct msgitem, list);
 		list_del(&msgitem->list);
-		ipn_node->msgcount--;
+		ipn_node->totmsgcount--;
 		ipn_msgpool_put(msgitem->msg,ipnn);
 		kmem_cache_free(ipn_msgitem_cache,msgitem);
 	}
 	spin_unlock(&ipn_node->msglock);
 }
 
-static int ipn_release_node(struct ipn_node *ipn_node)
+/* flush pending oob messages (for socket close) */
+static void ipn_flush_oobrecvqueue(struct ipn_node *ipn_node)
 {
-	if (!(ipn_node->flags & IPN_NODEFLAG_PERSIST)) 
-	{
-		struct ipn_network *ipnn=ipn_node->ipn;
-		if (ipnn) {
-			if (down_interruptible(&ipnn->ipnn_mutex)) {
-				up(&ipn_glob_mutex);
-				return -ERESTARTSYS;
-			}
-			if (ipn_node->portno >= 0) {
-				ipn_protocol_table[ipnn->protocol]->ipn_p_predelport(ipn_node);
-				ipnn->connport[ipn_node->portno]=NULL;
-			}
-			up(&ipnn->ipnn_mutex);
-			ipn_flush_recvqueue(ipn_node);
-			if (ipn_node->dev)
-				ipn_netdev_close(ipn_node);
-			if (ipn_node->portno >= 0) {
-				ipn_protocol_table[ipnn->protocol]->ipn_p_delport(ipn_node);
-			}
+	struct ipn_network *ipnn=ipn_node->ipn;
+	spin_lock(&ipn_node->msglock);
+	while (!list_empty(&ipn_node->oobmsgqueue)) {
+		struct msgitem *msgitem=
+			list_first_entry(&ipn_node->oobmsgqueue, struct msgitem, list);
+		list_del(&msgitem->list);
+		ipn_node->totmsgcount--;
+		ipn_node->oobmsgcount--;
+		ipn_msgpool_put(msgitem->msg,ipnn);
+		kmem_cache_free(ipn_msgitem_cache,msgitem);
+	}
+	spin_unlock(&ipn_node->msglock);
+}
 
-			/* No more network elements */
-			if (atomic_dec_and_test(&ipnn->refcnt))
-			{
-				ipn_protocol_table[ipnn->protocol]->ipn_p_delnet(ipnn);
-				ipn_remove_network(ipnn);
-				ipn_protocol_table[ipnn->protocol]->refcnt--;
-				if (ipnn->dentry) {
-					dput(ipnn->dentry);
-					mntput(ipnn->mnt);
-				}
-				module_put(THIS_MODULE);
-				if (ipnn->msgpool_cache)
-					kmem_cache_destroy(ipnn->msgpool_cache);
-				kfree(ipnn);
-			}
+/* Terminate node. The node is "logically" terminated. */
+static int ipn_terminate_node(struct ipn_node *ipn_node)
+{
+	struct ipn_network *ipnn=ipn_node->ipn;
+	if (ipnn) {
+		if (down_interruptible(&ipnn->ipnn_mutex)) 
+			return -ERESTARTSYS;
+		if (ipn_node->portno >= 0) {
+			ipn_protocol_table[ipnn->protocol]->ipn_p_predelport(ipn_node);
+			ipnn->connport[ipn_node->portno]=NULL;
 		}
-		if (ipn_node->pbp) {
-			kfree(ipn_node->pbp);
-			ipn_node->pbp=NULL;
-		} 
-		kmem_cache_free(ipn_node_cache,ipn_node);
-	} else
-		ipn_node->flags &= ~IPN_NODEFLAG_INUSE;
+		list_del(&ipn_node->nodelist);
+		ipn_flush_recvqueue(ipn_node);
+		ipn_flush_oobrecvqueue(ipn_node);
+		if (ipn_node->portno >= 0) {
+			ipn_protocol_table[ipnn->protocol]->ipn_p_delport(ipn_node);
+		ipn_node->ipn=NULL;
+		ipn_net_update_counters(ipnn,
+				(ipn_node->shutdown & RCV_SHUTDOWN)?0:-1,
+				(ipn_node->shutdown & SEND_SHUTDOWN)?0:-1);
+		up(&ipnn->ipnn_mutex);
+		if (ipn_node->dev)
+			ipn_netdev_close(ipn_node);
+		}
+		/* No more network elements */
+		if (atomic_dec_and_test(&ipnn->refcnt))
+		{
+			ipn_protocol_table[ipnn->protocol]->ipn_p_delnet(ipnn);
+			ipn_remove_network(ipnn);
+			ipn_protocol_table[ipnn->protocol]->refcnt--;
+			if (ipnn->dentry) {
+				dput(ipnn->dentry);
+				mntput(ipnn->mnt);
+			}
+			module_put(THIS_MODULE);
+			if (ipnn->msgpool_cache)
+				kmem_cache_destroy(ipnn->msgpool_cache);
+			if (ipnn->connport)
+				kfree(ipnn->connport);
+			kmem_cache_free(ipn_network_cache, ipnn);
+		}
+	}
+	if (ipn_node->pbp) {
+		kfree(ipn_node->pbp);
+		ipn_node->pbp=NULL;
+	} 
+	ipn_node->shutdown = SHUTDOWN_XMASK;
 	return 0;
 }
 
+/* release of a socket */
 static int ipn_release (struct socket *sock)
 {
 	struct ipn_sock *ipn_sk=(struct ipn_sock *)sock->sk;
 	struct ipn_node *ipn_node=ipn_sk->node;
 	int rv;
-	//printk("IPN release\n");
 	if (down_interruptible(&ipn_glob_mutex))
 		return -ERESTARTSYS;
-	rv=ipn_release_node(ipn_node);
-	if (!rv)
+	if (ipn_node->flags & IPN_NODEFLAG_PERSIST) {
+		ipn_node->flags &= ~IPN_NODEFLAG_INUSE;
+		rv=0;
+		up(&ipn_glob_mutex);
+	} else {
+		rv=ipn_terminate_node(ipn_node);
+		up(&ipn_glob_mutex);
+		if (rv==0) {
+			ipn_netdevsync();
+			kmem_cache_free(ipn_node_cache,ipn_node);
+		}
+	}
+	if (rv==0) 
 		sock_put((struct sock *) ipn_sk);
-	up(&ipn_glob_mutex);
 	return rv;
 }
 
-static int ipn_setpersist(struct ipn_node *ipn_node, int persist)
+/* _set persist, change the persistence of a node,
+ * when persistence gets cleared and the node is no longer used
+ * the node is terminated and freed.
+ * ipn_glob_mutex must be locked */
+static int _ipn_setpersist(struct ipn_node *ipn_node, int persist)
 {
-	if (ipn_node->dev == NULL)
-		return -ENODEV;
-	if (down_interruptible(&ipn_glob_mutex))
-		return -ERESTARTSYS;
+	int rv=0;
 	if (persist)
 		ipn_node->flags |= IPN_NODEFLAG_PERSIST;
 	else {
 		ipn_node->flags &= ~IPN_NODEFLAG_PERSIST;
-		if (!(ipn_node->flags & IPN_NODEFLAG_INUSE))
-			ipn_release_node(ipn_node);
-
+		if (!(ipn_node->flags & IPN_NODEFLAG_INUSE)) {
+			rv=ipn_terminate_node(ipn_node);
+			if (rv==0)
+				kmem_cache_free(ipn_node_cache,ipn_node);
+		}
 	}
-	up(&ipn_glob_mutex);
-	return 0;
+	return rv;
 }
 
+/* ipn_setpersist 
+ * lock ipn_glob_mutex and call __ipn_setpersist above */
+static int ipn_setpersist(struct ipn_node *ipn_node, int persist)
+{
+	int rv=0;
+	if (ipn_node->dev == NULL)
+		return -ENODEV;
+	if (down_interruptible(&ipn_glob_mutex))
+		return -ERESTARTSYS;
+	rv=_ipn_setpersist(ipn_node,persist);
+	up(&ipn_glob_mutex);
+	return rv;
+}
+
+/* several network parameters can be set by setsockopt prior to bind */
+/* struct pre_bind_parms is a temporary stucture connected to ipn_node->pbp
+ * to keep the parameter values. */
 struct pre_bind_parms {
 	unsigned short maxports;
 	unsigned short flags;
@@ -369,9 +467,9 @@ struct pre_bind_parms {
 	unsigned short mode;
 };
 
-/* STD_PARMS:  BITS_PER_BYTE nodes, no flags, BITS_PER_BYTE pending msgs, 
+/* STD_PARMS:  BITS_PER_LONG nodes, no flags, BITS_PER_BYTE pending msgs, 
  * Ethernet + VLAN MTU*/
-#define STD_BIND_PARMS {BITS_PER_BYTE, 0, BITS_PER_BYTE, 1514, 0x777};
+#define STD_BIND_PARMS {BITS_PER_LONG, 0, BITS_PER_BYTE, 1514, 0x777};
 
 static int ipn_mkname(struct sockaddr_un * sunaddr, int len)
 {
@@ -392,6 +490,7 @@ static int ipn_mkname(struct sockaddr_un * sunaddr, int len)
 }
 
 
+/* IPN BIND */
 static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
 	struct sockaddr_un *sunaddr=(struct sockaddr_un *)uaddr;
@@ -413,7 +512,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	}
 
 	if (ipn_node->protocol >= 0 && 
-			(ipn_node->protocol >= MAX_PROTO ||
+			(ipn_node->protocol >= IPN_MAX_PROTO ||
 			 ipn_protocol_table[ipn_node->protocol] == NULL)) {
 		err= -EPROTONOSUPPORT;
 		goto out;
@@ -455,25 +554,32 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		/* create a new ipn_network item */
 		if (ipn_node->pbp) 
 			parms=*ipn_node->pbp;
-		/* kzalloc the network structure (it cannot be a slub because the size depends
-		 * on maxports */
-		ipnn=kzalloc(sizeof(struct ipn_network) +
-				(parms.maxports * sizeof(struct ipn_node *)),GFP_KERNEL);
+		ipnn=kmem_cache_zalloc(ipn_network_cache,GFP_KERNEL); 
 		if (!ipnn) {
 			err=-ENOMEM;
-			goto out_mknod_dput;
+			goto out_mknod_dput_ipnn;
 		}
+		ipnn->connport=kzalloc(parms.maxports * sizeof(struct ipn_node *),GFP_KERNEL);
+		if (!ipnn->connport) {
+			err=-ENOMEM;
+			goto out_mknod_dput_ipnn2;
+		}
+
+		/* module refcnt is incremented for each network, thus
+		 * rmmod is forbidden if there are persistent node */
 		if (!try_module_get(THIS_MODULE)) {
 			err = -EINVAL;
-			goto out_mknod_dput;
+			goto out_mknod_dput_ipnn2;
 		}
 		memcpy(&ipnn->sunaddr,sunaddr,addr_len);
 		ipnn->mtu=parms.mtu;
-		ipnn->msgpool_cache=kmem_cache_create(ipnn->sunaddr.sun_path,sizeof(struct msgpool_item)+ipnn->mtu,0,0,NULL,NULL);
+		ipnn->msgpool_cache=kmem_cache_create(ipnn->sunaddr.sun_path,sizeof(struct msgpool_item)+ipnn->mtu,0,0,NULL);
 		if (!ipnn->msgpool_cache) {
 			err=-ENOMEM;
 			goto out_mknod_dput_putmodule;
 		}
+		INIT_LIST_HEAD(&ipnn->unconnectqueue);
+		INIT_LIST_HEAD(&ipnn->connectqueue);
 		atomic_set(&ipnn->refcnt,1);
 		ipnn->dentry=nd.dentry;
 		ipnn->mnt=nd.mnt;
@@ -483,6 +589,8 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		if (ipnn->protocol < 0) ipnn->protocol = 0;
 		ipn_protocol_table[ipnn->protocol]->refcnt++;
 		ipnn->flags=parms.flags;
+		ipnn->numreaders=0;
+		ipnn->numwriters=0;
 		ipnn->maxports=parms.maxports;
 		atomic_set(&ipnn->msgpool_nelem,0);
 		ipnn->msgpool_size=parms.msgpoolsize;
@@ -493,6 +601,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			goto out_mknod_dput_putmodule;
 		ipn_insert_network(&ipn_network_table[nd.dentry->d_inode->i_ino & (IPN_HASH_SIZE-1)],ipnn);
 	} else {
+		/* join an existing network */
 		err = vfs_permission(&nd, MAY_EXEC);
 		if (err)
 			goto put_fail;
@@ -500,8 +609,9 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		if (!S_ISSOCK(nd.dentry->d_inode->i_mode))
 			goto put_fail;
 		ipnn=ipn_find_network_byinode(nd.dentry->d_inode);
-		if (!ipnn)
+		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED))
 			goto put_fail;
+		list_add_tail(&ipn_node->nodelist,&ipnn->unconnectqueue);
 		atomic_inc(&ipnn->refcnt);
 	}
 	if (ipn_node->pbp) {
@@ -521,6 +631,10 @@ out:
 
 out_mknod_dput_putmodule:
 	module_put(THIS_MODULE);
+out_mknod_dput_ipnn2:
+	kfree(ipnn->connport);
+out_mknod_dput_ipnn:
+	kmem_cache_free(ipn_network_cache,ipnn);
 out_mknod_dput:
 	dput(dentry);
 out_mknod_unlock:
@@ -533,6 +647,7 @@ out_mknod_parent:
 	return err;
 }
 
+/* IPN CONNECT */
 static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 		int addr_len, int flags){
 	struct sockaddr_un *sunaddr=(struct sockaddr_un*)addr;
@@ -572,9 +687,10 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 			else
 				goto put_fail;
 		}
-		/*printk("NODE %d PERM %d BOTH %d\n",ipn_node->shutdown,mustshutdown,mustshutdown|ipn_node->shutdown);*/
 		mustshutdown |= ipn_node->shutdown;
-		if (mustshutdown == (RCV_SHUTDOWN | SEND_SHUTDOWN)) {
+		/* if the combination of shutdown and permissions leaves
+		 * no abilities, connect returns EACCES */
+		if (mustshutdown == SHUTDOWN_XMASK) {
 			err=-EACCES;
 			goto put_fail;
 		} else {
@@ -586,7 +702,7 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 			goto put_fail;
 		}
 		ipnn=ipn_find_network_byinode(nd.dentry->d_inode);
-		if (!ipnn) {
+		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED)) {
 			err = -ECONNREFUSED;
 			goto put_fail;
 		}
@@ -601,7 +717,6 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 	} else
 		ipnn=ipn_node->ipn;
 
-	/* is it possible to close ipn_glob_mutex here? */
 	if (down_interruptible(&ipnn->ipnn_mutex)) {
 		err=-ERESTARTSYS;
 		goto out;
@@ -611,8 +726,14 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 		sock->state = SS_CONNECTED;
 		ipn_node->portno=portno;
 		ipnn->connport[portno]=ipn_node;
-		if (!(ipn_node->flags & IPN_NODEFLAG_BOUND))
+		if (!(ipn_node->flags & IPN_NODEFLAG_BOUND)) {
 			atomic_inc(&ipnn->refcnt);
+			list_del(&ipn_node->nodelist);
+		}
+		list_add_tail(&ipn_node->nodelist,&ipnn->connectqueue);
+		ipn_net_update_counters(ipnn,
+				(ipn_node->shutdown & RCV_SHUTDOWN)?0:1,
+				(ipn_node->shutdown & SEND_SHUTDOWN)?0:1);
 	} else {
 		ipn_node->ipn=previousipnn; /* undo changes on ipn_node->ipn */
 		err=-EADDRNOTAVAIL;
@@ -635,14 +756,18 @@ static int ipn_getname(struct socket *sock, struct sockaddr *uaddr,
 	struct sockaddr_un *sunaddr=(struct sockaddr_un *)uaddr;
 	int err=0;
 
+	if (down_interruptible(&ipn_glob_mutex))
+		return -ERESTARTSYS;
 	if (ipnn) {
 		*uaddr_len = ipnn->sunaddr_len;
 		memcpy(sunaddr,&ipnn->sunaddr,*uaddr_len);
 	} else
 		err = -ENOTCONN;
+	up(&ipn_glob_mutex);
 	return err;
 }
 
+/* IPN POLL */
 static unsigned int ipn_poll(struct file *file, struct socket *sock, 
 		poll_table *wait) {
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
@@ -653,7 +778,11 @@ static unsigned int ipn_poll(struct file *file, struct socket *sock,
 		poll_wait(file,&ipn_node->read_wait,wait);
 		if (ipnn->flags & IPN_FLAG_LOSSLESS)
 			poll_wait(file,&ipnn->send_wait,wait);
-		if (!(list_empty(&ipn_node->msgqueue))) mask |= POLLIN | POLLRDNORM;
+		/* POLLIN if recv succeeds, 
+		 * POLL{PRI,RDNORM} if there are {oob,non-oob} messages */
+		if (ipn_node->totmsgcount > 0) mask |= POLLIN;
+		if (!(list_empty(&ipn_node->msgqueue))) mask |= POLLRDNORM;
+		if (!(list_empty(&ipn_node->oobmsgqueue))) mask |= POLLPRI;
 		if ((!(ipnn->flags & IPN_FLAG_LOSSLESS)) |
 				(atomic_read(&ipnn->msgpool_nelem) < ipnn->msgpool_size))
 			mask |= POLLOUT | POLLWRNORM;
@@ -661,6 +790,8 @@ static unsigned int ipn_poll(struct file *file, struct socket *sock,
 	return mask;
 }
 
+/* connect netdev (from ioctl). connect a bound socket to a 
+ * network device TAP or GRAB */
 static int ipn_connect_netdev(struct socket *sock,struct ifreq *ifr)
 {
 	int err=0;
@@ -678,7 +809,7 @@ static int ipn_connect_netdev(struct socket *sock,struct ifreq *ifr)
 		up(&ipn_glob_mutex);
 		return -ERESTARTSYS;
 	}
-	ipn_node->dev=ipn_netdev_alloc(ifr->ifr_flags,ifr->ifr_name,&err);
+	ipn_node->dev=ipn_netdev_alloc(ipn_node->net,ifr->ifr_flags,ifr->ifr_name,&err);
 	if (ipn_node->dev) {
 		int portno;
 		portno = ipn_protocol_table[ipnn->protocol]->ipn_p_newport(ipn_node);
@@ -695,10 +826,13 @@ static int ipn_connect_netdev(struct socket *sock,struct ifreq *ifr)
 				ipn_node->portno= -1;
 				ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
 				ipnn->connport[portno]=NULL;
-			} else 
+			} else  {
 				ipn_protocol_table[ipnn->protocol]->ipn_p_postnewport(ipn_node);
+				list_del(&ipn_node->nodelist);
+				list_add_tail(&ipn_node->nodelist,&ipnn->connectqueue);
+			}
 		} else {
-			ipn_netdev_close(ipn_node); /*unregister unregistered dev problem!*/
+			ipn_netdev_close(ipn_node); 
 			err=-EADDRNOTAVAIL;
 			ipn_node->dev=NULL;
 		}
@@ -709,6 +843,8 @@ static int ipn_connect_netdev(struct socket *sock,struct ifreq *ifr)
 	return err;
 }
 
+/* join a netdev, a socket gets connected to a persistent node
+ * not connected to another socket */
 static int ipn_join_netdev(struct socket *sock,struct ifreq *ifr)
 {
 	int err=0;
@@ -724,9 +860,17 @@ static int ipn_join_netdev(struct socket *sock,struct ifreq *ifr)
 		up(&ipn_glob_mutex);
 		return -ERESTARTSYS;
 	}
-	dev=dev_get_by_name(ifr->ifr_name);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+	dev=__dev_get_by_name(ifr->ifr_name);
+#else
+	dev=__dev_get_by_name(ipn_node->net,ifr->ifr_name);
+#endif
 	if (!dev) 
-		dev=dev_get_by_index(ifr->ifr_ifindex);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+		dev=__dev_get_by_index(ifr->ifr_ifindex);
+#else
+		dev=__dev_get_by_index(ipn_node->net,ifr->ifr_ifindex);
+#endif
 	if (dev && (ipn_joined=ipn_netdev2node(dev)) != NULL) { /* the interface does exist */
 		int i;
 		for (i=0;i<ipnn->maxports && ipn_joined != ipnn->connport[i] ;i++)
@@ -734,7 +878,7 @@ static int ipn_join_netdev(struct socket *sock,struct ifreq *ifr)
 		if (i < ipnn->maxports) { /* found */
 			/* ipn_joined is substituted to ipn_node */
 			((struct ipn_sock *)sock->sk)->node=ipn_joined;
-			ipn_node->flags |= IPN_NODEFLAG_INUSE;
+			ipn_joined->flags |= IPN_NODEFLAG_INUSE;
 			atomic_dec(&ipnn->refcnt);
 			kmem_cache_free(ipn_node_cache,ipn_node);
 		} else
@@ -746,6 +890,8 @@ static int ipn_join_netdev(struct socket *sock,struct ifreq *ifr)
 	return err;
 }
 
+/* set persistence of a node looking for it by interface name
+ * (it is for sysadm, to close network interfaces)*/
 static int ipn_setpersist_netdev(struct ifreq *ifr, int value)
 {
 	struct net_device *dev;
@@ -755,24 +901,36 @@ static int ipn_setpersist_netdev(struct ifreq *ifr, int value)
 		return -EPERM;
 	if (down_interruptible(&ipn_glob_mutex))
 		return -ERESTARTSYS;
-	dev=dev_get_by_name(ifr->ifr_name);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+	dev=__dev_get_by_name(ifr->ifr_name);
+#else
+	dev=__dev_get_by_name(&init_net,ifr->ifr_name);
+#endif
 	if (!dev)
-		dev=dev_get_by_index(ifr->ifr_ifindex);
-	if (dev && (ipn_node=ipn_netdev2node(dev)) != NULL &&
-			ipn_check_node_connected(ipn_node) ) { /* the interface does exist */
-		ipn_setpersist(ipn_node,value);
-	} else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+		dev=__dev_get_by_index(ifr->ifr_ifindex);
+#else
+		dev=__dev_get_by_index(&init_net,ifr->ifr_ifindex);
+#endif
+	if (dev && (ipn_node=ipn_netdev2node(dev)) != NULL) 
+		_ipn_setpersist(ipn_node,value);
+	else
 		err=-EADDRNOTAVAIL;
 	up(&ipn_glob_mutex);
 	return err;
 }
 
+/* IPN IOCTL */
 static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
 	struct ipn_network *ipnn=ipn_node->ipn;
 	void __user* argp = (void __user*)arg;
 	struct ifreq ifr;
 
+	if (ipn_node->shutdown == SHUTDOWN_XMASK)
+		return -ECONNRESET;
+
+	/* get arguments */
 	switch (cmd) {
 		case IPN_SETPERSIST_NETDEV:
 		case IPN_CLRPERSIST_NETDEV:
@@ -784,6 +942,7 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 			ifr.ifr_name[IFNAMSIZ-1] = '\0';
 	}
 
+	/* actions for unconnected and unbound sockets */
 	switch (cmd) {
 		case IPN_SETPERSIST_NETDEV:
 			return ipn_setpersist_netdev(&ifr,1);
@@ -797,8 +956,9 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 			else
 				return -EADDRNOTAVAIL;
 	}
-	if (ipn_node->ipn == NULL)
+	if (ipnn == NULL || (ipnn->flags & IPN_FLAG_TERMINATED))
 		return -ENOTCONN;
+	/* actions for connected or bound sockets */
 	switch (cmd) {
 		case IPN_CONN_NETDEV:
 			return ipn_connect_netdev(sock,&ifr);
@@ -819,35 +979,52 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 	}
 }
 
+/* shutdown: close socket for input or for output.
+ * shutdown can be called prior to connect and it is not reversible */
 static int ipn_shutdown(struct socket *sock, int mode) {
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
 	struct ipn_network *ipnn=ipn_node->ipn;
+	int oldshutdown=ipn_node->shutdown;
 	mode = (mode+1)&(RCV_SHUTDOWN|SEND_SHUTDOWN);
 
 	ipn_node->shutdown |= mode;
 
-	/* if recv channel has been shut down, flush the recv queue */
-	if ((ipn_node->shutdown & RCV_SHUTDOWN) && ipnn)
-		ipn_flush_recvqueue(ipn_node);
+	if(ipnn) {
+		if (down_interruptible(&ipnn->ipnn_mutex)) {
+			ipn_node->shutdown = oldshutdown;
+			return -ERESTARTSYS;
+		}
+		oldshutdown=ipn_node->shutdown-oldshutdown;
+		if (sock->state == SS_CONNECTED && oldshutdown) {
+			ipn_net_update_counters(ipnn,
+					(ipn_node->shutdown & RCV_SHUTDOWN)?0:-1,
+					(ipn_node->shutdown & SEND_SHUTDOWN)?0:-1);
+		}
 
+		/* if recv channel has been shut down, flush the recv queue */
+		if ((ipn_node->shutdown & RCV_SHUTDOWN))
+			ipn_flush_recvqueue(ipn_node);
+		up(&ipnn->ipnn_mutex);
+	}
 	return 0;
 }
 
-int ipn_proto_injectmsg(struct ipn_node *from, struct msgpool_item *msg, 
-		int depth)
+/* injectmsg: a new message is entering the ipn network.
+ * injectmsg gets called by send and by the grab/tap node */
+int ipn_proto_injectmsg(struct ipn_node *from, struct msgpool_item *msg)
 {
 	struct ipn_network *ipnn=from->ipn;
 	int err=0;
 	if (down_interruptible(&ipnn->ipnn_mutex))
 		err=-ERESTARTSYS;
 	else {
-		ipn_protocol_table[ipnn->protocol]->ipn_p_handlemsg(from, msg, depth);
+		ipn_protocol_table[ipnn->protocol]->ipn_p_handlemsg(from, msg);
 		up(&ipnn->ipnn_mutex);
 	}
 	return err;
 }
 
-
+/* SEND MSG */
 static int ipn_sendmsg(struct kiocb *kiocb, struct socket *sock,
 		struct msghdr *msg, size_t len) {
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
@@ -855,10 +1032,14 @@ static int ipn_sendmsg(struct kiocb *kiocb, struct socket *sock,
 	struct msgpool_item *newmsg;
 	int err=0;
 
-	if (sock->state != SS_CONNECTED)
-		return -ENOTCONN;
-	if (ipn_node->shutdown & SEND_SHUTDOWN)
-		return -EPIPE;
+	if (unlikely(sock->state != SS_CONNECTED)) 
+			return -ENOTCONN;
+	if (unlikely(ipn_node->shutdown & SEND_SHUTDOWN)) {
+		if (ipn_node->shutdown == SHUTDOWN_XMASK)
+			return -ECONNRESET;
+		else
+			return -EPIPE;
+	}
 	if (len > ipnn->mtu)
 		return -EOVERFLOW;
 	newmsg=ipn_msgpool_alloc_locking(ipnn);
@@ -867,30 +1048,29 @@ static int ipn_sendmsg(struct kiocb *kiocb, struct socket *sock,
 	newmsg->len=len;
 	err=memcpy_fromiovec(newmsg->data, msg->msg_iov, len);
 	if (!err) 
-		ipn_proto_injectmsg(ipn_node, newmsg, 0);
+		ipn_proto_injectmsg(ipn_node, newmsg);
 	ipn_msgpool_put(newmsg,ipnn);
 	return err;
 }
 
-void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg,
-		int depth)
+/* enqueue an oob message. "to" is the destination */
+void ipn_proto_oobsendmsg(struct ipn_node *to, struct msgpool_item *msg)
 {
 	if (to) {
-		/* printk("SEND MSG TO %d\n",to->portno); */
-		if (to->dev) {
-			ipn_netdev_sendmsg(to,msg);
-		} else {
-			/* socket send */
+		if (!to->dev) { /* no oob to netdev */
 			struct msgitem *msgitem;
 			struct ipn_network *ipnn=to->ipn;
 			spin_lock(&to->msglock);
-			if (ipnn->flags & IPN_FLAG_LOSSLESS ||
-					to->msgcount < ipnn->msgpool_size) {
-				msgitem=kmem_cache_alloc(ipn_msgitem_cache,GFP_KERNEL);
-				msgitem->msg=msg;
-				to->msgcount++;
-				list_add_tail(&msgitem->list, &to->msgqueue);
-				ipn_msgpool_hold(msg);
+			if ((to->shutdown & RCV_SHUTDOWN_NO_OOB) == 0 && 
+					(ipnn->flags & IPN_FLAG_LOSSLESS ||
+					 to->oobmsgcount < ipnn->msgpool_size)) {
+				if ((msgitem=kmem_cache_alloc(ipn_msgitem_cache,GFP_KERNEL))!=NULL) {
+					msgitem->msg=msg;
+					to->totmsgcount++;
+					to->oobmsgcount++;
+					list_add_tail(&msgitem->list, &to->oobmsgqueue);
+					ipn_msgpool_hold(msg);
+				}
 			}
 			spin_unlock(&to->msglock);
 			wake_up_interruptible(&to->read_wait);
@@ -898,6 +1078,35 @@ void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg,
 	}
 }
 
+/* ipn_proto_sendmsg is called by protocol implementation to enqueue a 
+ * for a destination (to).*/
+void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg)
+{
+	if (to) {
+		if (to->dev) {
+			ipn_netdev_sendmsg(to,msg);
+		} else {
+			/* socket send */
+			struct msgitem *msgitem;
+			struct ipn_network *ipnn=to->ipn;
+			spin_lock(&to->msglock);
+			if ((ipnn->flags & IPN_FLAG_LOSSLESS ||
+					to->totmsgcount < ipnn->msgpool_size) &&
+					(to->shutdown & RCV_SHUTDOWN)==0) {
+				if ((msgitem=kmem_cache_alloc(ipn_msgitem_cache,GFP_KERNEL))!=NULL) {
+					msgitem->msg=msg;
+					to->totmsgcount++;
+					list_add_tail(&msgitem->list, &to->msgqueue);
+					ipn_msgpool_hold(msg);
+				}
+			}
+			spin_unlock(&to->msglock);
+			wake_up_interruptible(&to->read_wait);
+		}
+	}
+}
+
+/* IPN RECV */
 static int ipn_recvmsg(struct kiocb *kiocb, struct socket *sock,
 		struct msghdr *msg, size_t len, int flags) {
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
@@ -905,22 +1114,35 @@ static int ipn_recvmsg(struct kiocb *kiocb, struct socket *sock,
 	struct msgitem *msgitem;
 	struct msgpool_item *currmsg;
 
-	if (sock->state != SS_CONNECTED)
-		return -ENOTCONN;
-	if (ipn_node->shutdown & RCV_SHUTDOWN)
-		return -EPIPE;
+	if (unlikely(sock->state != SS_CONNECTED)) 
+			return -ENOTCONN;
 
+	if (unlikely((ipn_node->shutdown & XRCV_SHUTDOWN) == XRCV_SHUTDOWN)) {
+		if (ipn_node->shutdown == SHUTDOWN_XMASK) /*EOF, nothing can be read*/
+			return 0;
+		else
+			return -EPIPE; /*trying to read on a write only node */
+	}
+
+	/* wait for a message */
 	spin_lock(&ipn_node->msglock);
-	while (list_empty(&ipn_node->msgqueue)) {
+	while (ipn_node->totmsgcount == 0) {
 		spin_unlock(&ipn_node->msglock);
 		if (wait_event_interruptible(ipn_node->read_wait,
-					!(list_empty(&ipn_node->msgqueue))))
+					!(ipn_node->totmsgcount == 0)))
 			return -ERESTARTSYS;
 		spin_lock(&ipn_node->msglock);
 	}
-	msgitem=list_first_entry(&ipn_node->msgqueue, struct msgitem, list);
+	/* oob gets delivered first. oob are rare */
+	if (likely(list_empty(&ipn_node->oobmsgqueue)))
+		msgitem=list_first_entry(&ipn_node->msgqueue, struct msgitem, list);
+	else {
+		msgitem=list_first_entry(&ipn_node->oobmsgqueue, struct msgitem, list);
+		msg->msg_flags |= MSG_OOB;
+		ipn_node->oobmsgcount--;
+	}
 	list_del(&msgitem->list);
-	ipn_node->msgcount--;
+	ipn_node->totmsgcount--;
 	spin_unlock(&ipn_node->msglock);
 	currmsg=msgitem->msg;
 	if (currmsg->len < len)
@@ -932,14 +1154,68 @@ static int ipn_recvmsg(struct kiocb *kiocb, struct socket *sock,
 	return len;
 }
 
+/* resize a network: change the # of communication ports (connport) */
+static int ipn_netresize(struct ipn_network *ipnn,int newsize)
+{
+	int oldsize,min;
+	struct ipn_node **newconnport;
+	struct ipn_node **oldconnport;
+	int err;
+	if (down_interruptible(&ipnn->ipnn_mutex))
+		        return -ERESTARTSYS;
+	oldsize=ipnn->maxports;
+	if (newsize == oldsize) {
+		up(&ipnn->ipnn_mutex);
+		return 0;
+	}
+	min=oldsize;
+	/* shrink a network. all the ports we are going to eliminate
+	 * must be unused! */
+	if (newsize < oldsize) {
+		int i;
+		for (i=newsize; i<oldsize; i++)
+			if (ipnn->connport[i]) {
+				up(&ipnn->ipnn_mutex);
+				return -EADDRINUSE;
+			}
+		min=newsize;
+	}
+	oldconnport=ipnn->connport;
+	/* allocate the new connport array and copy the old one */
+	newconnport=kzalloc(newsize * sizeof(struct ipn_node *),GFP_KERNEL);
+	if (!newconnport) {
+		up(&ipnn->ipnn_mutex);
+		return -ENOMEM;
+	}
+	memcpy(newconnport,oldconnport,min * sizeof(struct ipn_node *));
+	ipnn->connport=newconnport;
+	ipnn->maxports=newsize;
+	/* notify the protocol that the netowrk has been resized */
+	err=ipn_protocol_table[ipnn->protocol]->ipn_p_resizenet(ipnn,oldsize,newsize);
+	if (err) {
+		/* roll back if the resize operation failed for the protocol */
+		ipnn->connport=oldconnport;
+		ipnn->maxports=oldsize;
+		kfree(newconnport);
+	} else 
+		/* successful mission, network resized */
+		kfree(oldconnport);
+	up(&ipnn->ipnn_mutex);
+	return err;
+}
+
+/* IPN SETSOCKOPT */
 static int ipn_setsockopt(struct socket *sock, int level, int optname,
 		char __user *optval, int optlen) {
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
 	struct ipn_network *ipnn=ipn_node->ipn;
 
+	if (ipn_node->shutdown == SHUTDOWN_XMASK)
+		return -ECONNRESET;
 	if (level != 0 && level != ipn_node->protocol+1)
 		return -EPROTONOSUPPORT;
 	if (level > 0) {
+		/* protocol specific sockopt */
 		if (ipnn) {
 			int rv;
 			if (down_interruptible(&ipnn->ipnn_mutex))
@@ -954,8 +1230,11 @@ static int ipn_setsockopt(struct socket *sock, int level, int optname,
 			if (optlen > IPN_DESCRLEN)
 				return -EINVAL;
 			else {
-				memcpy(ipn_node->descr,optval,optlen);
-				ipn_node->descr[optlen-1]=0;
+				memset(ipn_node->descr,0,IPN_DESCRLEN);
+				if (copy_from_user(ipn_node->descr,optval,optlen))
+					ipn_node->descr[0]=0;
+				else
+					ipn_node->descr[optlen-1]=0;
 				return 0;
 			}
 		} else {
@@ -964,7 +1243,8 @@ static int ipn_setsockopt(struct socket *sock, int level, int optname,
 			else if ((optname & IPN_SO_PREBIND) && (ipnn != NULL))
 				return -EISCONN;
 			else {
-				int val=*((int *)optval);
+				int val;
+				get_user(val, (int __user *) optval);
 				if ((optname & IPN_SO_PREBIND) && !ipn_node->pbp) {
 					struct pre_bind_parms std=STD_BIND_PARMS;
 					ipn_node->pbp=kzalloc(sizeof(struct pre_bind_parms),GFP_KERNEL);
@@ -977,16 +1257,46 @@ static int ipn_setsockopt(struct socket *sock, int level, int optname,
 						if (sock->state == SS_UNCONNECTED)
 							ipn_node->portno=val;
 						else
-							val=-EISCONN;
+							return -EISCONN;
+						break;
+					case IPN_SO_CHANGE_NUMNODES:
+						if ((ipn_node->flags & IPN_NODEFLAG_BOUND)!=0) {
+							if (val <= 0)
+								return -EINVAL;
+							else
+								return ipn_netresize(ipnn,val);
+						} else
+							val=-ENOTCONN;
+						break;
+					case IPN_SO_WANT_OOB_NUMNODES:
+						if (val)
+							ipn_node->flags |= IPN_NODEFLAG_OOB_NUMNODES;
+						else
+							ipn_node->flags &= ~IPN_NODEFLAG_OOB_NUMNODES;
+						break;
+					case IPN_SO_HANDLE_OOB:
+						if (val)
+							ipn_node->shutdown &= ~RCV_SHUTDOWN_NO_OOB;
+						else
+							ipn_node->shutdown |= RCV_SHUTDOWN_NO_OOB;
 						break;
 					case IPN_SO_MTU:
-						ipn_node->pbp->mtu=val;
+						if (val <= 0)
+							return -EINVAL;
+						else
+							ipn_node->pbp->mtu=val;
 						break;
 					case IPN_SO_NUMNODES:
-						ipn_node->pbp->maxports=val;
+						if (val <= 0)
+							return -EINVAL;
+						else
+							ipn_node->pbp->maxports=val;
 						break;
 					case IPN_SO_MSGPOOLSIZE:
-						ipn_node->pbp->msgpoolsize=val;
+						if (val <= 0)
+							return -EINVAL;
+						else
+							ipn_node->pbp->msgpoolsize=val;
 						break;
 					case IPN_SO_FLAGS:
 						ipn_node->pbp->flags=val;
@@ -1001,16 +1311,21 @@ static int ipn_setsockopt(struct socket *sock, int level, int optname,
 	}
 }
 
+/* IPN GETSOCKOPT */
 static int ipn_getsockopt(struct socket *sock, int level, int optname,
 		char __user *optval, int __user *optlen) {
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
 	struct ipn_network *ipnn=ipn_node->ipn;
+	int len;
 
+	if (ipn_node->shutdown == SHUTDOWN_XMASK)
+		return -ECONNRESET;
 	if (level != 0 && level != ipn_node->protocol+1)
 		return -EPROTONOSUPPORT;
 	if (level > 0) {
 		if (ipnn) {
 			int rv;
+			/* protocol specific sockopt */
 			if (down_interruptible(&ipnn->ipnn_mutex))
 				return -ERESTARTSYS;
 			rv=ipn_protocol_table[ipn_node->protocol]->ipn_p_getsockopt(ipn_node,optname,optval,optlen);
@@ -1019,13 +1334,18 @@ static int ipn_getsockopt(struct socket *sock, int level, int optname,
 		} else
 			return -EOPNOTSUPP;
 	} else {
+		if (get_user(len, optlen))
+			return -EFAULT;
 		if (optname == IPN_SO_DESCR) {
-			if (*optlen < IPN_DESCRLEN)
+			if (len < IPN_DESCRLEN)
 				return -EINVAL;
 			else {
-				if (*optlen > IPN_DESCRLEN)
-					*optlen=IPN_DESCRLEN;
-				memcpy(optval,ipn_node->descr,*optlen);
+				if (len > IPN_DESCRLEN)
+					len=IPN_DESCRLEN;
+				if(put_user(len, optlen))
+					return -EFAULT;
+				if(copy_to_user(optval,ipn_node->descr,len))
+					return -EFAULT;
 				return 0;
 			}
 		} else {
@@ -1068,11 +1388,14 @@ static int ipn_getsockopt(struct socket *sock, int level, int optname,
 			if (val < -1)
 				return -EINVAL;
 			else {
-				if (*optlen < sizeof(int))
+				if (len < sizeof(int))
 					return -EOVERFLOW;
 				else {
-					*optlen=sizeof(int);
-					*((int *) optval) = val;
+					len = sizeof(int);
+					if(put_user(len, optlen))
+						return -EFAULT;
+					if(copy_to_user(optval,&val,len))
+						return -EFAULT;
 					return 0;
 				}
 			}
@@ -1093,13 +1416,14 @@ static int ipn_bcast_newport(struct ipn_node *newport) {
 }
 
 static int ipn_bcast_handlemsg(struct ipn_node *from, 
-		struct msgpool_item *msgitem,
-		int depth){
+		struct msgpool_item *msgitem){
 	struct ipn_network *ipnn=from->ipn;
-	int i;
-	for (i=0; i<ipnn->maxports; i++)
-		if (ipnn->connport[i] && ipnn->connport[i] != from)
-			ipn_proto_sendmsg(ipnn->connport[i],msgitem,depth);
+
+	struct ipn_node *ipn_node;
+	list_for_each_entry(ipn_node, &ipnn->connectqueue, nodelist) {
+		if (ipn_node != from)
+			ipn_proto_sendmsg(ipn_node,msgitem);
+	}
 	return 0;
 }
 
@@ -1107,6 +1431,8 @@ static void ipn_null_delport(struct ipn_node *oldport) {}
 static void ipn_null_postnewport(struct ipn_node *newport) {}
 static  void ipn_null_predelport(struct ipn_node *oldport) {}
 static int ipn_null_newnet(struct ipn_network *newnet) {return 0;}
+static int ipn_null_resizenet(struct ipn_network *net,int oldsize,int newsize) {
+	return 0;}
 static void ipn_null_delnet(struct ipn_network *oldnet) {}
 static int ipn_null_setsockopt(struct ipn_node *port,int optname,
 		char __user *optval, int optlen) {return -EOPNOTSUPP;}
@@ -1123,6 +1449,7 @@ void ipn_init_protocol(struct ipn_protocol *p)
 	if (p->ipn_p_postnewport == NULL) p->ipn_p_postnewport=ipn_null_postnewport;
 	if (p->ipn_p_predelport == NULL) p->ipn_p_predelport=ipn_null_predelport;
 	if (p->ipn_p_newnet == NULL) p->ipn_p_newnet=ipn_null_newnet;
+	if (p->ipn_p_resizenet == NULL) p->ipn_p_resizenet=ipn_null_resizenet;
 	if (p->ipn_p_delnet == NULL) p->ipn_p_delnet=ipn_null_delnet;
 	if (p->ipn_p_setsockopt == NULL) p->ipn_p_setsockopt=ipn_null_setsockopt;
 	if (p->ipn_p_getsockopt == NULL) p->ipn_p_getsockopt=ipn_null_getsockopt;
@@ -1138,14 +1465,14 @@ int ipn_proto_register(int protocol,struct ipn_protocol *ipn_service)
 	ipn_init_protocol(ipn_service);
 	if (down_interruptible(&ipn_glob_mutex)) 
 		return -ERESTARTSYS;
-	if (protocol > 1 && protocol <= MAX_PROTO) {
+	if (protocol > 1 && protocol <= IPN_MAX_PROTO) {
 		protocol--;
 		if (ipn_protocol_table[protocol])
 			rv= -EEXIST;
 		else {
 			ipn_service->refcnt=0;
 			ipn_protocol_table[protocol]=ipn_service;
-			printk(KERN_INFO "IPN-VDE: Registered protocol %d\n",protocol+1);
+			printk(KERN_INFO "IPN: Registered protocol %d\n",protocol+1);
 		}
 	} else
 		rv= -EINVAL;
@@ -1158,12 +1485,12 @@ int ipn_proto_deregister(int protocol)
 	int rv=0;
 	if (down_interruptible(&ipn_glob_mutex)) 
 		return -ERESTARTSYS;
-	if (protocol > 1 && protocol <= MAX_PROTO) {
+	if (protocol > 1 && protocol <= IPN_MAX_PROTO) {
 		protocol--;
 		if (ipn_protocol_table[protocol]) {
 			if (ipn_protocol_table[protocol]->refcnt == 0) {
 				ipn_protocol_table[protocol]=NULL;
-				printk(KERN_INFO "IPN-VDE: Unregistered protocol %d\n",protocol+1);
+				printk(KERN_INFO "IPN: Unregistered protocol %d\n",protocol+1);
 			} else
 				rv=-EADDRINUSE;
 		} else 
@@ -1182,62 +1509,71 @@ static struct net_proto_family ipn_family_ops = {
 	.owner  = THIS_MODULE,
 };
 
+/* IPN constructor */
 static int ipn_init(void)
 {
 	int rc;
 
 	ipn_init_protocol(&ipn_bcast);
-	ipn_node_cache=kmem_cache_create("ipn_node",sizeof(struct ipn_node),0,0,NULL,NULL);
+	ipn_network_cache=kmem_cache_create("ipn_network",sizeof(struct ipn_network),0,0,NULL);
+	if (!ipn_network_cache) {
+		printk(KERN_CRIT "%s: Cannot create ipn_network SLAB cache!\n",
+				__FUNCTION__);
+		rc=-ENOMEM;
+		goto out;
+	}
+
+	ipn_node_cache=kmem_cache_create("ipn_node",sizeof(struct ipn_node),0,0,NULL);
 	if (!ipn_node_cache) {
 		printk(KERN_CRIT "%s: Cannot create ipn_node SLAB cache!\n",
 				__FUNCTION__);
 		rc=-ENOMEM;
-		goto out;
+		goto out_net;
 	}
 
-	ipn_msgitem_cache=kmem_cache_create("ipn_msgitem",sizeof(struct msgitem),0,0,NULL,NULL);
+	ipn_msgitem_cache=kmem_cache_create("ipn_msgitem",sizeof(struct msgitem),0,0,NULL);
 	if (!ipn_msgitem_cache) {
-		kmem_cache_destroy(ipn_node_cache);
 		printk(KERN_CRIT "%s: Cannot create ipn_msgitem SLAB cache!\n",
 				__FUNCTION__);
 		rc=-ENOMEM;
-		goto out;
-	}
-
-	if ((rc=ipn_hash_init()) < 0) {
-		kmem_cache_destroy(ipn_node_cache);
-		kmem_cache_destroy(ipn_msgitem_cache);
-		printk(KERN_CRIT "%s: Cannot startup hash table management!\n",
-				__FUNCTION__);
-		goto out;
+		goto out_net_node;
 	}
 
 	rc=proto_register(&ipn_proto,1);
 	if (rc != 0) {
-		printk(KERN_CRIT "%s: Cannot create ipn_node SLAB cache!\n",
+		printk(KERN_CRIT "%s: Cannot register the protocol!\n",
 				__FUNCTION__);
-		goto out;
+		goto out_net_node_msg;
 	}
 
 	sock_register(&ipn_family_ops);
 	ipn_netdev_init();
-	printk(KERN_INFO "IPN-VDE: Virtual Square Project, University of Bologna (c) 2007\n");
+	printk(KERN_INFO "IPN: Virtual Square Project, University of Bologna 2007\n");
+	return 0;
+
+out_net_node_msg:
+		kmem_cache_destroy(ipn_msgitem_cache);
+out_net_node:
+		kmem_cache_destroy(ipn_node_cache);
+out_net:
+		kmem_cache_destroy(ipn_network_cache);
 out:
 	return rc;
 }
 
+/* IPN destructor */
 static void ipn_exit(void)
 {
-	cleanup_persistent_nodes();
 	ipn_netdev_fini();
-	ipn_hash_fini();
 	if (ipn_msgitem_cache)
 		kmem_cache_destroy(ipn_msgitem_cache);
 	if (ipn_node_cache)
 		kmem_cache_destroy(ipn_node_cache);
+	if (ipn_network_cache)
+		kmem_cache_destroy(ipn_network_cache);
 	sock_unregister(PF_IPN);
 	proto_unregister(&ipn_proto);
-	printk(KERN_INFO "IPN-VDE removed\n");
+	printk(KERN_INFO "IPN removed\n");
 }
 
 module_init(ipn_init);
@@ -1246,5 +1582,6 @@ module_exit(ipn_exit);
 EXPORT_SYMBOL_GPL(ipn_proto_register);
 EXPORT_SYMBOL_GPL(ipn_proto_deregister);
 EXPORT_SYMBOL_GPL(ipn_proto_sendmsg);
+EXPORT_SYMBOL_GPL(ipn_proto_oobsendmsg);
 EXPORT_SYMBOL_GPL(ipn_msgpool_alloc);
 EXPORT_SYMBOL_GPL(ipn_msgpool_put);

@@ -17,7 +17,7 @@
  *  without placing your module under the GPL.  Please consult a lawyer for
  *  advice before doing this.
  *
- * WARNING: THIS CODE IS ALREADY EXTREEEEMELY EXPERIMENTAL
+ * WARNING: THIS CODE IS ALREADY EXPERIMENTAL
  *
  */
 
@@ -29,20 +29,29 @@
 #include <linux/list.h>
 #include <linux/mount.h>
 #include <linux/etherdevice.h>
-/* We are stealing bridge structures, just for now */
 #include <linux/if_bridge.h>
 #include <net/sock.h>
+/*#include <net/af_ipn.h>*/
 #include "af_ipn.h"
 
-struct net_device *ipn_netdev_alloc(int type, char *name, int *err);
+#ifdef IPN_STEALING
+#define ipn_port br_port
+#endif
+
+struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *err);
 int ipn_netdev_activate(struct ipn_node *ipn_node);
 void ipn_netdev_close(struct ipn_node *ipn_node);
 void ipn_netdev_sendmsg(struct ipn_node *to,struct msgpool_item *msg);
 int ipn_netdev_init(void);
 void ipn_netdev_fini(void);
 
-inline struct ipn_node *ipn_netdev2node(struct net_device *dev)
+static inline struct ipn_node *ipn_netdev2node(struct net_device *dev)
 {
-	return (struct ipn_node *) rcu_dereference(dev->br_port);
+	return rcu_dereference((struct ipn_node *)dev->ipn_port);
+}
+
+static inline void ipn_netdevsync(void)
+{
+	synchronize_rcu();
 }
 #endif
