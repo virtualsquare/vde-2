@@ -36,7 +36,16 @@
 #define USE_IPN
 
 #ifdef USE_IPN
-#include <af_ipn.h>
+#ifndef AF_IPN
+#define AF_IPN    34  /* IPN sockets      */
+#define PF_IPN    AF_IPN
+#endif
+#define AF_IPN_STOLEN    33  /* IPN temporary sockets      */
+#define PF_IPN_STOLEN    AF_IPN_STOLEN
+#define IPN_ANY 0
+
+#define IPN_SO_PORT 0
+#define IPN_SO_DESCR 1
 #endif
 
 #ifndef VDESTDSOCK
@@ -115,6 +124,12 @@ VDECONN *vde_open_real(char *sockname,char *descr,int interface_version,
 	if((conn->fddata = socket(AF_IPN,SOCK_RAW,IPN_ANY)) >= 0) {
 		/* IPN service exists */
 		sockun.sun_family = AF_IPN;
+	}
+	if((conn->fddata = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_ANY)) >= 0) {
+		/* IPN_STOLEN service exists */
+		sockun.sun_family = AF_IPN_STOLEN;
+	}
+	if (conn->fddata >= 0) {
 		if (port != 0 || req.type == REQ_NEW_PORT0)
 			setsockopt(conn->fddata,0,IPN_SO_PORT,&port,sizeof(port));
 		snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s", sockname);
