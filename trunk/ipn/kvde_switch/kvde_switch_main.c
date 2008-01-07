@@ -1,7 +1,7 @@
 #include <linux/module.h>
 #include <linux/if_ether.h>
 #include "../af_ipn.h"
-#include "../ipn_hash.h"
+#include "ipn_hash.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("VIEW-OS TEAM");
@@ -21,8 +21,7 @@ static int ipn_kvde_switch_newport(struct ipn_node *newport) {
 }
 
 static int ipn_kvde_switch_handlemsg(struct ipn_node *from, 
-		struct msgpool_item *msgitem,
-		int depth){
+		struct msgpool_item *msgitem){
 	struct ipn_network *ipnn=from->ipn;
 	struct ipn_hash *vdeh=(struct ipn_hash *)ipnn->proto_private;
 	int port;
@@ -34,12 +33,14 @@ static int ipn_kvde_switch_handlemsg(struct ipn_node *from,
 	if (IS_BROADCAST(ehdr->h_dest) || 
 			(port = ipn_hash_find(vdeh,(u16 *)&ehdr->h_dest,0)) < 0) {
 		/*printk("SWITCH FROM %d -> BROADCAST\n",from->portno);*/
-		for (port=0; port<ipnn->maxports; port++)
-			if (ipnn->connport[port] && ipnn->connport[port] != from)
-				ipn_proto_sendmsg(ipnn->connport[port],msgitem,depth);
+		struct ipn_node *ipn_node;
+		list_for_each_entry(ipn_node, &ipnn->connectqueue, nodelist) {
+			if (ipn_node != from)
+				ipn_proto_sendmsg(ipn_node,msgitem);
+		}
 	} else {
 		/*printk("SWITCH FROM %d -> %d\n",from->portno,port);*/
-		ipn_proto_sendmsg(ipnn->connport[port],msgitem,depth);
+		ipn_proto_sendmsg(ipnn->connport[port],msgitem);
 	}
 	return 0;
 }
@@ -94,7 +95,7 @@ static struct ipn_protocol vde_switch_proto={
 static int kvde_switch_init(void)
 {
 	int rc=0;
-	kvde_net_cache=kmem_cache_create("kvde_net",sizeof(struct ipn_hash),0,0,NULL,NULL);
+	kvde_net_cache=kmem_cache_create("kvde_net",sizeof(struct ipn_hash),0,0,NULL);
 	if (!kvde_net_cache) {
 		rc=-ENOMEM;
 		goto out;

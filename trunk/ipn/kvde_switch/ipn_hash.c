@@ -25,7 +25,12 @@
 #include <linux/timer.h>
 #include <linux/list.h>
 #include <linux/jiffies.h>
+#include "../af_ipn.h"
 #include "ipn_hash.h"
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("VIEW-OS TEAM");
+MODULE_DESCRIPTION("Ethernet hash table Kernel Module");
 
 #undef IPN_DEBUG
 
@@ -195,7 +200,7 @@ void ipn_hash_add(struct ipn_hash *vdeh,u16 *key,u16 vlan,int port)
 #endif
 		list_del(&elem->lrunode);
 		hlist_del(&elem->hashnode);
-	} else {
+	} else if (vdeh->timeout>0){ /* vdeh->timeout == 0 means HUB */
 #ifdef IPN_DEBUG
 		printk("NEW HASH %x %x %x %x (%d) <- %d\n", key[0], key[1], key[2], vlan, hashvalue,port);
 #endif
@@ -204,7 +209,7 @@ void ipn_hash_add(struct ipn_hash *vdeh,u16 *key,u16 vlan,int port)
 			elem->key[0]=key[0]; elem->key[1]=key[1];
 			elem->key[2]=key[2]; elem->key[3]=vlan;
 		}
-	}
+	} 
 	if (elem) {
 		elem->port=port;
 		list_add_tail(&elem->lrunode,&vdeh->lrulist);
@@ -244,7 +249,7 @@ int ipn_hash_find(struct ipn_hash *vdeh,u16 *key,u16 vlan)
 
 int ipn_hash_init(void)
 {
-	ipn_hash_elem_cache=kmem_cache_create("ipn_hash",sizeof(struct ipn_hash_elem),0,0,NULL,NULL);
+	ipn_hash_elem_cache=kmem_cache_create("ipn_hash",sizeof(struct ipn_hash_elem),0,0,NULL);
 	if (ipn_hash_elem_cache)
 		return 0;
 	else
@@ -264,3 +269,7 @@ EXPORT_SYMBOL_GPL(ipn_hash_flush_port);
 EXPORT_SYMBOL_GPL(ipn_hash_free);
 EXPORT_SYMBOL_GPL(ipn_hash_add);
 EXPORT_SYMBOL_GPL(ipn_hash_find);
+
+module_init(ipn_hash_init);
+module_exit(ipn_hash_fini);
+
