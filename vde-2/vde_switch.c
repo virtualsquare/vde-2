@@ -461,8 +461,8 @@ static void sig_handler(int sig)
 static void setsighandlers()
 {
 	/* setting signal handlers.
-	 *      * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
-	 *           * ignores all the others signals which could cause termination. */
+	 * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
+	 * ignores all the others signals which could cause termination. */
 	struct { int sig; const char *name; int ignore; } signals[] = {
 		{ SIGHUP, "SIGHUP", 0 },
 		{ SIGINT, "SIGINT", 0 },
