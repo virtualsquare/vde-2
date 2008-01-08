@@ -361,7 +361,7 @@ static int ipn_terminate_node(struct ipn_node *ipn_node)
 		list_del(&ipn_node->nodelist);
 		ipn_flush_recvqueue(ipn_node);
 		ipn_flush_oobrecvqueue(ipn_node);
-		if (ipn_node->portno >= 0) {
+		if (ipn_node->portno >= 0) 
 			ipn_protocol_table[ipnn->protocol]->ipn_p_delport(ipn_node);
 		ipn_node->ipn=NULL;
 		ipn_net_update_counters(ipnn,
@@ -370,7 +370,6 @@ static int ipn_terminate_node(struct ipn_node *ipn_node)
 		up(&ipnn->ipnn_mutex);
 		if (ipn_node->dev)
 			ipn_netdev_close(ipn_node);
-		}
 		/* No more network elements */
 		if (atomic_dec_and_test(&ipnn->refcnt))
 		{
@@ -602,6 +601,10 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		ipn_insert_network(&ipn_network_table[nd.dentry->d_inode->i_ino & (IPN_HASH_SIZE-1)],ipnn);
 	} else {
 		/* join an existing network */
+		if (parms.flags & IPN_FLAG_EXCL) {
+			err=-EEXIST;
+			goto put_fail;
+		}
 		err = vfs_permission(&nd, MAY_EXEC);
 		if (err)
 			goto put_fail;
@@ -609,7 +612,8 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		if (!S_ISSOCK(nd.dentry->d_inode->i_mode))
 			goto put_fail;
 		ipnn=ipn_find_network_byinode(nd.dentry->d_inode);
-		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED))
+		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED) ||
+				(ipnn->flags & IPN_FLAG_EXCL))
 			goto put_fail;
 		list_add_tail(&ipn_node->nodelist,&ipnn->unconnectqueue);
 		atomic_inc(&ipnn->refcnt);
@@ -932,6 +936,8 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 
 	/* get arguments */
 	switch (cmd) {
+		case IPN_CHECK:
+			return IPN_CHECK;
 		case IPN_SETPERSIST_NETDEV:
 		case IPN_CLRPERSIST_NETDEV:
 		case IPN_CONN_NETDEV:
