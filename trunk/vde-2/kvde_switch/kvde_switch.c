@@ -1,7 +1,8 @@
-/* Copyright 2008 Renzo Davoli VDE-2
- * co-authors Ludovico Gardenghi, Filippo Giunchedi, Luca Bigliardi
- * Kernel VDE switch: requires ipn and kvde_switch modules in the kernel
- * Licensed under the GPLv2
+/* Copyright 2005 Renzo Davoli VDE-2
+ * Licensed under the GPL
+ * --pidfile/-p and cleanup management by Mattia Belletti.
+ * some code remains from uml_switch Copyright 2001, 2002 Jeff Dike and others
+ * Modified by Ludovico Gardenghi 2005
  */
 
 #include <unistd.h>
@@ -9,172 +10,268 @@
 #include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <string.h>
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
-#include <libgen.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <sys/un.h>
-#include <grp.h>
-#include <linux/if.h>
-#include <config.h>
-#include <vde.h>
-
-/* will be inserted in a af_ipn.h include */
-#ifndef AF_IPN
-#define AF_IPN    34  /* IPN sockets      */
-#define PF_IPN    AF_IPN
+#include <sys/poll.h>
+#ifndef HAVE_POLL
+#include <utils/poll.h>
 #endif
-#define AF_IPN_STOLEN    33  /* IPN temporary sockets      */
-#define PF_IPN_STOLEN    AF_IPN_STOLEN
+#include <switch.h>
+#include <config.h>
+#include <consmgmt.h>
+#include <sys/time.h>
+#include <time.h>
 
-#define IPN_ANY 0
-#define IPN_BROADCAST 1
-#define IPN_HUB 1
-#define IPN_VDESWITCH 2
-#define IPN_VDESWITCH_L3 3
+#include <vde.h>
+#undef VDE_PQ
+#undef OPTPOLL
+#ifdef VDE_PQ
+#include <packetq.h>
+#endif
 
-#define IPN_SO_PREBIND 0x80
-#define IPN_SO_PORT 0
-#define IPN_SO_DESCR 1
-#define IPN_SO_CHANGE_NUMNODES 2
-#define IPN_SO_HANDLE_OOB 3
-#define IPN_SO_WANT_OOB_NUMNODES 4
-#define IPN_SO_MTU (IPN_SO_PREBIND | 0)
-#define IPN_SO_NUMNODES (IPN_SO_PREBIND | 1)
-#define IPN_SO_MSGPOOLSIZE (IPN_SO_PREBIND | 2)
-#define IPN_SO_FLAGS (IPN_SO_PREBIND | 3)
-#define IPN_SO_MODE (IPN_SO_PREBIND | 4)
+time_t starting_time;
+static struct swmodule *swmh;
 
-#define IPN_PORTNO_ANY -1
+char *prog;
+unsigned char switchmac[ETH_ALEN];
+unsigned int priority=DEFAULT_PRIORITY;
 
-#define IPN_DESCRLEN 128
+static int hash_size=INIT_HASH_SIZE;
+static int numports=INIT_NUMPORTS;
 
-#define IPN_FLAG_LOSSLESS 1
-#define IPN_FLAG_TERMINATED 0x1000
 
-#define IPN_NODEFLAG_TAP   0x10    /* This is a tap interface */
-#define IPN_NODEFLAG_GRAB  0x20    /* This is a grab of a real interface */
+static void recaddswm(struct swmodule **p,struct swmodule *new)
+{
+	struct swmodule *this=*p;
+	if (this == NULL)
+		*p=new;
+	else 
+		recaddswm(&(this->next),new);
+}
 
-/* Ioctl defines */
-#define IPN_SETPERSIST_NETDEV   _IOW('I', 200, int) 
-#define IPN_CLRPERSIST_NETDEV   _IOW('I', 201, int) 
-#define IPN_CONN_NETDEV          _IOW('I', 202, int) 
-#define IPN_JOIN_NETDEV          _IOW('I', 203, int) 
-#define IPN_SETPERSIST           _IOW('I', 204, int) 
+void add_swm(struct swmodule *new)
+{
+	static int lastlwmtag;
+	new->swmtag= ++lastlwmtag;
+	if (new != NULL && new->swmtag != 0) {
+		new->next=NULL;
+		recaddswm(&swmh,new);
+	}
+}
 
-static int kvdefd;
-static char *prog="kde_switch";
-static char *vdesocket;
-static char *pidfile;
-static char pidfile_path[PATH_MAX];
-static int logok=0;
+static void recdelswm(struct swmodule **p,struct swmodule *old)
+{
+	struct swmodule *this=*p;
+	if (this != NULL) {
+		if(this == old)
+			*p=this->next;
+		else
+			recdelswm(&(this->next),old);
+	}
+}
 
-static struct option global_options[] = {
-	{"help", 0 , 0, 'h'},
-	{"version", 0, 0, 'v'},
-	{"numports", 1, 0, 'n'},
-	{"sock", 1, 0, 's'},
-	{"mod", 1, 0, 'm'},
-	{"group", 1, 0, 'g'},
-	{"daemon", 0, 0, 'd'},
-	{"pidfile", 1, 0, 'p'},
-	{"tap", 1, 0, 't'},
-	{"grab", 1, 0, 'g'},
+void del_swm(struct swmodule *old)
+{
+	if (old != NULL) {
+		recdelswm(&swmh,old);
+	}
+}
+
+/* FD MGMT */
+struct pollplus {
+	unsigned char type;
+	int arg;
+	time_t timestamp;
 };
 
-void printlog(int priority, const char *format, ...)
+static int nfds = 0;
+static int nprio =0;
+static struct pollfd *fds = NULL;
+static struct pollplus **fdpp = NULL;
+
+static int maxfds = 0;
+
+static struct swmodule **fdtypes;
+static int ntypes;
+static int maxtypes;
+
+#define PRIOFLAG 0x80
+#define TYPEMASK 0x7f
+#define ISPRIO(X) ((X) & PRIOFLAG)
+
+#define TYPE2MGR(X) (fdtypes[((X) & TYPEMASK)])
+
+unsigned char add_type(struct swmodule *mgr,int prio)
 {
-	va_list arg;
-
-	va_start (arg, format);
-
-	if (logok)
-		vsyslog(priority,format,arg);
-	else {
-		fprintf(stderr,"%s: ",prog);
-		vfprintf(stderr,format,arg);
-		fprintf(stderr,"\n");
-	}
-	va_end (arg);
+	register int i;
+	if(ntypes==maxtypes) {
+		maxtypes = maxtypes ? 2 * maxtypes : 8;
+		if (maxtypes > PRIOFLAG) {
+			printlog(LOG_ERR,"too many file types");
+			exit(1);
+		}
+		if((fdtypes = realloc(fdtypes, maxtypes * sizeof(struct swmodule *))) == NULL){
+			printlog(LOG_ERR,"realloc fdtypes %s",strerror(errno));
+			exit(1);
+		}
+		memset(fdtypes+ntypes,0,sizeof(struct swmodule *) * maxtypes-ntypes);
+		i=ntypes;
+	} else
+		for(i=0; fdtypes[i] != NULL; i++)
+			;
+	fdtypes[i]=mgr;
+	ntypes++;
+	return i | ((prio != 0)?PRIOFLAG:0);
 }
 
-static void save_pidfile()
+void del_type(unsigned char type)
 {
-	if(pidfile[0] != '/')
-		strncat(pidfile_path, pidfile, PATH_MAX - strlen(pidfile_path));
-	else
-		strcpy(pidfile_path, pidfile);
-
-	int fd = open(pidfile_path,
-			O_WRONLY | O_CREAT | O_EXCL,
-			S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-	FILE *f;
-
-	if(fd == -1) {
-		printlog(LOG_ERR, "Error in pidfile creation: %s", strerror(errno));
-		exit(1);
-	}
-
-	if((f = fdopen(fd, "w")) == NULL) {
-		printlog(LOG_ERR, "Error in FILE* construction: %s", strerror(errno));
-		exit(1);
-	}
-
-	if(fprintf(f, "%ld\n", (long int)getpid()) <= 0) {
-		printlog(LOG_ERR, "Error in writing pidfile");
-		exit(1);
-	}
-
-	fclose(f);
+	type &= TYPEMASK;
+	if (type < maxtypes)
+		fdtypes[type]=NULL;
+	ntypes--;
 }
 
-static void cleanup(void)
+void add_fd(int fd,unsigned char type,int arg)
 {
-	if (vdesocket)
-		unlink(vdesocket);
-	if (pidfile)
-		unlink(pidfile_path);
+	struct pollfd *p;
+	int index;
+	/* enlarge fds and g_fdsdata array if needed */
+	if(nfds == maxfds){
+		maxfds = maxfds ? 2 * maxfds : 8;
+		if((fds = realloc(fds, maxfds * sizeof(struct pollfd))) == NULL){
+			printlog(LOG_ERR,"realloc fds %s",strerror(errno));
+			exit(1);
+		}
+		if((fdpp = realloc(fdpp, maxfds * sizeof(struct pollplus *))) == NULL){
+			printlog(LOG_ERR,"realloc pollplus %s",strerror(errno));
+			exit(1);
+		}
+	}
+	if (ISPRIO(type)) {
+		fds[nfds]=fds[nprio];
+		fdpp[nfds]=fdpp[nprio];
+		index=nprio;
+		nprio++;
+	} else
+		index=nfds;
+	if((fdpp[index]=malloc(sizeof(struct pollplus))) == NULL) {
+		printlog(LOG_ERR,"realloc pollplus elem %s",strerror(errno));
+		exit(1);
+	}
+	p = &fds[index];
+	p->fd = fd;
+	p->events = POLLIN | POLLHUP;
+	fdpp[index]->type=type;
+	fdpp[index]->arg=arg;
+	nfds++;
 }
 
-static void Usage(int module) {
-	if (module)
-		printf(
-				"%s\n"
-				"Runs a kernel VDE switch (it requires ipn and kvde_switch modules loaded).\n",prog);
-	else
-		printf(
-				"Usage: %s [OPTIONS]\n"
-				"Runs a kernel VDE switch.\n"
-				"  -h, --help              Display this help and exit\n"
-				"  -v, --version           Display informations on version and exit\n"
-				"  -n  --numports          Number of ports (default 32)\n"
-				"  -s, --sock SOCK         switch socket pathname\n"
-				"  -m, --mod MODE          Standard access mode for comm sockets (octal)\n"
-				"  -g, --group GROUP       Group owner for comm sockets\n"
-				"  -d, --daemon            Daemonize vde_switch once run\n"
-				"  -p, --pidfile PIDFILE   Write pid of daemon to PIDFILE\n"
-				//"  -f, --rcfile            Configuration file (overrides /etc/vde2/vde_switch.\n"
-				"  -t, --tap TAP           Enable routing through TAP tap interface\n"
-				"  -G, --grab INT          Enable routing grabbing an existing interface\n",prog);
+static void file_cleanup(void)
+{
+	register int i;
+	for(i = 0; i < nfds; i++)
+		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->arg);
+}
+
+void remove_fd(int fd)
+{
+	register int i;
+
+	for(i = 0; i < nfds; i++){
+		if(fds[i].fd == fd) break;
+	}
+	if(i == nfds){
+		printlog(LOG_WARNING,"remove_fd : Couldn't find descriptor %d", fd);
+	} else {
+		struct pollplus *old=fdpp[i];
+		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->arg);
+		if (ISPRIO(fdpp[i]->type)) nprio--;
+		memmove(&fds[i], &fds[i + 1], (maxfds - i - 1) * sizeof(struct pollfd));
+		memmove(&fdpp[i], &fdpp[i + 1], (maxfds - i - 1) * sizeof(struct pollplus *));
+		free(old);
+		nfds--;
+	}
+}
+
+static void main_loop()
+{
+	time_t now;
+	register int n,i;
+	while(1) {
+#ifdef VDE_PQ
+		n=poll(fds,nfds,packetq_timeout);
+#else
+		n=poll(fds,nfds,-1);
+#endif
+		now=time(NULL);
+		if(n < 0){ 
+			if(errno != EINTR)
+				printlog(LOG_WARNING,"poll %s",strerror(errno));
+		} else {
+			for(i = 0; /*i < nfds &&*/ n>0; i++){
+				if(fds[i].revents != 0) {
+					register int prenfds=nfds;
+					n--;
+					fdpp[i]->timestamp=now;
+					TYPE2MGR(fdpp[i]->type)->handle_input(fdpp[i]->type,fds[i].fd,fds[i].revents,&(fdpp[i]->arg));
+					if (nfds!=prenfds) /* the current fd has been deleted */
+						break; /* PERFORMANCE it is faster returning to poll */
+				}	
+/* optimization: most used descriptors migrate to the head of the poll array */
+#ifdef OPTPOLL
+				else
+				{
+					if (i < nfds && i > 0 && i != nprio) {
+						register int i_1=i-1;
+						if (fdpp[i]->timestamp > fdpp[i_1]->timestamp) {
+							struct pollfd tfds;
+							struct pollplus *tfdpp;
+							tfds=fds[i];fds[i]=fds[i_1];fds[i_1]=tfds;
+							tfdpp=fdpp[i];fdpp[i]=fdpp[i_1];fdpp[i_1]=tfdpp;
+						}
+					}
+				}
+#endif
+			}
+#ifdef VDE_PQ
+			if (packetq_timeout > 0)
+				packetq_try();
+#endif
+		}
+	}
+}
+
+/* starting/ending routines, main_loop, main*/
+#define HASH_TABLE_SIZE_ARG 0x100
+#define MACADDR_ARG         0x101
+#define PRIORITY_ARG        0x102
+
+static void Usage(void) {
+	struct swmodule *p;
+	printf(
+			"Usage: vde_switch [OPTIONS]\n"
+			"Runs a VDE switch.\n"
+			"(global opts)\n"
+			"  -h, --help                 Display this help and exit\n"
+			"  -v, --version              Display informations on version and exit\n"
+			);
+	for(p=swmh;p != NULL;p=p->next)
+		if (p->usage != NULL)
+			p->usage();
 	printf(
 			"\n"
-			"Report bugs to "PACKAGE_BUGREPORT "\n");
-
+			"Report bugs to "PACKAGE_BUGREPORT "\n"
+			);
 	exit(1);
 }
 
 static void version(void)
-{
+{ 
 	printf(
 			"VDE " PACKAGE_VERSION "\n"
-			"Kernel VDE switch\n"
 			"Copyright 2003,2004,2005,2006,2007,2008 Renzo Davoli\n"
 			"VDE comes with NO WARRANTY, to the extent permitted by law.\n"
 			"You may redistribute copies of VDE under the terms of the\n"
@@ -182,6 +279,115 @@ static void version(void)
 			"For more information about these matters, see the files\n"
 			"named COPYING.\n");
 	exit(0);
+} 
+
+static struct option *optcpy(struct option *tgt, struct option *src, int n, int tag)
+{
+	register int i;
+	memcpy(tgt,src,sizeof(struct option) * n);
+	for (i=0;i<n;i++) {
+		tgt[i].val=(tgt[i].val & 0xffff) | tag << 16;
+	}
+	return tgt+n;
+}
+
+static int parse_globopt(int c, char *optarg)
+{
+	int outc=0;
+	switch (c) {
+		case 'v':
+			version();
+			break;
+		case 'h':
+			Usage();
+			break;
+		default:
+			outc=c;
+	}
+	return outc;
+}
+
+static void parse_args(int argc, char **argv)
+{
+	struct swmodule *swmp;
+	struct option *long_options;
+	char *optstring;
+	static struct option global_options[] = {
+		{"help",0 , 0, 'h'},
+		{"version", 0, 0, 'v'},
+	};
+	static struct option optail = {0,0,0,0};
+#define N_global_options (sizeof(global_options)/sizeof(struct option))
+	prog = argv[0];
+	int totopts=N_global_options+1;
+
+	for(swmp=swmh;swmp != NULL;swmp=swmp->next)
+		totopts += swmp->swmnopts;
+	long_options=malloc(totopts * sizeof(struct option));
+	optstring=malloc(2 * totopts * sizeof(char));
+	if (long_options == NULL || optstring==NULL)
+		exit(2);
+	{ /* fill-in the long_options fields */
+		register int i;
+		char *os=optstring;
+		char last=0;
+		struct option *opp=long_options;
+		opp=optcpy(opp,global_options,N_global_options,0);
+		for(swmp=swmh;swmp != NULL;swmp=swmp->next)
+			opp=optcpy(opp,swmp->swmopts,swmp->swmnopts,swmp->swmtag);
+		optcpy(opp,&optail,1,0);
+		for (i=0;i<totopts-1;i++)
+		{
+			int val=long_options[i].val & 0xffff;
+			if(val > ' ' && val <= '~' && val != last)
+			{
+				*os++=val;
+				if(long_options[i].has_arg) *os++=':';
+			}
+		}
+		*os=0;
+	}
+	{
+		/* Parse args */
+		int option_index = 0;
+		int c;
+		while (1) {
+			c = GETOPT_LONG (argc, argv, optstring,
+					long_options, &option_index);
+			if (c == -1)
+				break;
+			c=parse_globopt(c,optarg);
+			for(swmp=swmh;swmp != NULL && c!=0;swmp=swmp->next) {
+				if (swmp->parseopt != NULL) {
+					if((c >> 7) == 0)
+						c=swmp->parseopt(c,optarg);
+					else if ((c >> 16) == swmp->swmtag)
+						swmp->parseopt(c & 0xffff,optarg),c=0;
+				}
+			}
+		}
+	}
+	if(optind < argc)
+		Usage();
+	free(long_options);
+	free(optstring);
+}
+
+static void init_mods(void)
+{
+	struct swmodule *swmp;
+	for(swmp=swmh;swmp != NULL;swmp=swmp->next)
+		if (swmp->init != NULL)
+			swmp->init();
+}
+
+static void cleanup(void)
+{
+	struct swmodule *swmp;
+	file_cleanup();
+	for(swmp=swmh;swmp != NULL;swmp=swmp->next)
+		if (swmp->cleanup != NULL)
+			swmp->cleanup(0,-1,-1);
 }
 
 static void sig_handler(int sig)
@@ -192,7 +398,7 @@ static void sig_handler(int sig)
 	kill(getpid(), sig);
 }
 
-static void setsighandlers(void)
+static void setsighandlers()
 {
 	/* setting signal handlers.
 	 * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
@@ -233,162 +439,26 @@ static void setsighandlers(void)
 					strerror(errno));
 }
 
-struct extinterface {
-	char type;
-	char *name;
-	struct extinterface *next;
-};
+static void start_modules(void);
 
-static struct extinterface *extifhead;
-static struct extinterface **extiftail=&extifhead;
-
-static void addextinterface(char type,char *name)
+int main(int argc, char **argv)
 {
-	struct extinterface *new=malloc(sizeof (struct extinterface));
-	if (new) {
-		new->type=type;
-		new->name=strdup(name);
-		new->next=NULL;
-		*extiftail=new;
-		extiftail=&(new->next);
-	}
-}
-
-static void runextinterfaces(void)
-{
-	struct extinterface *iface,*oldiface;
-	struct ifreq ifr;
-	for (iface=extifhead;iface != NULL;iface=oldiface)
-	{
-		memset(&ifr, 0, sizeof(ifr));
-		strncpy(ifr.ifr_name,iface->name,IFNAMSIZ);
-		if (iface->type == 't')
-			ifr.ifr_flags=IPN_NODEFLAG_TAP;
-		else
-			ifr.ifr_flags=IPN_NODEFLAG_GRAB;
-	//	printf("ioctl\n");
-		if (ioctl(kvdefd, IPN_CONN_NETDEV, (void *) &ifr) < 0) {
-			printlog(LOG_ERR, "%s interface %s error: %s", iface->name,
-					(iface->type == 't')?"tap":"grab",strerror(errno));
-			exit(-1);
-		}
-		free(iface->name);
-		oldiface=iface->next;
-		free(iface);
-	}
-	extifhead=NULL;
-}
-
-int main(int argc,char *argv[])
-{
-	struct sockaddr_un sun;
-	gid_t grp_owner = -1;
-	int option_index = 0;
-	int c;
-	int daemonize=0;
-	int sockmode = -1;
-	int family = AF_IPN;
-	kvdefd = socket(AF_IPN,SOCK_RAW,IPN_BROADCAST);
-	if (kvdefd < 0) {
-		family=AF_IPN_STOLEN;
-		kvdefd = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_BROADCAST);
-		if (kvdefd < 0) {
-			Usage(1);
-		}
-	}
+	starting_time=time(NULL);
+	start_modules();
+	parse_args(argc,argv);
 	atexit(cleanup);
-	while (1) {
-		int value;
-		c = GETOPT_LONG (argc, argv, "hvn:s:m:g:dp:t:g:",
-				global_options, &option_index);
-		if (c == -1)
-			        break;
-		switch (c) {
-			case 'h':
-				Usage(0);
-				break;
-			case 'v':
-				version();
-				break;
-			case 'n':
-				value=atoi(optarg);
-				if (setsockopt(kvdefd,0,IPN_SO_NUMNODES,&value,sizeof(value)) < 0)
-					printlog(LOG_ERR,"set numnodes %d",value);
-				break;
-			case 's':
-				vdesocket=strdup(optarg);
-				break;
-			case 'm':
-				sscanf(optarg,"%o",&value);
-				sockmode=value;
-				if (setsockopt(kvdefd,0,IPN_SO_MODE,&value,sizeof(value)) < 0)
-					printlog(LOG_ERR,"set mode %o",value);
-				break;
-			case 'g': {
-									struct group *grp;
-									if (!(grp = getgrnam(optarg))) {
-										printlog(LOG_ERR,"No such group '%s'\n", optarg);
-										exit(1);
-									}
-									grp_owner=grp->gr_gid;
-								}
-				break;
-			case 'd':
-				daemonize=1;
-				break;
-			case 'p':
-				pidfile=strdup(optarg);
-				break;
-			case 't':
-			case 'G':
-				addextinterface(c,optarg);
-				break;
-		}
-	}
-	if(optind < argc)
-		Usage(0);
-	/* saves current path in pidfile_path, because otherwise with daemonize() we
-	 * forget it */
-	if(getcwd(pidfile_path, PATH_MAX-1) == NULL) {
-		printlog(LOG_ERR, "getcwd: %s", strerror(errno));
-		exit(1);
-	}
-	strcat(pidfile_path, "/");
-	if (daemonize) {
-		openlog(basename(prog), LOG_PID, 0);
-		logok=1;
-		syslog(LOG_INFO,"VDE_SWITCH started");
-	}
-	/* once here, we're sure we're the true process which will continue as a
-	 * server: save PID file if needed */
-	if(pidfile) save_pidfile();
-
-	if (!vdesocket)
-		vdesocket=VDESTDSOCK;
-	sun.sun_family = family;
-	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",vdesocket);
-	if(bind(kvdefd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-		if (strcmp(vdesocket,VDESTDSOCK)==0) {
-			vdesocket=VDETMPSOCK;
-			snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",vdesocket);
-			if(bind(kvdefd, (struct sockaddr *) &sun, sizeof(sun)) < 0) {
-				printlog(LOG_ERR,"cannot bind socket %s",vdesocket);
-				vdesocket=NULL;
-				exit(-1);
-			}
-		} else {
-			printlog(LOG_ERR,"cannot bind socket %s",vdesocket);
-			vdesocket=NULL;
-			exit(-1);
-		}
-	}
-	if(sockmode >= 0 && chmod(vdesocket, sockmode) <0) {
-		printlog(LOG_ERR, "chmod: %s", strerror(errno));
-		exit(1);
-	}
-	runextinterfaces();
 	setsighandlers();
-	while ((c=getchar()) != EOF)
-		;
+	init_mods();
+	loadrcfile();
+	main_loop();
 	return 0;
+}
+
+/* modules: module references are only here! */
+static void start_modules(void)
+{
+	void start_datasock(void);
+	void start_consmgmt(void);
+	start_datasock();
+	start_consmgmt();
 }

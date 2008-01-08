@@ -1,3 +1,3 @@
 bin_PROGRAMS = kvde_switch
-wirefilter_SOURCES = kvde_switch.c
+kvde_switch_SOURCES = kvde_switch.c consmgmt.c  datasock.c  sockutils.c 
 
