@@ -30,9 +30,11 @@
 #define IPN_DESCRLEN 128
 
 #define IPN_FLAG_LOSSLESS 1
+#define IPN_FLAG_EXCL 2
 #define IPN_FLAG_TERMINATED 0x1000
 
 /* Ioctl defines */
+#define IPN_CHECK               _IOW('I', 199, int) 
 #define IPN_SETPERSIST_NETDEV  	_IOW('I', 200, int) 
 #define IPN_CLRPERSIST_NETDEV  	_IOW('I', 201, int) 
 #define IPN_CONN_NETDEV          _IOW('I', 202, int) 
