@@ -544,7 +544,11 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		else
 			mode = SOCK_INODE(sock)->i_mode;
 		mode = S_IFSOCK | (mode & ~current->fs->umask);
+#ifdef APPARMOR
+		err = vfs_mknod(nd.dentry->d_inode, dentry, nd.mnt, mode, 0);
+#else
 		err = vfs_mknod(nd.dentry->d_inode, dentry, mode, 0);
+#endif
 		if (err)
 			goto out_mknod_dput;
 		mutex_unlock(&nd.dentry->d_inode->i_mutex);
