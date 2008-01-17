@@ -163,7 +163,7 @@ struct ipn_network {
 	struct hlist_node hnode;
 	struct list_head unconnectqueue;
 	struct list_head connectqueue;
-	atomic_t refcnt;
+	int refcnt;
 	struct dentry		*dentry;
   struct vfsmount		*mnt;
 	struct semaphore ipnn_mutex;

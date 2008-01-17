@@ -50,7 +50,10 @@ MODULE_DESCRIPTION("IPN Kernel Module");
 
 /* Network table and hash */
 struct hlist_head ipn_network_table[IPN_HASH_SIZE + 1];
-DEFINE_SPINLOCK(ipn_table_lock);
+/* not needed. Now protected by ipn_glob_mutex 
+ * comment *IPNTL*
+ * DEFINE_SPINLOCK(ipn_table_lock);
+ */
 static struct kmem_cache *ipn_network_cache;
 static struct kmem_cache *ipn_node_cache;
 static struct kmem_cache *ipn_msgitem_cache;
@@ -88,19 +91,20 @@ static int ipn_getsockopt(struct socket *sock, int level, int optname,
 		char __user *optval, int __user *optlen);
 
 /* Network table Management 
- * inode->ipn_network hash table */
+ * inode->ipn_network hash table 
+ * LOCKING: MUTEX ipn_glob_mutex must be LOCKED*/
 static inline void ipn_insert_network(struct hlist_head *list, struct ipn_network *ipnn)
 {
-	spin_lock(&ipn_table_lock);
+	/* *IPNTL* spin_lock(&ipn_table_lock); */
 	hlist_add_head(&ipnn->hnode, list);
-	spin_unlock(&ipn_table_lock);
+	/* *IPNTL* spin_unlock(&ipn_table_lock); */
 }
 
 static inline void ipn_remove_network(struct ipn_network *ipnn)
 {
-	spin_lock(&ipn_table_lock);
+	/* *IPNTL* spin_lock(&ipn_table_lock); */
 	hlist_del(&ipnn->hnode);
-	spin_unlock(&ipn_table_lock);
+	/* *IPNTL* spin_unlock(&ipn_table_lock); */
 }
 
 static struct ipn_network *ipn_find_network_byinode(struct inode *i)
@@ -108,17 +112,17 @@ static struct ipn_network *ipn_find_network_byinode(struct inode *i)
 	struct ipn_network *ipnn;
 	struct hlist_node *node;
 
-	spin_lock(&ipn_table_lock);
+	/* *IPNTL* spin_lock(&ipn_table_lock);*/
 	hlist_for_each_entry(ipnn, node,
 			&ipn_network_table[i->i_ino & (IPN_HASH_SIZE - 1)], hnode) {
 		struct dentry *dentry = ipnn->dentry;
 
-		if(atomic_read(&ipnn->refcnt) > 0 && dentry && dentry->d_inode == i)
+		if(ipnn->refcnt > 0 && dentry && dentry->d_inode == i)
 			goto found;
 	}
 	ipnn = NULL;
 found:
-	spin_unlock(&ipn_table_lock);
+	/* *IPNTL* spin_unlock(&ipn_table_lock); */
 	return ipnn;
 }
 
@@ -190,7 +194,7 @@ void ipn_msgpool_put(struct msgpool_item *old,
 	if (atomic_dec_and_test(&old->count)) {
 		kmem_cache_free(ipnn->msgpool_cache,old);
 		atomic_dec(&ipnn->msgpool_nelem);
-		if (ipnn->flags & IPN_FLAG_LOSSLESS) /* could be done anyway */
+		if (ipnn->flags & IPN_FLAG_LOSSLESS) /* this could be done anyway */
 			wake_up_interruptible(&ipnn->send_wait);
 	}
 }
@@ -290,6 +294,7 @@ static int ipn_create(struct net *net,struct socket *sock, int protocol)
 
 /* update # of readers and # of writers counters for an ipn network.
  * This function sends oob messages to nodes requesting the service */
+/* LOCKING ipnn_mutex is locked */
 static void ipn_net_update_counters(struct ipn_network *ipnn,
 		int chg_readers, int chg_writers) {
 	ipnn->numreaders += chg_readers;
@@ -315,6 +320,7 @@ static void ipn_net_update_counters(struct ipn_network *ipnn,
 }
 
 /* flush pending messages (for close and shutdown RCV) */
+/* LOCKING: ipnn_mutex is locked */
 static void ipn_flush_recvqueue(struct ipn_node *ipn_node)
 {
 	struct ipn_network *ipnn=ipn_node->ipn;
@@ -331,6 +337,7 @@ static void ipn_flush_recvqueue(struct ipn_node *ipn_node)
 }
 
 /* flush pending oob messages (for socket close) */
+/* LOCKING: ipnn_mutex is locked */
 static void ipn_flush_oobrecvqueue(struct ipn_node *ipn_node)
 {
 	struct ipn_network *ipnn=ipn_node->ipn;
@@ -348,6 +355,7 @@ static void ipn_flush_oobrecvqueue(struct ipn_node *ipn_node)
 }
 
 /* Terminate node. The node is "logically" terminated. */
+/* LOCKING: ipn_glob_lock must be locked here */
 static int ipn_terminate_node(struct ipn_node *ipn_node)
 {
 	struct ipn_network *ipnn=ipn_node->ipn;
@@ -367,11 +375,13 @@ static int ipn_terminate_node(struct ipn_node *ipn_node)
 		ipn_net_update_counters(ipnn,
 				(ipn_node->shutdown & RCV_SHUTDOWN)?0:-1,
 				(ipn_node->shutdown & SEND_SHUTDOWN)?0:-1);
+		ipn_node->shutdown = SHUTDOWN_XMASK;
 		up(&ipnn->ipnn_mutex);
 		if (ipn_node->dev)
 			ipn_netdev_close(ipn_node);
 		/* No more network elements */
-		if (atomic_dec_and_test(&ipnn->refcnt))
+		ipnn->refcnt--;
+		if (ipnn->refcnt == 0)
 		{
 			ipn_protocol_table[ipnn->protocol]->ipn_p_delnet(ipnn);
 			ipn_remove_network(ipnn);
@@ -380,19 +390,18 @@ static int ipn_terminate_node(struct ipn_node *ipn_node)
 				dput(ipnn->dentry);
 				mntput(ipnn->mnt);
 			}
-			module_put(THIS_MODULE);
 			if (ipnn->msgpool_cache)
 				kmem_cache_destroy(ipnn->msgpool_cache);
 			if (ipnn->connport)
 				kfree(ipnn->connport);
 			kmem_cache_free(ipn_network_cache, ipnn);
+			module_put(THIS_MODULE);
 		}
 	}
 	if (ipn_node->pbp) {
 		kfree(ipn_node->pbp);
 		ipn_node->pbp=NULL;
 	} 
-	ipn_node->shutdown = SHUTDOWN_XMASK;
 	return 0;
 }
 
@@ -488,7 +497,6 @@ static int ipn_mkname(struct sockaddr_un * sunaddr, int len)
 	return len;
 }
 
-
 /* IPN BIND */
 static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
@@ -523,7 +531,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		goto out;
 	}
 
-	/* check if there is already a socket with that name */
+	/* check if there is already an ipn-network socket with that name */
 	err = path_lookup(sunaddr->sun_path, LOOKUP_FOLLOW, &nd);
 	if (err) { /* it does not exist, NEW IPN socket! */
 		unsigned int mode;
@@ -583,7 +591,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		}
 		INIT_LIST_HEAD(&ipnn->unconnectqueue);
 		INIT_LIST_HEAD(&ipnn->connectqueue);
-		atomic_set(&ipnn->refcnt,1);
+		ipnn->refcnt=1;
 		ipnn->dentry=nd.dentry;
 		ipnn->mnt=nd.mnt;
 		init_MUTEX(&ipnn->ipnn_mutex);
@@ -620,7 +628,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 				(ipnn->flags & IPN_FLAG_EXCL))
 			goto put_fail;
 		list_add_tail(&ipn_node->nodelist,&ipnn->unconnectqueue);
-		atomic_inc(&ipnn->refcnt);
+		ipnn->refcnt++;
 	}
 	if (ipn_node->pbp) {
 		kfree(ipn_node->pbp);
@@ -735,7 +743,7 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 		ipn_node->portno=portno;
 		ipnn->connport[portno]=ipn_node;
 		if (!(ipn_node->flags & IPN_NODEFLAG_BOUND)) {
-			atomic_inc(&ipnn->refcnt);
+			ipnn->refcnt++;
 			list_del(&ipn_node->nodelist);
 		}
 		list_add_tail(&ipn_node->nodelist,&ipnn->connectqueue);
@@ -887,7 +895,7 @@ static int ipn_join_netdev(struct socket *sock,struct ifreq *ifr)
 			/* ipn_joined is substituted to ipn_node */
 			((struct ipn_sock *)sock->sk)->node=ipn_joined;
 			ipn_joined->flags |= IPN_NODEFLAG_INUSE;
-			atomic_dec(&ipnn->refcnt);
+			ipnn->refcnt--;
 			kmem_cache_free(ipn_node_cache,ipn_node);
 		} else
 			err=-EPERM;
