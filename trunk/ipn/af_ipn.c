@@ -32,6 +32,7 @@
 */
 #include "af_ipn.h"
 #include "ipn_netdev.h"
+#include "ipn_msgbuf.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("VIEW-OS TEAM");
@@ -391,7 +392,8 @@ static int ipn_terminate_node(struct ipn_node *ipn_node)
 				mntput(ipnn->mnt);
 			}
 			if (ipnn->msgpool_cache)
-				kmem_cache_destroy(ipnn->msgpool_cache);
+				/*kmem_cache_destroy(ipnn->msgpool_cache);*/
+				ipn_msgbuf_put(ipnn->msgpool_cache);
 			if (ipnn->connport)
 				kfree(ipnn->connport);
 			kmem_cache_free(ipn_network_cache, ipnn);
@@ -584,7 +586,8 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		}
 		memcpy(&ipnn->sunaddr,sunaddr,addr_len);
 		ipnn->mtu=parms.mtu;
-		ipnn->msgpool_cache=kmem_cache_create(ipnn->sunaddr.sun_path,sizeof(struct msgpool_item)+ipnn->mtu,0,0,NULL);
+		/*ipnn->msgpool_cache=kmem_cache_create(ipnn->sunaddr.sun_path,sizeof(struct msgpool_item)+ipnn->mtu,0,0,NULL);*/
+		ipnn->msgpool_cache=ipn_msgbuf_get(ipnn->mtu);
 		if (!ipnn->msgpool_cache) {
 			err=-ENOMEM;
 			goto out_mknod_dput_putmodule;
@@ -1557,11 +1560,18 @@ static int ipn_init(void)
 		goto out_net_node;
 	}
 
+	rc=ipn_msgbuf_init();
+	if (rc != 0) {
+		printk(KERN_CRIT "%s: Cannot create ipn_msgbuf SLAB cache\n",
+				__FUNCTION__);
+		goto out_net_node_msg;
+	}
+
 	rc=proto_register(&ipn_proto,1);
 	if (rc != 0) {
 		printk(KERN_CRIT "%s: Cannot register the protocol!\n",
 				__FUNCTION__);
-		goto out_net_node_msg;
+		goto out_net_node_msg_msgbuf;
 	}
 
 	sock_register(&ipn_family_ops);
@@ -1569,12 +1579,14 @@ static int ipn_init(void)
 	printk(KERN_INFO "IPN: Virtual Square Project, University of Bologna 2007\n");
 	return 0;
 
+out_net_node_msg_msgbuf:
+	ipn_msgbuf_fini();
 out_net_node_msg:
-		kmem_cache_destroy(ipn_msgitem_cache);
+	kmem_cache_destroy(ipn_msgitem_cache);
 out_net_node:
-		kmem_cache_destroy(ipn_node_cache);
+	kmem_cache_destroy(ipn_node_cache);
 out_net:
-		kmem_cache_destroy(ipn_network_cache);
+	kmem_cache_destroy(ipn_network_cache);
 out:
 	return rc;
 }
@@ -1589,6 +1601,7 @@ static void ipn_exit(void)
 		kmem_cache_destroy(ipn_node_cache);
 	if (ipn_network_cache)
 		kmem_cache_destroy(ipn_network_cache);
+	ipn_msgbuf_fini();
 	sock_unregister(PF_IPN);
 	proto_unregister(&ipn_proto);
 	printk(KERN_INFO "IPN removed\n");

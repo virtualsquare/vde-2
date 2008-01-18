@@ -9,7 +9,7 @@ ifneq ($(KERNELRELEASE),)
 
 	obj-m      += ipn.o
 
-	ipn-objs                  := af_ipn.o ipn_netdev.o
+	ipn-objs                  := af_ipn.o ipn_netdev.o ipn_msgbuf.o
 
 else
 	KERNELDIR ?= /lib/modules/$(shell uname -r)/build
