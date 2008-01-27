@@ -27,6 +27,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <sys/un.h>
 #include <config.h>
 #include <libvdeplug/libvdeplug.h>
@@ -198,9 +200,9 @@ static char *progname;
 /* Small utility functions, to talk to humans.
  */
 static char *ip2ascii(uint32_t ip){
-	char *res = calloc(1,16);
-	snprintf(res,16,"%u.%u.%u.%u",((ip>>24)&0xFF),((ip>>16)&0xFF),((ip>>8)&0xFF),(ip&0xFF));
-	return res;
+	struct in_addr ia_be;
+	ia_be.s_addr = htonl(ip);
+	return(strdup(inet_ntoa(ia_be)));
 }
 
 uint8_t *ip2mac(uint32_t ip)
@@ -605,8 +607,9 @@ int parse_arp(struct vde_buff *vdb)
 	struct arp_entry *ae=(struct arp_entry*)malloc(sizeof(struct arp_entry));;
 	ah = (struct arp_header *)iphead(vdb);
 	vif = get_iface_by_ipaddr(ntohl(ah->d_addr));
-	if(!vif)
+	if(!vif){
 		return -1;
+	}
 	memcpy(ae->mac,ah->s_mac,6);
 	ae->ipaddr=ah->s_addr;
 	
@@ -811,15 +814,7 @@ static uint32_t inline unicast_ip(uint32_t ip){
 
 
 uint32_t ascii2ip(char *c){
-	uint8_t *z=(uint8_t *)malloc(4);
-	if(!index(c,'.'))
-		return 0;
-	if(sscanf(c,"%hu.%hu.%hu.%hu",(unsigned short*)z,
-			(unsigned short*)z+1,
-			(unsigned short*)z+2,
-			(unsigned short*)z+3) < 0)
-		return 0;
-	return ntohl(*((uint32_t *)z));
+	return (ntohl(inet_addr(c)));	
 }
 
 //return >0 for valid netmasks.
