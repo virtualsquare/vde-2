@@ -31,15 +31,15 @@
 #include <config.h>
 #include <utils/cmdparse.h>
 
+#define STD_SOCK_DIR INSTALLPATH"/var/run"
 #define STD_RC_DIR INSTALLPATH"/etc/vde2"
-#define STD_SOCK_DIR "/var/run"
 
 void usage(char *progname){
 	/* TODO: write it better */
 	printf("Usage: %s OPTIONS command\n", progname);
-	printf("\t-s sockname : management socket path (default is %s/%s)\n", STD_SOCK_DIR, basename(progname));
-	printf("\t-f rcfile   : configuration path (default is %s/%s)\n", STD_RC_DIR, basename(progname));
-	printf("\t-v          : run parse machine in debug mode\n");
+	printf("\t-s sockname  management socket path (default is %s/%s)\n", STD_SOCK_DIR, basename(progname));
+	printf("\t-f rcfile    configuration path (default is %s/%s)\n", STD_RC_DIR, basename(progname));
+	printf("\t-v           run parse machine in debug mode\n");
 }
 
 int main(int argc,char *argv[])
