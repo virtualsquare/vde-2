@@ -392,7 +392,6 @@ static int ipn_terminate_node(struct ipn_node *ipn_node)
 				mntput(ipnn->mnt);
 			}
 			if (ipnn->msgpool_cache)
-				/*kmem_cache_destroy(ipnn->msgpool_cache);*/
 				ipn_msgbuf_put(ipnn->msgpool_cache);
 			if (ipnn->connport)
 				kfree(ipnn->connport);
@@ -586,7 +585,6 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		}
 		memcpy(&ipnn->sunaddr,sunaddr,addr_len);
 		ipnn->mtu=parms.mtu;
-		/*ipnn->msgpool_cache=kmem_cache_create(ipnn->sunaddr.sun_path,sizeof(struct msgpool_item)+ipnn->mtu,0,0,NULL);*/
 		ipnn->msgpool_cache=ipn_msgbuf_get(ipnn->mtu);
 		if (!ipnn->msgpool_cache) {
 			err=-ENOMEM;
@@ -1111,14 +1109,18 @@ void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg)
 			struct msgitem *msgitem;
 			struct ipn_network *ipnn=to->ipn;
 			spin_lock(&to->msglock);
-			if ((ipnn->flags & IPN_FLAG_LOSSLESS ||
-					to->totmsgcount < ipnn->msgpool_size) &&
-					(to->shutdown & RCV_SHUTDOWN)==0) {
-				if ((msgitem=kmem_cache_alloc(ipn_msgitem_cache,GFP_KERNEL))!=NULL) {
-					msgitem->msg=msg;
-					to->totmsgcount++;
-					list_add_tail(&msgitem->list, &to->msgqueue);
-					ipn_msgpool_hold(msg);
+			if (likely((to->shutdown & RCV_SHUTDOWN)==0)) {
+				if (unlikely((ipnn->flags & IPN_FLAG_LOSSLESS) == 0 ||
+							            to->totmsgcount >= ipnn->msgpool_size))
+					schedule();
+				if (ipnn->flags & IPN_FLAG_LOSSLESS ||
+						to->totmsgcount < ipnn->msgpool_size) { 
+					if ((msgitem=kmem_cache_alloc(ipn_msgitem_cache,GFP_KERNEL))!=NULL) {
+						msgitem->msg=msg;
+						to->totmsgcount++;
+						list_add_tail(&msgitem->list, &to->msgqueue);
+						ipn_msgpool_hold(msg);
+					}
 				}
 			}
 			spin_unlock(&to->msglock);
