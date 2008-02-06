@@ -58,10 +58,12 @@ static struct pidlist *plmalloc(void) {
 	return rv;
 }
 
+/* not used? 
 static void plfree (struct pidlist *el) {
 	el->next=flh;
 	flh=el;
 }
+*/
 
 static int addpid(int pid) {
 	struct pidlist *plp;
@@ -168,15 +170,17 @@ int ioctl(int fd, unsigned long int command, ...)
 				sprintf(name,ifr->ifr_name,tapcount++);
 				strncpy(ifr->ifr_name,name,IFNAMSIZ);
 			}
-			if (ifr->ifr_flags & IFF_TAP &&
-					((vdesock=getenv(ifr->ifr_name)) != NULL)
-					||(vdesock=getenv(VDEALLTAP)) != NULL){
+			if ((ifr->ifr_flags & IFF_TAP) && (
+					/* from env: single interface or VDEALLTAP */
+					((vdesock=getenv(ifr->ifr_name)) != NULL) ||
+						(vdesock=getenv(VDEALLTAP)) != NULL)
+				){
 				if ((pid=fork()) < 0) { 
 					close(tapfd[1]);
 					errno=EINVAL;
 					return -1;
 				} else if (pid > 0) { /*father*/
-					if(pid=addpid(pid) < 0) {
+					if((pid=addpid(pid)) < 0) {
 						close(tapfd[0]);
 						close(tapfd[1]);
 						return -1;
@@ -188,7 +192,7 @@ int ioctl(int fd, unsigned long int command, ...)
 					plh=NULL;
 					close(tapfd[0]);
 					sprintf(num,"%d",tapfd[1]);
-					execlp(VDETAPEXEC,"-",num,vdesock,name,(char *) 0);
+					return execlp(VDETAPEXEC,"-",num,vdesock,name,(char *) 0);
 				}
 			}
 			else /*roll back to the native tuntap*/
@@ -216,9 +220,9 @@ int ioctl(int fd, unsigned long int command, ...)
 					}
 				}
 			}
-		}			else 
+		} else  
 			return 0;
-	} else
+	} else 
 		return (native_ioctl(fd, command, data));
 }
 
