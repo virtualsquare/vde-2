@@ -161,4 +161,7 @@ rcv_challenge(struct datagram *pkt, struct peer *p);
 struct peer 
 *getpeerbyid(struct datagram *pkt);
 
+void
+vde_plug(struct peer *);
+
 #endif

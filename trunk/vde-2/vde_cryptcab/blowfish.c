@@ -82,7 +82,11 @@ static void _populatepoll(struct pollfd *pfd, struct peer *iter,int index, struc
 		pfd[index].fd=datafd;
 		pfd[index++].events=POLLIN|POLLHUP;
 	} else {
-		
+		vde_plug(iter);
+		usleep(100000);
+		_populatepoll(pfd,iter->next,index, peerlist);
+		return;
+
 	}
 	
 	_populatepoll(pfd,iter->next,index, peerlist);
@@ -160,11 +164,13 @@ int
 isvalid_crc32(unsigned char *block, int len)
 {
 	unsigned char *crc=(unsigned char *)crc32(block,len-4);
-	if(strncmp((char*)block+(len-4),(char*)crc,4)==0)
+	if(strncmp((char*)block+(len-4),(char*)crc,4)==0){
+		free(crc);
 		return 1;
-	else{
+	}else{
 			
 		//fprintf(stderr,"bad crc32!\n");
+		free(crc);
 		return 0;
 	}
 }
@@ -224,9 +230,10 @@ autocleaner(int signo)
  */
 static struct peer *populate_peerlist(struct pollfd *pfd)
 {
-	struct peer *iter, *peerlist;
+	static struct peer *iter, *peerlist;
 	iter=list; //=clean_peerlist(list);
-
+	if(peerlist)
+		free(peerlist);
 	peerlist=(struct peer *) malloc( (numberofpeers()+1)*sizeof(struct peer) );
 	_populatepoll(pfd,iter,1,peerlist);
 
@@ -281,11 +288,13 @@ struct datagram *blowfish_select (int timeout)
 {
    unsigned peerlen;
    int pollret;
-   struct pollfd *pfd;
+   static struct pollfd *pfd = NULL;
    static struct datagram *ret = NULL;
-   struct peer *peerlist;
+   static struct peer *peerlist = NULL;
    static int i=1;
-   
+
+   if (pfd)
+	free(pfd);
    pfd=malloc((1+numberofpeers())*sizeof(struct pollfd));
    
    pfd[0].fd=nfd;
@@ -349,6 +358,7 @@ for(;;){
 			fprintf (stderr,"error in decrypt final\n");
 			return NULL;
 		  }
+		EVP_CIPHER_CTX_cleanup(&ctx);
 		  ret->len += tlen;
 		  if( isvalid_crc32(ret->data,ret->len) && isvalid_timestamp(ret->data,ret->len,ret->orig) ){
 			ret->len-=12;
@@ -376,6 +386,7 @@ for(;;){
 			fprintf (stderr,"error in decrypt final\n");
 			return NULL;
 		  }
+		EVP_CIPHER_CTX_cleanup(&ctx);
 		  ret->len += tlen;
 		  ret->len +=1;
 		  if( isvalid_crc32(ret->data+1,ret->len-1) && isvalid_timestamp(ret->data,ret->len,ret->orig) ){
@@ -504,6 +515,7 @@ send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 	unsigned char *outbuf=outpkt+1;
 	int olen,tlen;
 	struct sockaddr_in *destination=&(p->in_a);
+	unsigned char *crc;
 	if(flags==CMD_CHALLENGE || flags==CMD_LOGIN || flags==CMD_DENY || flags==CMD_AUTH_OK || flags==CMD_IDENTIFY){
 		memcpy(outbuf,data,len);
 		olen=len;
@@ -512,7 +524,9 @@ send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 			set_timestamp(data+len);
 			len+=8;
 			
+			crc = crc32(data,len);
 			memcpy(data+len,crc32(data,len),4);
+			free(crc);
 			len+=4;
 			
 		}
@@ -534,6 +548,7 @@ send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 			    fprintf (stderr,"error in encrypt final\n");
 			    return;
 		    }
+		EVP_CIPHER_CTX_cleanup(&ctx);
 		olen += tlen;
 	}
 	
@@ -664,7 +679,7 @@ rcv_login(struct datagram *pkt, struct peer *p, char *pre_shared)
 		snprintf(filename,127,"%s",pre_shared);
 
 		
-//	fprintf(stderr,"Filename:%s\n",filename);
+	fprintf(stderr,"Filename:%s\n",filename);
 	if (((fd = open (filename, O_RDONLY)) == -1)||
  			((read (fd, p->key, 16)) == -1) ||
 			((read (fd, p->iv, 8)) == -1) ){
@@ -674,7 +689,9 @@ rcv_login(struct datagram *pkt, struct peer *p, char *pre_shared)
 	}
 	close(fd);
 	memcpy(p->id,pkt->data+1,FILENAMESIZE);
+	fprintf(stderr,"Sending challenge... ");
 	send_challenge(p);
+	fprintf(stderr,"OK.\n");
 
 }
 
@@ -701,6 +718,7 @@ rcv_response(struct datagram *pkt, struct peer *p, void (*callback)(struct peer*
 		fprintf (stderr,"error in decrypt final\n");
 		return;
 	  }
+	EVP_CIPHER_CTX_cleanup(&ctx);
 
 	  if (strncmp((char *)response,p->challenge,128)==0){
 		  p->state=ST_AUTH;
