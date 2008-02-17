@@ -378,6 +378,7 @@ int main(int argc, char **argv)
 							bzero(p1,sizeof(struct peer));
 							memcpy(&(p1->in_a),&(pkt->orig->in_a),sizeof(struct sockaddr_in));
 							addpeer(p1);
+							vde_plug(p1);
 							p1->state=ST_OPENING;
 						}
 						p1->counter=0;
@@ -385,6 +386,7 @@ int main(int argc, char **argv)
 						break;
 						
 					case CMD_RESPONSE:
+						//fprintf(stderr, "Receiving response\n");
 						if(!p1){
 							p1=(struct peer*)getpeerbynewaddr(pkt->orig->in_a);
 							if(p1){
@@ -394,6 +396,7 @@ int main(int argc, char **argv)
 								
 						}
 						if(p1){
+						//	fprintf(stderr, "Received response\n");
 							rcv_response(pkt, p1, vde_plug);
 						}
 						break;
@@ -418,10 +421,10 @@ int main(int argc, char **argv)
 						break;
 						
 					case CMD_IDENTIFY:
-//						fprintf(stderr,"ID received...");
+						//fprintf(stderr,"ID received...");
 						p1=(struct peer*)getpeerbyid(pkt);
 						if(p1){
-//							fprintf(stderr,"Client is known. Sending handover.\n");
+							//fprintf(stderr,"Client is known. Sending handover.\n");
 							// case 0: client changed transport address
 							memcpy(&p1->handover_a,&pkt->orig->in_a, sizeof(struct sockaddr_in));
 							send_handover(p1);
