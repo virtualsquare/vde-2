@@ -6,7 +6,7 @@ AC_INIT([vde2], [2.2.0-pre2], [info@v2.cs.unibo.it])
 AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects])
 AC_CONFIG_SRCDIR([vde.h])
 AC_CONFIG_HEADER([config.h])
-AC_CONFIG_LIBOBJ_DIR(utils)
+AC_CONFIG_LIBOBJ_DIR(compat)
 
 # Checks for programs.
 AC_PROG_CXX
@@ -57,16 +57,19 @@ AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([atexit dup2 gethostbyname gethostname gettimeofday inet_ntoa memmove memset putenv select setenv socket strchr strdup strerror strstr uname inet_aton sprintf readv random srandom index bcmp drand48 memmove gethostid revoke fchmod getopt_long_only funopen])
 AC_REPLACE_FUNCS([open_memstream strndup])
-AC_MSG_CHECKING([for broken poll()])
-	if expr "$build_os" : "darwin8\..*" > /dev/null; then
-		AC_MSG_RESULT([yes, emulating with select()])
-		AC_DEFINE([HAVE_POLL], 0, [Define to 1 if your system has a working poll() function.])
-		AC_LIBOBJ([poll])
-		AC_DEFINE([poll], [rpl_poll], [Define to rpl_poll if the replacement function should be used.])
-	else
-		AC_DEFINE([HAVE_POLL], 1, [Define to 1 if your system has a working poll() function.])
-		AC_MSG_RESULT([no])
-	fi
+AC_CHECK_FUNC([poll],
+	[
+		AC_MSG_CHECKING([for poll sanity])
+		if expr "$build_os" : "darwin8\..*" > /dev/null; then
+			AC_MSG_RESULT([present but broken, emulating with select])
+			AC_LIBOBJ([poll])
+			AC_DEFINE([poll], [rpl_poll], [Define to rpl_poll if the replacement function should be used.])
+		else
+			AC_DEFINE([HAVE_POLL], 1, [Define to 1 if your system has a working poll() function.])
+			AC_MSG_RESULT([yes])
+		fi
+	],
+	[])
 
 # All other nice checks I have to make for recostructing missing parts of
 # slirp's config.h file
@@ -166,6 +169,8 @@ CFLAGS="-Wall -O2 $CFLAGS"
 AC_SUBST(CFLAGS)
 
 AC_CONFIG_FILES([Makefile]
+		[compat/Makefile]
+		[utils/Makefile]
 		[doc/Makefile]
 		[qemu/Makefile]
 		[slirpvde/Makefile]

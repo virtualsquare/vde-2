@@ -1,3 +1,4 @@
 bin_PROGRAMS = unixterm
 unixterm_SOURCES = unixterm.c
-unixterm_LDADD = $(LIBOBJS)
+unixterm_LDADD = ../compat/libvdecompat.la
+unixterm_LDFLAGS = -Wl,-ldl

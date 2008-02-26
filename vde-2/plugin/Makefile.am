@@ -10,10 +10,10 @@ AM_LIBTOOLFLAGS = --tag=disable-static
 mod_LTLIBRARIES = dump.la
 
 dump_la_SOURCES = dump.c vdeplugin.h
-dump_la_LIBADD = $(LTLIBOBJS)
+dump_la_LIBADD = ../compat/libvdecompat.la ../utils/libvdeutils.la
 
 if ENABLE_PCAP
 mod_LTLIBRARIES += pdump.la
 pdump_la_SOURCES = pdump.c vdeplugin.h
-pdump_la_LIBADD = $(LTLIBOBJS) -lpcap
+pdump_la_LIBADD = ../compat/libvdecompat.la ../utils/libvdeutils.la -lpcap
 endif

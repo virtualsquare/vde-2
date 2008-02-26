@@ -8,10 +8,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/poll.h>
-#ifndef HAVE_POLL
-#include <utils/poll.h>
-#endif
+#include "compat/poll.h"
 #include <sys/socket.h>
 #include <sys/un.h>
 

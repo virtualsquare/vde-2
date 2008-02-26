@@ -28,7 +28,6 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/poll.h>
 #include <syslog.h>
 #include <stdarg.h>
 
@@ -36,9 +35,8 @@
 #include <config.h>
 #include <libvdemgmt/libvdemgmt.h>
 
-#ifndef HAVE_POLL
-#include <utils/poll.h>
-#endif
+#include "compat/poll.h"
+
 #ifndef HAVE_STRNDUP
 #include <utils/strndup.h>
 #endif

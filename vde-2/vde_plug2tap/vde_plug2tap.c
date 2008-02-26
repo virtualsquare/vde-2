@@ -7,10 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
-#include <poll.h>
-#ifndef HAVE_POLL
-#include <utils/poll.h>
-#endif
+#include "compat/poll.h"
 #include <syslog.h>
 #include <errno.h>
 #include <string.h>

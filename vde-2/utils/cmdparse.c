@@ -20,12 +20,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/poll.h>
+#include "compat/poll.h"
 #include <errno.h>
 
-#ifndef HAVE_OPEN_MEMSTREAM
-#include <utils/open_memstream.h>
-#endif
+#include "compat/open_memstream.h"
 
 #include <utils/cmdparse.h>
 

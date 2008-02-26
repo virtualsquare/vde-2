@@ -9,4 +9,5 @@ libvdetap_la_CFLAGS = -fno-strict-aliasing
 AM_CPPFLAGS=-DLIBEXECDIR=\"$(libexecdir)\"
 
 vdetap_SOURCES = vdetap.c
-vdetap_LDADD = ../libvdeplug/libvdeplug.la
+vdetap_LDADD = ../compat/libvdecompat.la ../libvdeplug/libvdeplug.la
+vdetap_LDFLAGS = -Wl,-ldl
