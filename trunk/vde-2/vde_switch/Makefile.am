@@ -23,7 +23,8 @@ vde_switch_SOURCES = \
 	tuntap.c \
 	tuntap.h
 
-vde_switch_LDADD = $(LIBOBJS)
+vde_switch_LDADD = ../compat/libvdecompat.la ../utils/libvdeutils.la
+vde_switch_LDFLAGS = -Wl,-ldl
 
 AM_CFLAGS = -Wall
 

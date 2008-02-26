@@ -1,11 +1,10 @@
 #define _GNU_SOURCE
-#include "vdeplugin.h"
+
 #include <stdio.h>
 #include <stdlib.h>
+#include "vdeplugin.h"
+#include "compat/open_memstream.h"
 
-#ifndef HAVE_OPEN_MEMSTREAM
-#include <utils/open_memstream.h>
-#endif
 
 int testevent(struct dbgcl *tag,va_list v);
 struct plugin vde_plugin_data={

@@ -1,6 +1,7 @@
 bin_PROGRAMS = vdeq
 vdeq_SOURCES = vdeq.c
-vdeq_LDADD = $(LIBOBJS) ../libvdeplug/libvdeplug.la
+vdeq_LDADD = ../compat/libvdecompat.la ../libvdeplug/libvdeplug.la
+vdeq_LDFLAGS = -Wl,-ldl
 
 
 INCLUDES = -I$(top_srcdir)

@@ -247,6 +247,8 @@ extern int do_echo;
 
 #define DEFAULT_BAUD 115200
 
+void client_eth_register(const unsigned char *eth_addr, const unsigned char *ip_addr);
+
 /* cksum.c */
 int cksum(struct mbuf *m, int len);
 

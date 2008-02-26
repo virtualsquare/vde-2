@@ -12,4 +12,5 @@ vde_over_ns_SOURCES = \
 	fun.h \
 	pstack.h
 
-vde_over_ns_LDADD = $(LIBOBJS) ../libvdeplug/libvdeplug.la
+vde_over_ns_LDADD = ../compat/libvdecompat.la ../libvdeplug/libvdeplug.la
+vde_over_ns_LDFLAGS = -Wl,-ldl

@@ -17,7 +17,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include <sys/poll.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <libslirp.h>

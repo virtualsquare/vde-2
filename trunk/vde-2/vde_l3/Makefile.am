@@ -12,11 +12,12 @@ pfifo_la_SOURCES = pfifo.c  vde_buff.h
 tbf_la_SOURCES = tbf.c  vde_buff.h
 bfifo_la_SOURCES = bfifo.c  vde_buff.h
 
-pfifo_la_LIBADD = $(LTLIBOBJS)
-bfifo_la_LIBADD = $(LTLIBOBJS)
-tbf_la_LIBADD = $(LTLIBOBJS)
+pfifo_la_LIBADD = ../compat/libvdecompat.la
+bfifo_la_LIBADD = ../compat/libvdecompat.la
+tbf_la_LIBADD = ../compat/libvdecompat.la
 
 bin_PROGRAMS = vde_l3
 vde_l3_SOURCES = vde_l3.c vde_buff.h vde_l3.h
-vde_l3_LDADD = $(LIBOBJS) ../libvdeplug/libvdeplug.la -ldl
+vde_l3_LDADD = ../compat/libvdecompat.la ../libvdeplug/libvdeplug.la -ldl
+vde_l3_LDFLAGS = -Wl,-ldl
 

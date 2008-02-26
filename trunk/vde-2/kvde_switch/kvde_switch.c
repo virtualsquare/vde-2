@@ -14,10 +14,7 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
-#include <sys/poll.h>
-#ifndef HAVE_POLL
-#include <utils/poll.h>
-#endif
+#include "compat/poll.h"
 #include <switch.h>
 #include <config.h>
 #include <consmgmt.h>

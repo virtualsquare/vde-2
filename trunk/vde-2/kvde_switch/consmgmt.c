@@ -18,7 +18,6 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <sys/poll.h>
 #include <sys/un.h>
 #include <sys/uio.h>
 #include <net/if.h>
@@ -33,9 +32,7 @@
 
 #define MAXCMD 128
 
-#ifndef HAVE_OPEN_MEMSTREAM
-#include <utils/open_memstream.h>
-#endif
+#include "compat/open_memstream.h"
 
 static struct swmodule swmi;
 extern time_t starting_time;

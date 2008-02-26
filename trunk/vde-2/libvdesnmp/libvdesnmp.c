@@ -21,7 +21,7 @@
 #include <sys/un.h>
 #include <assert.h>
 #include <errno.h>
-#include <poll.h>
+#include "compat/poll.h"
 #include <sys/time.h>
 #include <time.h>
 

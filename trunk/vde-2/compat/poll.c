@@ -13,7 +13,7 @@
 #include <syslog.h>
 
 /* Just for structs and defines */
-#include <sys/poll.h>
+#include "poll.h"
 
 #ifndef MAX
 #define MAX(x,y) ((x)>(y)?(x):(y))

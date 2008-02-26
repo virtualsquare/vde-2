@@ -5,6 +5,6 @@ libvdesnmp_la_LDFLAGS = -version-number 0:0:1 -export-dynamic
 
 libvdesnmp_la_CFLAGS = -I../libvdemgmt/ -I../plugin/
 
-libvdesnmp_la_LIBADD = $(LTLIBOBJS)
+libvdesnmp_la_LIBADD = ../compat/libvdecompat.la
 
 include_HEADERS = libvdesnmp.h

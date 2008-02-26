@@ -16,10 +16,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include <sys/poll.h>
-#ifndef HAVE_POLL
-#include <utils/poll.h>
-#endif
+#include "compat/poll.h"
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pwd.h>
