@@ -42,10 +42,12 @@
  * terms and conditions of the copyright.
  */
 
-#include <config.h>
 #include <slirp.h>
-
 #include <ip_icmp.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #ifdef VDE
 extern int dhcpmgmt;

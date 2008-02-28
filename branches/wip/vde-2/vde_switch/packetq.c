@@ -4,7 +4,6 @@
  * Licensed under the GPLv2
  */
 
-#include <config.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,8 +14,11 @@
 #include <errno.h>
 #include <syslog.h>
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #include <consmgmt.h>
-#include <vde.h>
 
 #ifdef VDE_PQ
 #include "packetq.h"

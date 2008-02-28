@@ -6,7 +6,10 @@
  */
 
 #define WANT_SYS_IOCTL_H
-#include <config.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #include <slirp.h>
 #include <ip_icmp.h>
 #include <main.h>

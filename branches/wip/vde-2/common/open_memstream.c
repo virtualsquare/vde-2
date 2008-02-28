@@ -17,13 +17,15 @@
  * USA
  */
 
-#include <config.h>
-
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 /* BSD-compatible implementation of open_memstream */
 

@@ -5,7 +5,6 @@
  */
 
 #define _GNU_SOURCE
-#include <config.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -25,14 +24,15 @@
 #include <getopt.h>
 #include <dlfcn.h>
 
-#include <vde.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #include <switch.h>
 #include <sockutils.h>
 #include <consmgmt.h>
 
 #define MAXCMD 128
-
-#include "compat/open_memstream.h"
 
 static struct swmodule swmi;
 extern time_t starting_time;

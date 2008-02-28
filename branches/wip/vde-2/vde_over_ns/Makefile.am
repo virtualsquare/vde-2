@@ -1,3 +1,4 @@
+AM_CPPFLAGS = -I$(top_srcdir)/include
 bin_PROGRAMS = vde_over_ns
 vde_over_ns_SOURCES = \
 	vde_over_ns.c \
@@ -12,5 +13,5 @@ vde_over_ns_SOURCES = \
 	fun.h \
 	pstack.h
 
-vde_over_ns_LDADD = ../compat/libvdecompat.la ../libvdeplug/libvdeplug.la
+vde_over_ns_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
 vde_over_ns_LDFLAGS = -Wl,-ldl

@@ -32,6 +32,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #include "fun.h"
 
 int checksum (unsigned char *buf, int len)

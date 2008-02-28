@@ -43,9 +43,12 @@
  */
 
 #define WANT_SYS_IOCTL_H
-#include <config.h>
 #include <slirp.h>
 #include "tcp2unix.h"
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 /* patchable/settable parameters for tcp */
 int 	tcp_mssdflt = TCP_MSS;

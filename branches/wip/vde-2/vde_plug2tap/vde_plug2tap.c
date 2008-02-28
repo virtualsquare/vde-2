@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
-#include "compat/poll.h"
 #include <syslog.h>
 #include <errno.h>
 #include <string.h>
@@ -17,11 +16,13 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <libgen.h>
-#include <libvdeplug/libvdeplug.h>
 #define _GNU_SOURCE
 #include <getopt.h>
-#include <config.h>
-#include <vde.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+#include "libvdeplug/libvdeplug.h"
 
 #define BUFSIZE 2048
 

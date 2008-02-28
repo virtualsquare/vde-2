@@ -2,8 +2,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #include "vdeplugin.h"
-#include "compat/open_memstream.h"
 
 
 int testevent(struct dbgcl *tag,va_list v);

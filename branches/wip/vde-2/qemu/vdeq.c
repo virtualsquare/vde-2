@@ -16,14 +16,15 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include "compat/poll.h"
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pwd.h>
 
-#include <config.h>
-#include <vde.h>
-#include <libvdeplug/libvdeplug.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
+#include "libvdeplug/libvdeplug.h"
 
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048

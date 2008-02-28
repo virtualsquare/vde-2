@@ -1,3 +1,5 @@
+AM_CPPFLAGS = -I$(top_srcdir)/include
+
 lib_LTLIBRARIES = libvdeplug.la
 
 libvdeplug_la_SOURCES = libvdeplug.c

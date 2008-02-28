@@ -13,6 +13,10 @@
 #include <sys/ioctl.h>
 #include <linux/if_tun.h>
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 static void Usage(char *name)
 {
   fprintf(stderr, "Create: %s [-b] [-u owner] [-t device-name] "

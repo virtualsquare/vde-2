@@ -4,7 +4,6 @@
  * Modified by Ludovico Gardenghi 2005 (OSX tuntap support)
  */
 
-#include <config.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -19,7 +18,10 @@
 #include <stdarg.h>
 #define _GNU_SOURCE
 #include <getopt.h>
-#include <vde.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #include <port.h>
 #include <switch.h>

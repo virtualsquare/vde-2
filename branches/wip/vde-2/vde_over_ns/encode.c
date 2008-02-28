@@ -26,6 +26,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 unsigned char map[] = 
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_1234567890";
 unsigned char *revmap = NULL;

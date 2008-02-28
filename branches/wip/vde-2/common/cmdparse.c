@@ -15,17 +15,18 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "compat/poll.h"
 #include <errno.h>
 
-#include "compat/open_memstream.h"
 
-#include <utils/cmdparse.h>
 
 #define BUFSIZE 256
 #define TIMEOUT 10000

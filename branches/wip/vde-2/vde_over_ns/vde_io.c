@@ -25,7 +25,6 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
-#include "compat/poll.h"
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <net/if.h>
@@ -40,7 +39,9 @@
 #include <errno.h>
 #include <sysexits.h>
 
-#include <config.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #include "fun.h"
 

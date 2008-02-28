@@ -8,13 +8,12 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "compat/poll.h"
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include <config.h>
-
-#include <vde.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #define BUFSIZE 1024
 char buf[BUFSIZE];

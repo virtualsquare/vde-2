@@ -6,7 +6,6 @@
  * dir permission patch by Alessio Caprari 2006
  */
 
-#include <config.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -28,8 +27,11 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #include <switch.h>
-#include <vde.h>
 #include <sockutils.h>
 #include <consmgmt.h>
 

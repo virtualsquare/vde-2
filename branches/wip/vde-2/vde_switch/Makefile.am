@@ -6,7 +6,6 @@ vde_switch_SOURCES = \
 	port.h \
 	vde_switch.c \
 	switch.h \
-	../vde.h \
 	sockutils.c \
 	sockutils.h \
 	qtimer.c \
@@ -23,9 +22,10 @@ vde_switch_SOURCES = \
 	tuntap.c \
 	tuntap.h
 
-vde_switch_LDADD = ../compat/libvdecompat.la ../utils/libvdeutils.la
+vde_switch_LDADD = $(top_srcdir)/common/libvdecommon.la
 vde_switch_LDFLAGS = -Wl,-ldl
 
+AM_CPPFLAGS = -I$(top_srcdir)/include
 AM_CFLAGS = -Wall
 
 if DARWIN_GCC
@@ -36,6 +36,6 @@ endif
 
 if ENABLE_EXPERIMENTAL
   AM_CFLAGS += $(EXP_CFLAGS)
-  AM_CPPFLAGS = -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN
+  AM_CPPFLAGS += -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN
 endif
 

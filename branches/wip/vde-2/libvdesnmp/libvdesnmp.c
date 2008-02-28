@@ -21,9 +21,12 @@
 #include <sys/un.h>
 #include <assert.h>
 #include <errno.h>
-#include "compat/poll.h"
 #include <sys/time.h>
 #include <time.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #include <libvdesnmp.h>
 #include <libvdemgmt.h>

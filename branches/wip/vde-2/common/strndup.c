@@ -1,6 +1,9 @@
-
 #include <stdlib.h>
 #include <string.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 char *strndup(const char *s, size_t n)
 {

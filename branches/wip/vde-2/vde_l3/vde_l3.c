@@ -20,20 +20,22 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <sys/time.h>
-#include "compat/poll.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/un.h>
-#include <config.h>
-#include <libvdeplug/libvdeplug.h>
+#include <dlfcn.h>
+
+#include "libvdeplug/libvdeplug.h"
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 #include "vde_buff.h"
 #include "vde_l3.h"
 
-#include <vde.h>
-#include <dlfcn.h>
 
 #define MAXCMD 255
 #define DEBUG 0

@@ -13,6 +13,10 @@
 #include <sys/time.h>
 #include <time.h>
 #include "vde_buff.h"
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 #include "vde_l3.h"
 
 struct timeval add_t(struct timeval x, struct timeval y) 

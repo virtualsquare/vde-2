@@ -1,3 +1,6 @@
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 int memcmp(const void *v1, const void *v2, size_t n)
 {

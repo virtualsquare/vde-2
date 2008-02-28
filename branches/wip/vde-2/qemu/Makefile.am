@@ -1,10 +1,9 @@
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)
+
 bin_PROGRAMS = vdeq
 vdeq_SOURCES = vdeq.c
-vdeq_LDADD = ../compat/libvdecompat.la ../libvdeplug/libvdeplug.la
+vdeq_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
 vdeq_LDFLAGS = -Wl,-ldl
-
-
-INCLUDES = -I$(top_srcdir)
 
 EXTRA_DIST = README qemu-vde-HOWTO
 

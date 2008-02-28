@@ -1,6 +1,7 @@
+AM_CPPFLAGS = -I$(top_srcdir)/include
 bin_PROGRAMS = unixcmd
 unixcmd_SOURCES = unixcmd.c
-unixcmd_LDADD = ../compat/libvdecompat.la ../utils/libvdeutils.la
+unixcmd_LDADD = $(top_srcdir)/common/libvdecommon.la
 unixcmd_LDFLAGS = -Wl,-ldl
 
 install-exec-hook:

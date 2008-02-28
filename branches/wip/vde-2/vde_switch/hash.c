@@ -4,7 +4,6 @@
  * Modified 2003 Renzo Davoli
  */
 
-#include <config.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,6 +15,10 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/signal.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #include <switch.h>
 #include <hash.h>

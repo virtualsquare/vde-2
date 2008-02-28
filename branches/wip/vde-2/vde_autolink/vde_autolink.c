@@ -31,15 +31,12 @@
 #include <syslog.h>
 #include <stdarg.h>
 
-#include <vde.h>
-#include <config.h>
-#include <libvdemgmt/libvdemgmt.h>
+#include "libvdemgmt/libvdemgmt.h"
 
-#include "compat/poll.h"
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
-#ifndef HAVE_STRNDUP
-#include <utils/strndup.h>
-#endif
 
 #define STDRCFILE "/etc/vde2/vde_autolink.rc"
 

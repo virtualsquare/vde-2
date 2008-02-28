@@ -24,13 +24,12 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include <config.h>
-#include <utils/cmdparse.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #include "libvdemgmt.h"
 
-#ifndef HAVE_STRNDUP
-#include <utils/strndup.h>
-#endif
 
 #define OPENMACHINE_RC INSTALLPATH"/etc/vde2/libvdemgmt/openmachine.rc"
 #define CLOSEMACHINE_RC INSTALLPATH"/etc/vde2/libvdemgmt/closemachine.rc"

@@ -1,5 +1,9 @@
-
 #include <stdlib.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #undef realloc
 
 void * rpl_realloc(void *ptr, size_t size)
