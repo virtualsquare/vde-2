@@ -53,9 +53,6 @@ typedef unsigned char u_int8_t;
 #include <stdio.h>
 #include <errno.h>
 
-#ifndef HAVE_MEMMOVE
-#define memmove(x, y, z) bcopy(y, x, z)
-#endif
 
 #if TIME_WITH_SYS_TIME
 # include <sys/time.h>

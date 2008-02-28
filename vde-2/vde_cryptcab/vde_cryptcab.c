@@ -12,8 +12,6 @@
  */
 
 #define _GNU_SOURCE
-#include "config.h"
-#include "blowfish.h"
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -25,11 +23,12 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <signal.h>
-#include "vde.h"
+#include "blowfish.h"
 
-#ifndef HAVE_STRNDUP
-#include <utils/strndup.h>
-#endif
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 
 #define PORTNO 7667
 static char *plugname;

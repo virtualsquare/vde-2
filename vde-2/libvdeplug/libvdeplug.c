@@ -17,7 +17,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301, USA
  */
 
-#include "libvdeplug.h"
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -30,6 +29,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
+#include "libvdeplug.h"
 
 /* IPN - Kernel VDE 
 */

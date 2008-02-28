@@ -14,6 +14,10 @@
 #include <stdio.h>
 #include <consmgmt.h> /* just for printlog def */
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #define QT_ALLOC_STEP 4
 
 struct qt_timer {

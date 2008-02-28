@@ -5,8 +5,14 @@
  * terms and conditions of the copyright.
  */
 
-#include <config.h>
 #include <slirp.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 /* Done as a macro in socket.h */
 /* int

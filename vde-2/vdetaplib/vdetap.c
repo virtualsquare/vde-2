@@ -6,13 +6,14 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <sys/select.h>
-#include "compat/poll.h"
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <pwd.h>
-#include <vde.h>
 #include <libvdeplug/libvdeplug.h>
-#include <config.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048

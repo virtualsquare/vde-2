@@ -1,4 +1,4 @@
-SUBDIRS = compat utils libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_switch vde_plug vde_plug2tap vde_over_ns vde_l3 plugin libvdemgmt unixcmd vde_autolink libvdesnmp 
+SUBDIRS = common include libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_switch vde_plug vde_plug2tap vde_over_ns vde_l3 plugin libvdemgmt unixcmd vde_autolink libvdesnmp 
 # kvde_switch
 
 

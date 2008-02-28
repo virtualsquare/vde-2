@@ -19,6 +19,10 @@
 #include <switch.h>
 #include <consmgmt.h>
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 /* check to see if given unix socket is still in use; if it isn't, remove the
  *  * socket from the file system */
 int still_used(struct sockaddr_un *sun)

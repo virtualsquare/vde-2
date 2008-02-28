@@ -29,6 +29,10 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #include "fun.h"
 
 static struct nstxqueue *qhead = NULL;

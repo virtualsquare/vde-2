@@ -42,8 +42,11 @@
  * terms and conditions of the copyright.
  */
 
-#include <config.h>
 #include <slirp.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #define max(x,y) ((x) > (y) ? (x) : (y))
 #define min(x,y) ((x) < (y) ? (x) : (y))

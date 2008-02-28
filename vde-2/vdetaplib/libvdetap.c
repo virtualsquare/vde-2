@@ -2,7 +2,6 @@
  * Reseased under the GPLv2 */
 
 #define _GNU_SOURCE
-#include <config.h>
 #include <dlfcn.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -20,6 +19,10 @@
 #include <linux/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #define TUNTAPPATH "/dev/net/tun"
 #define VDETAPEXEC LIBEXECDIR "/vdetap"

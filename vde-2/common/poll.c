@@ -4,7 +4,6 @@
  * Licensed under the GPLv2
  */
 
-#include <config.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -12,8 +11,9 @@
 #include <errno.h>
 #include <syslog.h>
 
-/* Just for structs and defines */
-#include "poll.h"
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #ifndef MAX
 #define MAX(x,y) ((x)>(y)?(x):(y))
@@ -117,7 +117,7 @@ static int convert_results(struct pollfd *ufds, int nfds,
 	return retval;
 }
 
-int rpl_poll(struct pollfd *ufds, nfds_t nfds, int timeout)
+int vde_poll(struct pollfd *ufds, nfds_t nfds, int timeout)
 {
 	fd_set rfds, wfds, efds;
 	struct timeval stimeout;

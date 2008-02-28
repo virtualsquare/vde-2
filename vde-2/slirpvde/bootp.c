@@ -21,8 +21,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include <config.h>
 #include <slirp.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 /* XXX: only DHCP is supported */
 

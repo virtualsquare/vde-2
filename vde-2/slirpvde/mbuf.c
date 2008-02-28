@@ -15,8 +15,13 @@
  * the flags
  */
 
-#include <config.h>
 #include <slirp.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 struct	mbuf *mbutl;
 char	*mclrefcnt;

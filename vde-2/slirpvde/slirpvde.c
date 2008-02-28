@@ -3,7 +3,6 @@
  * Modified by Ludovico Gardenghi 2005
  */
 
-#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -25,10 +24,14 @@
 #include <getopt.h>
 #include <stdarg.h>
 #include <fcntl.h>
-#include <vde.h>
 #include <netinet/in.h>
-#include <libvdeplug/libvdeplug.h>
 
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
+#include "libvdeplug/libvdeplug.h"
 #include "misc.h"
 #include "tcp2unix.h"
 

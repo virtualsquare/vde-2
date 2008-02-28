@@ -2,15 +2,17 @@
  * Licensed under the GPL
  */
 
-#include <config.h>
-#include<stdio.h>
-#include<unistd.h>
-#include<stdlib.h>
-#include<string.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <signal.h>
 #include <fcntl.h>
 
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #if 0
 #define execvp(X,Y) \

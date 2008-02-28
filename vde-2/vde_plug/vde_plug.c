@@ -15,15 +15,17 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include "compat/poll.h"
 #include <sys/utsname.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <pwd.h>
 #include <grp.h>
-#include <config.h>
-#include <vde.h>
-#include <libvdeplug/libvdeplug.h>
+#include "libvdeplug/libvdeplug.h"
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
 #ifdef VDE_IP_LOG
 #define DO_SYSLOG
 #endif

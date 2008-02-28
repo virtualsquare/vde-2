@@ -1,9 +1,14 @@
 #define _GNU_SOURCE
-#include "vdeplugin.h"
 #include <stdio.h>
 #include <pcap.h>
 #include <string.h>
 #include <stdlib.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
+#include "vdeplugin.h"
 
 /* usage:
  *

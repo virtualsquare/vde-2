@@ -22,15 +22,15 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <sys/time.h>
-#include "compat/poll.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <config.h>
 #include <libvdeplug/libvdeplug.h>
 
-#include <vde.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 #	include <limits.h>

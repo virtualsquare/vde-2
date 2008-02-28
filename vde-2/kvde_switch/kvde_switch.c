@@ -14,14 +14,15 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
-#include "compat/poll.h"
-#include <switch.h>
-#include <config.h>
-#include <consmgmt.h>
 #include <sys/time.h>
 #include <time.h>
 
-#include <vde.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
+
+#include <switch.h>
+#include <consmgmt.h>
 #undef VDE_PQ
 #undef OPTPOLL
 #ifdef VDE_PQ

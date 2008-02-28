@@ -1,10 +1,8 @@
-
-#if HAVE_CONFIG_H
-# include <config.h>
-#endif
-#undef malloc
-
 #include <sys/types.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 void *malloc ();
 

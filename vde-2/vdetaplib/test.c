@@ -1,7 +1,6 @@
 /* Copyright 2004 Renzo Davoli
  * Reseased under the GPLv2 */
 
-#include <config.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -10,6 +9,10 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <linux/if_tun.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 static int tun_alloc(char *dev)
 {

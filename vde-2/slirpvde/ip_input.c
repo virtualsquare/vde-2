@@ -42,11 +42,13 @@
  * terms and conditions of the copyright.
  */
 
-#include <config.h>
 #include <slirp.h>
 #include <misc.h>
-
 #include <ip_icmp.h>
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 int ip_defttl;
 struct ipstat ipstat;

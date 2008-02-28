@@ -2,7 +2,6 @@
  * Licensed under the GPLv2 
  */
 
-#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,6 +11,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h> /*ntoh conversion*/
+
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #include <switch.h>
 #include <hash.h>

@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
-#include "compat/poll.h"
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -26,7 +25,9 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include <config.h>
+#include "config.h"
+#include "vde.h"
+#include "vdecommon.h"
 
 #include "blowfish.h"
 #include "crc32.h"
