@@ -28,7 +28,7 @@
 #include <sys/un.h>
 #include <dlfcn.h>
 
-#include "libvdeplug/libvdeplug.h"
+#include "libvdeplug.h"
 
 #include "config.h"
 #include "vde.h"

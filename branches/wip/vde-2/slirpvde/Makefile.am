@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/include -DVDE
+AM_CPPFLAGS = -I$(top_srcdir)/include -DVDE -I$(top_srcdir)/libvdeplug
 AM_CFLAGS = -g -O2
 
 
