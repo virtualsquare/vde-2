@@ -31,7 +31,7 @@
 #include "vde.h"
 #include "vdecommon.h"
 
-#include "libvdeplug/libvdeplug.h"
+#include "libvdeplug.h"
 #include "misc.h"
 #include "tcp2unix.h"
 
@@ -113,18 +113,22 @@ static void cleanup(void)
 	vde_close(conn);
 }
 
-static void sig_handler(int sig)
+/* XXX Apparently unused... check if ok to be removed */
+
+/*static void sig_handler(int sig)
 {
 	  cleanup();
 		  signal(sig, SIG_DFL);
 			  kill(getpid(), sig);
-}
+}*/
 
-static void setsighandlers()
+
+
+/*static void setsighandlers()
 {
-	/* setting signal handlers.
+	|+ setting signal handlers.
 	 * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
-	 * ignores all the others signals which could cause termination. */
+	 * ignores all the others signals which could cause termination. +|
 	struct { int sig; const char *name; int ignore; } signals[] = {
 		{ SIGHUP, "SIGHUP", 0 },
 		{ SIGINT, "SIGINT", 0 },
@@ -158,7 +162,7 @@ static void setsighandlers()
 		if(signal(signals[i].sig,
 					signals[i].ignore ? SIG_IGN : sig_handler) < 0)
 			perror("Setting handler");
-}
+}*/
 
 unsigned char bufin[BUFSIZE];
 

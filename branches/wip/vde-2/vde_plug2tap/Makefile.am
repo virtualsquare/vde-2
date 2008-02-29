@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)
 bin_PROGRAMS = vde_plug2tap
 
 vde_plug2tap_SOURCES = vde_plug2tap.c 

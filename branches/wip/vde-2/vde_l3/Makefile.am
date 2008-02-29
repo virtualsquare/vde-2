@@ -3,7 +3,7 @@ moddir = $(pkglibdir)/vde_l3
 
 AM_LDFLAGS = -module -avoid-version -export-dynamic
 AM_LIBTOOLFLAGS = --tag=disable-static
-AM_CPPFLAGS = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)
 
 #install-data-hook:
 #	cd "$(DESTDIR)/$(moddir)" && rm -f $(mod_LTLIBRARIES)

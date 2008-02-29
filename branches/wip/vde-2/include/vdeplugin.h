@@ -3,6 +3,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "config.h"
+#include "vde.h"
+
 /* command type constants */
 /* doit signature:
  * int doit (
@@ -96,5 +99,22 @@ void mgmtnewfd(int new);
 	  if (__builtin_expect(((CL)->nfds) > 0, 0)) debugout((CL), __VA_ARGS__)
 #define EVENTOUT(CL, ...) \
 	  if (__builtin_expect(((CL)->nfun) > 0, 0)) eventout((CL), __VA_ARGS__)
+
+
+int eventadd(int (*fun)(),char *path,void *arg);
+int eventdel(int (*fun)(),char *path,void *arg);
+
+void debugout(struct dbgcl* cl, const char *format, ...);
+
+void addcl(int ncl,struct comlist *cl);
+void delcl(int ncl,struct comlist *cl);
+
+#ifdef DEBUGOPT
+void adddbgcl(int ncl,struct dbgcl *cl);
+void deldbgcl(int ncl,struct dbgcl *cl);
+#endif
+
+void printoutc(FILE *f, const char *format, ...);
+
 
 #endif

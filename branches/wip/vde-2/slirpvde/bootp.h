@@ -1,3 +1,5 @@
+#ifndef SLIRP_BOOT_H_
+#define SLIRP_BOOT_H_
 /* bootp/dhcp defines */
 
 #define BOOTP_SERVER	67
@@ -112,3 +114,5 @@ struct bootp_t {
 };
 
 void bootp_input(struct mbuf *m);
+
+#endif

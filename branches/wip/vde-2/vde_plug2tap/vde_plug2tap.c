@@ -22,7 +22,7 @@
 #include "config.h"
 #include "vde.h"
 #include "vdecommon.h"
-#include "libvdeplug/libvdeplug.h"
+#include "libvdeplug.h"
 
 #define BUFSIZE 2048
 

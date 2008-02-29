@@ -1,3 +1,6 @@
+#ifndef SLIRP_CONFIG_H_
+#define SLIRP_CONFIG_H_
+
 /*
  * User definable configuration options
  */
@@ -45,4 +48,4 @@
 #define NO_PROTOTYPES
 #endif
 
-
+#endif
