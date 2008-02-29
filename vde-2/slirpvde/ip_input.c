@@ -42,9 +42,9 @@
  * terms and conditions of the copyright.
  */
 
-#include <slirp.h>
-#include <misc.h>
-#include <ip_icmp.h>
+#include "slirp.h"
+#include "misc.h"
+#include "ip_icmp.h"
 
 #include "config.h"
 #include "vde.h"

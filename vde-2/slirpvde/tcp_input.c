@@ -44,6 +44,10 @@
 
 #include <slirp.h>
 #include <ip_icmp.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "vde.h"

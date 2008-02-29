@@ -31,12 +31,10 @@
 #include <syslog.h>
 #include <stdarg.h>
 
-#include "libvdemgmt/libvdemgmt.h"
-
 #include "config.h"
 #include "vde.h"
 #include "vdecommon.h"
-
+#include "libvdemgmt.h"
 
 #define STDRCFILE "/etc/vde2/vde_autolink.rc"
 

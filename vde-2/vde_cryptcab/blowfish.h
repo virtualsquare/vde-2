@@ -30,7 +30,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
-#include <libvdeplug/libvdeplug.h>
+
+#include "config.h"
+#include "libvdeplug.h"
 
 #define IP_SIZE 1024
 #define OP_SIZE 1032

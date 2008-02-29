@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)
 bin_PROGRAMS = vde_over_ns
 vde_over_ns_SOURCES = \
 	vde_over_ns.c \

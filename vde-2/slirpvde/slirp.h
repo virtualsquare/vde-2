@@ -1,7 +1,10 @@
-#ifndef __COMMON_H__
-#define __COMMON_H__
+#ifndef __SLIRP_H__
+#define __SLIRP_H__
+
+#include "config.h"
 
 #define CONFIG_QEMU
+
 
 #ifndef CONFIG_QEMU
 #include <version.h>

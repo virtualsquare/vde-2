@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/libvdeplug
 bin_PROGRAMS = vde_plug
 
 vde_plug_SOURCES = vde_plug.c 

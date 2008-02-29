@@ -6,7 +6,7 @@
  */
 
 #define WANT_SYS_IOCTL_H
-#include <slirp.h>
+#include "slirp.h"
 #include <unistd.h>
 #include <stdlib.h>
 

@@ -1,9 +1,13 @@
 moddir = $(pkglibdir)/plugins
 
+
 AM_LDFLAGS = -module -avoid-version -export-dynamic
 AM_LIBTOOLFLAGS = --tag=disable-static
 AM_CPPFLAGS = -I$(top_srcdir)/include
 
+if ENABLE_EXPERIMENTAL
+  AM_CPPFLAGS += -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN
+endif
 
 #install-data-hook:
 #	cd "$(DESTDIR)/$(moddir)" && rm -f $(mod_LTLIBRARIES)

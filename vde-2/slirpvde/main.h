@@ -5,6 +5,9 @@
  * terms and conditions of the copyright.
  */
 
+#ifndef SLIRP_MAIN_H_
+#define SLIRP_MAIN_H_
+
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
@@ -50,3 +53,5 @@ extern int tcp_keepintvl;
 #endif
 
 void if_encap(const uint8_t *ip_data, int ip_data_len);
+
+#endif

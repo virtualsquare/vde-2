@@ -5,6 +5,9 @@
  * terms and conditions of the copyright.
  */
 
+#ifndef SLIRP_DEBUG_H_
+#define SLIRP_DEBUG_H_
+
 #define PRN_STDERR	1
 #define PRN_SPRINTF	2
 
@@ -48,3 +51,4 @@ void mbufstats _P((void));
 void sockstats _P((void));
 void slirp_exit _P((int));
 
+#endif

@@ -26,11 +26,11 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <libvdeplug/libvdeplug.h>
 
 #include "config.h"
 #include "vde.h"
 #include "vdecommon.h"
+#include "libvdeplug.h"
 
 #if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 #	include <limits.h>

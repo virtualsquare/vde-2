@@ -6,7 +6,7 @@ libvdetap_la_LDFLAGS = -avoid-version -export-dynamic -module -Wl,-init -Wl,libv
 # vdetaplib/libvdetap.c|85| warning: dereferencing type-punned pointer will break strict-aliasing rules
 libvdetap_la_CFLAGS = -fno-strict-aliasing 
 
-AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBEXECDIR=\"$(libexecdir)\"
+AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBEXECDIR=\"$(libexecdir)\" -I$(top_srcdir)/libvdeplug
 
 vdetap_SOURCES = vdetap.c
 vdetap_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
