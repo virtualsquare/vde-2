@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <libgen.h>
+#include <limits.h>
 #include <string.h>
 #include <time.h>
 #include <sys/wait.h>
