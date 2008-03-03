@@ -31,6 +31,8 @@
 #include <sys/un.h>
 #include <syslog.h>
 #include <stdarg.h>
+#include <sys/types.h>
+#include <signal.h>
 
 #include "config.h"
 #include "vde.h"
