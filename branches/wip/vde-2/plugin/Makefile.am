@@ -15,11 +15,11 @@ endif
 
 mod_LTLIBRARIES = dump.la
 
-dump_la_SOURCES = dump.c vdeplugin.h
+dump_la_SOURCES = dump.c
 dump_la_LIBADD = $(top_srcdir)/common/libvdecommon.la
 
 if ENABLE_PCAP
 mod_LTLIBRARIES += pdump.la
-pdump_la_SOURCES = pdump.c vdeplugin.h
+pdump_la_SOURCES = pdump.c
 pdump_la_LIBADD = $(top_srcdir)/common/libvdecommon.la -lpcap
 endif

@@ -1,2 +1,2 @@
-EXTRA_DIST = cmdparse.h open_memstream.h poll.h strndup.h vde.h
+EXTRA_DIST = vdecommon.h cmdparse.h open_memstream.h vdepoll.h strndup.h vde.h vdeplugin.h
 
