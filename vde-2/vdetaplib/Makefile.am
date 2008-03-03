@@ -10,4 +10,4 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBEXECDIR=\"$(libexecdir)\" -I$(top_src
 
 vdetap_SOURCES = vdetap.c
 vdetap_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
-vdetap_LDFLAGS = -Wl,-ldl
+#vdetap_LDFLAGS = -Wl,-ldl

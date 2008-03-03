@@ -3,4 +3,4 @@ bin_PROGRAMS = vde_plug
 
 vde_plug_SOURCES = vde_plug.c 
 vde_plug_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
-vde_plug_LDFLAGS = -Wl,-ldl
+#vde_plug_LDFLAGS = -Wl,-ldl
