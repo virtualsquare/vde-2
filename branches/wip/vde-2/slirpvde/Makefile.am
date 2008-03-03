@@ -47,6 +47,6 @@ slirpvde_SOURCES = \
 		   slirpvde.c
 
 slirpvde_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
-slirpvde_LDFLAGS = -Wl,-ldl
+#slirpvde_LDFLAGS = -Wl,-ldl
 
 EXTRA_DIST = README COPYRIGHT

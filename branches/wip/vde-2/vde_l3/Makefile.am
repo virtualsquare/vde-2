@@ -20,5 +20,4 @@ tbf_la_LIBADD = $(top_srcdir)/common/libvdecommon.la
 bin_PROGRAMS = vde_l3
 vde_l3_SOURCES = vde_l3.c vde_buff.h vde_l3.h
 vde_l3_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
-vde_l3_LDFLAGS = -Wl,-ldl
-
+#vde_l3_LDFLAGS = -Wl,-ldl

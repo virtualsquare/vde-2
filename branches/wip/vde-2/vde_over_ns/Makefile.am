@@ -14,4 +14,4 @@ vde_over_ns_SOURCES = \
 	pstack.h
 
 vde_over_ns_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
-vde_over_ns_LDFLAGS = -Wl,-ldl
+#vde_over_ns_LDFLAGS = -Wl,-ldl

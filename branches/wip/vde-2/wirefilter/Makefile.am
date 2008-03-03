@@ -3,4 +3,4 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/libvdeplug
 bin_PROGRAMS = wirefilter
 wirefilter_SOURCES = wirefilter.c
 wirefilter_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
-wirefilter_LDFLAGS = -Wl,-ldl
+#wirefilter_LDFLAGS = -Wl,-ldl
