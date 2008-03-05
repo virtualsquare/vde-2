@@ -168,31 +168,24 @@ fi
 CFLAGS="-Wall -O2 $CFLAGS"
 AC_SUBST(CFLAGS)
 
-AC_CONFIG_FILES([Makefile]
-		[include/Makefile]
-		[common/Makefile]
+AC_CONFIG_FILES(
+		[Makefile]
 		[doc/Makefile]
-		[qemu/Makefile]
-		[slirpvde/Makefile]
-		[vdetaplib/Makefile]
-		[libvdeplug/Makefile]
-		[vde_plug/Makefile]
-		[vde_switch/Makefile]
-		[vde_plug2tap/Makefile]
-		[vde_cryptcab/Makefile]
-		[bochs/Makefile]
-		[dpipe/Makefile]
-		[unixterm/Makefile]
-		[wirefilter/Makefile]
-		[vde_over_ns/Makefile]
-		[plugin/Makefile]
-		[vde_l3/Makefile]
-		[uml/Makefile]
-		[libvdemgmt/Makefile]
-		[unixcmd/Makefile]
-		[tunctl/Makefile]
-		[vde_autolink/Makefile]
-		[libvdesnmp/Makefile])
+		[include/Makefile]
+		[man/Makefile]
+		[src/Makefile]
+		[src/lib/Makefile]
+		[src/vde_switch/Makefile]
+		[src/kvde_switch/Makefile]
+		[src/vde_over_ns/Makefile]
+		[src/common/Makefile]
+		[src/vdetaplib/Makefile]
+		[src/vde_l3/Makefile]
+		[src/vde_cryptcab/Makefile]
+		[src/slirpvde/Makefile]
+		[src/plugin/Makefile]
+		)
+
 AC_OUTPUT
 
 
