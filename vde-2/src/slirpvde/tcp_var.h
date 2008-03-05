@@ -37,8 +37,8 @@
 #ifndef _TCP_VAR_H_
 #define _TCP_VAR_H_
 
-#include <tcpip.h>
-#include <tcp_timer.h>
+#include "tcpip.h"
+#include "tcp_timer.h"
 
 #if SIZEOF_CHAR_P == 4
  typedef struct tcpiphdr *tcpiphdrp_32;

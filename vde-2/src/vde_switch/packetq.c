@@ -14,11 +14,11 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include <consmgmt.h>
+#include "consmgmt.h"
 
 #ifdef VDE_PQ
 #include "packetq.h"

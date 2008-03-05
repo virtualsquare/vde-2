@@ -7,9 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 #include "vde_buff.h"
 #include "vde_l3.h"
 

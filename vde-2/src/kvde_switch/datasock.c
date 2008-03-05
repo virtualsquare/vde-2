@@ -27,13 +27,13 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #include <switch.h>
-#include <sockutils.h>
-#include <consmgmt.h>
+#include "sockutils.h"
+#include "consmgmt.h"
 
 /* will be inserted in a af_ipn.h include */
 #ifndef AF_IPN

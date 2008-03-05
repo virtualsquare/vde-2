@@ -27,11 +27,11 @@
 #include <netinet/in.h>
 
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include "libvdeplug.h"
+#include <libvdeplug.h>
 #include "misc.h"
 #include "tcp2unix.h"
 

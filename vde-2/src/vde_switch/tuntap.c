@@ -19,13 +19,13 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include <port.h>
-#include <switch.h>
-#include <consmgmt.h>
+#include "port.h"
+#include "switch.h"
+#include "consmgmt.h"
 
 #ifdef HAVE_TUNTAP
 

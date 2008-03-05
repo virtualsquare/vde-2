@@ -3,8 +3,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#include "config.h"
-#include "vde.h"
+#include <config.h>
+#include <vde.h>
 
 /* command type constants */
 /* doit signature:

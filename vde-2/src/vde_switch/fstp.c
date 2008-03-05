@@ -12,17 +12,17 @@
 #include <sys/un.h>
 #include <netinet/in.h> /*ntoh conversion*/
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include <switch.h>
-#include <hash.h>
-#include <qtimer.h>
-#include <port.h>
-#include <fcntl.h>
-#include <consmgmt.h>
-#include <bitarray.h>
+#include "switch.h"
+#include "hash.h"
+#include "qtimer.h"
+#include "port.h"
+#include "fcntl.h"
+#include "consmgmt.h"
+#include "bitarray.h"
 
 static int pflag=0;
 static int numports;

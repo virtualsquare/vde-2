@@ -1,8 +1,8 @@
 #include <sys/types.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 void *malloc ();
 

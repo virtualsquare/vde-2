@@ -21,10 +21,10 @@
 #include <pwd.h>
 #include <grp.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
-#include "libvdeplug.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
+#include <libvdeplug.h>
 
 #ifdef VDE_IP_LOG
 #define DO_SYSLOG

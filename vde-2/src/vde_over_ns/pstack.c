@@ -33,9 +33,9 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #include "fun.h"
 #include "pstack.h"

@@ -25,9 +25,9 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #include "blowfish.h"
 #include "crc32.h"

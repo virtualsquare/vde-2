@@ -46,9 +46,9 @@
 #include "misc.h"
 #include "ip_icmp.h"
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 int ip_defttl;
 struct ipstat ipstat;

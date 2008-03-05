@@ -11,9 +11,9 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #ifndef MAX
 #define MAX(x,y) ((x)>(y)?(x):(y))

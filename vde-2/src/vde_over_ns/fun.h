@@ -22,8 +22,8 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
   -------------------------------------------------------------------------- */
-#include "vde.h"
-#include "libvdeplug.h"
+#include <vde.h>
+#include <libvdeplug.h>
 
 #ifndef _NSTXHDR_H
 #define _NSTXHDR_H

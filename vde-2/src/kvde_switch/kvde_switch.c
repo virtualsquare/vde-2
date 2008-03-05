@@ -17,12 +17,12 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #include <switch.h>
-#include <consmgmt.h>
+#include "consmgmt.h"
 #undef VDE_PQ
 #undef OPTPOLL
 #ifdef VDE_PQ

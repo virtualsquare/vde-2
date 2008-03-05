@@ -27,10 +27,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
-#include "libvdeplug.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
+#include <libvdeplug.h>
 
 #if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 #	include <limits.h>

@@ -20,11 +20,11 @@
 #include <sys/wait.h>
 #include <pwd.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include "libvdeplug/libvdeplug.h"
+#include <libvdeplug.h>
 
 #define SWITCH_MAGIC 0xfeedface
 #define BUFSIZE 2048

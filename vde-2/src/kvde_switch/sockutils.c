@@ -17,12 +17,12 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #include <switch.h>
-#include <consmgmt.h>
+#include "consmgmt.h"
 
 /* check to see if given unix socket is still in use; if it isn't, remove the
  *  * socket from the file system */

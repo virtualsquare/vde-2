@@ -6,12 +6,12 @@ SUBDIRS = \
 	vde_l3 \
 	vde_cryptcab \
 	slirpvde
-#	kvde_switch \
+#	kvde_switch
 
 bin_PROGRAMS = \
 	dpipe \
 	unixcmd \
-	unixter \
+	unixterm \
 	vde_autolink \
 	vde_plug2tap \
 	vde_plug \
@@ -35,13 +35,13 @@ if ENABLE_EXPERIMENTAL
 endif
 
 AM_CPPFLAGS = -I$(top_srcdir)/include
-AM_LDADD = common/libvdecommon.la
+LDADD = common/libvdecommon.la
 
-vde_autolink_LDADD = lib/libvdemgmt.la
-vde_plug2tap_LDADD = lib/libvdeplug.la
-vde_plug_LDADD = lib/libvdeplug.la
-vdeq_LDADD = lib/libvdeplug.la
-wirefilter_LDADD = lib/libvdeplug.la
+vde_autolink_LDADD = $(LDADD) lib/libvdemgmt.la
+vde_plug2tap_LDADD =$(LDADD) lib/libvdeplug.la
+vde_plug_LDADD = $(LDADD) lib/libvdeplug.la
+vdeq_LDADD = $(LDADD) lib/libvdeplug.la
+wirefilter_LDADD = $(LDADD) lib/libvdeplug.la
 
 install-exec-hook:
 	rm -f $(DESTDIR)$(bindir)/vdecmd
