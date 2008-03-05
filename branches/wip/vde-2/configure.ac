@@ -176,15 +176,16 @@ AC_CONFIG_FILES(
 		[src/Makefile]
 		[src/lib/Makefile]
 		[src/vde_switch/Makefile]
-		[src/kvde_switch/Makefile]
 		[src/vde_over_ns/Makefile]
 		[src/common/Makefile]
 		[src/vdetaplib/Makefile]
 		[src/vde_l3/Makefile]
 		[src/vde_cryptcab/Makefile]
 		[src/slirpvde/Makefile]
-		[src/plugin/Makefile]
+		[src/vde_switch/plugins/Makefile]
 		)
+
+#		[src/kvde_switch/Makefile]
 
 AC_OUTPUT
 

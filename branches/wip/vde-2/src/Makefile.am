@@ -30,10 +30,6 @@ if ENABLE_CRYPTCAB
   SUBDIRS += vde_cryptcab
 endif
 
-if ENABLE_EXPERIMENTAL
-  SUBDIRS += plugin
-endif
-
 AM_CPPFLAGS = -I$(top_srcdir)/include
 LDADD = common/libvdecommon.la
 
