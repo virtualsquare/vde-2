@@ -10,3 +10,5 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBEXECDIR=\"$(libexecdir)\"
 
 vdetap_SOURCES = vdetap.c
 vdetap_LDADD = $(top_srcdir)/src/common/libvdecommon.la $(top_srcdir)/src/lib/libvdeplug.la
+
+EXTRA_DIST = test.c
