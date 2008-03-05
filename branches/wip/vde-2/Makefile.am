@@ -1,18 +1,19 @@
-SUBDIRS = common include libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_switch vde_plug vde_plug2tap vde_over_ns vde_l3 libvdemgmt unixcmd vde_autolink libvdesnmp 
-# kvde_switch
+#SUBDIRS = common include libvdeplug qemu slirpvde bochs uml doc dpipe wirefilter unixterm vde_switch vde_plug vde_plug2tap vde_over_ns vde_l3 libvdemgmt unixcmd vde_autolink libvdesnmp 
+## kvde_switch
 
+SUBDIRS = include src man doc
 
-if CAN_MAKE_LIBVDETAP
-  SUBDIRS += vdetaplib tunctl
-endif
-
-if ENABLE_CRYPTCAB
-  SUBDIRS += vde_cryptcab
-endif
-
-if ENABLE_EXPERIMENTAL
-  SUBDIRS += plugin
-endif
+#if CAN_MAKE_LIBVDETAP
+#  SUBDIRS += vdetaplib tunctl
+#endif
+#
+#if ENABLE_CRYPTCAB
+#  SUBDIRS += vde_cryptcab
+#endif
+#
+#if ENABLE_EXPERIMENTAL
+#  SUBDIRS += plugin
+#endif
 
 AUTOMAKE_OPTIONS = foreign
 
