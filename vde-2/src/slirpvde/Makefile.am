@@ -1,6 +1,5 @@
-AM_CPPFLAGS = -I$(top_srcdir)/include -DVDE -I$(top_srcdir)/libvdeplug
+AM_CPPFLAGS = -I$(top_srcdir)/include -DVDE
 AM_CFLAGS = -g -O2
-
 
 bin_PROGRAMS = slirpvde
 
@@ -46,7 +45,4 @@ slirpvde_SOURCES = \
 		   tcp2unix.h \
 		   slirpvde.c
 
-slirpvde_LDADD = $(top_srcdir)/common/libvdecommon.la $(top_srcdir)/libvdeplug/libvdeplug.la
-#slirpvde_LDFLAGS = -Wl,-ldl
-
-EXTRA_DIST = README COPYRIGHT
+slirpvde_LDADD = $(top_srcdir)/src/common/libvdecommon.la $(top_srcdir)/src/lib/libvdeplug.la

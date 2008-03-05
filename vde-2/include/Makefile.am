@@ -1,2 +1,11 @@
-EXTRA_DIST = vdecommon.h cmdparse.h open_memstream.h vdepoll.h strndup.h vde.h vdeplugin.h
+include_HEADERS = libvdesnmp.h libvdemgmt.h
+nobase_include_HEADERS = libvdeplug.h libvdeplug_dyn.h
 
+EXTRA_DIST = \
+	cmdparse.h \
+	open_memstream.h \
+	strndup.h \
+	vdecommon.h \
+	vde.h \
+	vdeplugin.h \
+	vdepoll.h
