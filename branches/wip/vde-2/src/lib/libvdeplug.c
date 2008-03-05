@@ -30,11 +30,11 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include "libvdeplug.h"
+#include <libvdeplug.h>
 
 /* IPN - Kernel VDE 
 */

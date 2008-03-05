@@ -27,14 +27,14 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include <port.h>
-#include <switch.h>
-#include <sockutils.h>
-#include <consmgmt.h>
+#include "port.h"
+#include "switch.h"
+#include "sockutils.h"
+#include "consmgmt.h"
 
 static struct swmodule swmi;
 static struct mod_support modfun;

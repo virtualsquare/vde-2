@@ -23,9 +23,9 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 /* BSD-compatible implementation of open_memstream */
 

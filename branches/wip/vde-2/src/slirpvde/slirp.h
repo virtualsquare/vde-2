@@ -1,7 +1,7 @@
 #ifndef __SLIRP_H__
 #define __SLIRP_H__
 
-#include "config.h"
+#include <config.h>
 
 #define CONFIG_QEMU
 
@@ -9,7 +9,7 @@
 #ifndef CONFIG_QEMU
 #include <version.h>
 #endif
-#include <slirp_config.h>
+#include "slirp_config.h"
 
 #include <sys/types.h>
 #ifdef HAVE_SYS_BITYPES_H
@@ -168,29 +168,29 @@ int inet_aton _P((const char *cp, struct in_addr *ia));
 #include <sys/stropts.h>
 #endif
 
-#include <debug.h>
+#include "debug.h"
 
-#include <ip.h>
-#include <tcp.h>
-#include <tcp_timer.h>
-#include <tcp_var.h>
-#include <tcpip.h>
-#include <udp.h>
-#include <icmp_var.h>
-#include <mbuf.h>
-#include <sbuf.h>
-#include <socket.h>
-#include <if.h>
-#include <main.h>
-#include <misc.h>
-#include <ctl.h>
+#include "ip.h"
+#include "tcp.h"
+#include "tcp_timer.h"
+#include "tcp_var.h"
+#include "tcpip.h"
+#include "udp.h"
+#include "icmp_var.h"
+#include "mbuf.h"
+#include "sbuf.h"
+#include "socket.h"
+#include "if.h"
+#include "main.h"
+#include "misc.h"
+#include "ctl.h"
 #ifdef USE_PPP
 #include <ppp/pppd.h>
 #include <ppp/ppp.h>
 #endif
 
-#include <bootp.h>
-#include <libslirp.h>
+#include "bootp.h"
+#include "libslirp.h"
 
 extern struct ttys *ttys_unit[MAX_INTERFACES];
 

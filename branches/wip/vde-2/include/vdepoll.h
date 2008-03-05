@@ -1,7 +1,7 @@
 #ifndef VDEPOLL_H__
 #define VDEPOLL_H__
 
-#include "config.h"
+#include <config.h>
 
 #ifdef HAVE_POLL
 #include <poll.h>

@@ -16,15 +16,15 @@
 #include <sys/time.h>
 #include <sys/signal.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include <switch.h>
-#include <hash.h>
-#include <qtimer.h>
-#include <consmgmt.h>
-#include <bitarray.h>
+#include "switch.h"
+#include "hash.h"
+#include "qtimer.h"
+#include "consmgmt.h"
+#include "bitarray.h"
 
 #define MIN_PERSISTENCE_DFL 3
 static int min_persistence=MIN_PERSISTENCE_DFL;

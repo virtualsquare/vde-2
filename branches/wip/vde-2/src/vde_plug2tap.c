@@ -19,10 +19,10 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
-#include "libvdeplug.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
+#include <libvdeplug.h>
 
 #define BUFSIZE 2048
 

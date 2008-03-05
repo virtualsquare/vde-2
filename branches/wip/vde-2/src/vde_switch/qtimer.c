@@ -10,13 +10,13 @@
 #include <syslog.h>
 #include <errno.h>
 #include <string.h>
-#include <switch.h>
+#include "switch.h"
 #include <stdio.h>
-#include <consmgmt.h> /* just for printlog def */
+#include "consmgmt.h" /* just for printlog def */
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #define QT_ALLOC_STEP 4
 

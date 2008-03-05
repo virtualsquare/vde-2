@@ -16,8 +16,8 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 
-#include "config.h"
-#include "libvdeplug.h"
+#include <config.h>
+#include <libvdeplug.h>
 
 #define PTYPE_IP 0x0800
 #define PTYPE_ARP 0x0806

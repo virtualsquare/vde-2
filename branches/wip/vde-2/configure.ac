@@ -2,11 +2,11 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([vde2], [2.2.0-pre2], [info@v2.cs.unibo.it])
+AC_INIT([vde2], [2.2.0-pre3], [info@v2.cs.unibo.it])
 AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects])
 AC_CONFIG_SRCDIR([include/vde.h])
 AC_CONFIG_HEADER([include/config.h])
-AC_CONFIG_LIBOBJ_DIR(common)
+AC_CONFIG_LIBOBJ_DIR(src/common)
 
 # Checks for programs.
 AC_PROG_CXX

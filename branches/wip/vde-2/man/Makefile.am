@@ -3,14 +3,9 @@ generated_mans = vdetaplib.1
 
 man_MANS = $(static_mans) $(generated_mans)
 
-vdecmddir = $(sysconfdir)/vde2/
-dist_vdecmd_DATA = vdecmd
-libvdemgmtdir = $(sysconfdir)/vde2/libvdemgmt/
-dist_libvdemgmt_DATA = libvdemgmt/asyncrecv.rc libvdemgmt/closemachine.rc \
-		       libvdemgmt/openmachine.rc libvdemgmt/sendcmd.rc
 
 CLEANFILES = $(generated_mans)
-EXTRA_DIST = $(static_mans) vdetaplib.1.in freebsd_tap vde_autolink-howto
+EXTRA_DIST = $(static_mans) vdetaplib.1.in
 
 vdetaplib.1: vdetaplib.1.in
 	sed 's/%LIBEXECDIR%/$(subst /,\/,$(libexecdir))/g' vdetaplib.1.in > vdetaplib.1

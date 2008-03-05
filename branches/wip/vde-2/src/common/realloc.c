@@ -1,8 +1,8 @@
 #include <stdlib.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #undef realloc
 

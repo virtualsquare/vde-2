@@ -13,21 +13,21 @@
 #include <sys/un.h>
 #include <netinet/in.h> /*ntoh conversion*/
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include <switch.h>
-#include <hash.h>
-#include <qtimer.h>
-#include <port.h>
-#include <fcntl.h>
-#include <consmgmt.h>
-#include <bitarray.h>
-#include <fstp.h>
+#include "switch.h"
+#include "hash.h"
+#include "qtimer.h"
+#include "port.h"
+#include "fcntl.h"
+#include "consmgmt.h"
+#include "bitarray.h"
+#include "fstp.h"
 
 #ifdef VDE_PQ
-#include <packetq.h>
+#include "packetq.h"
 #endif
 
 static int pflag=0;

@@ -28,11 +28,11 @@
 #include <sys/un.h>
 #include <dlfcn.h>
 
-#include "libvdeplug.h"
+#include <libvdeplug.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 #include "vde_buff.h"
 #include "vde_l3.h"
 

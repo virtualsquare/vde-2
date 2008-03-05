@@ -33,9 +33,9 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 #include "fun.h"
 #include "dns.h"
 #include "dns_proto.h"

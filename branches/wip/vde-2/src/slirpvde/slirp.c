@@ -1,12 +1,12 @@
-#include <slirp.h>
+#include "slirp.h"
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 /* host address */
 struct in_addr our_addr;

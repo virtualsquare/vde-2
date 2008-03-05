@@ -31,8 +31,8 @@
 #include <errno.h>
 #include <time.h>
 
-#include "config.h"
-#include "libvdeplug.h"
+#include <config.h>
+#include <libvdeplug.h>
 
 #define IP_SIZE 1024
 #define OP_SIZE 1032

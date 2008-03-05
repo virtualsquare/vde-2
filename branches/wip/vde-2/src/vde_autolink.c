@@ -34,10 +34,10 @@
 #include <sys/types.h>
 #include <signal.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
-#include "libvdemgmt.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
+#include <libvdemgmt.h>
 
 #define STDRCFILE "/etc/vde2/vde_autolink.rc"
 

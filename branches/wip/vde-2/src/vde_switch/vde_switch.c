@@ -14,23 +14,23 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
-#include <switch.h>
-#include <qtimer.h>
-#include <hash.h>
-#include <port.h>
+#include "switch.h"
+#include "qtimer.h"
+#include "hash.h"
+#include "port.h"
 #ifdef FSTP
-#include <fstp.h>
+#include "fstp.h"
 #endif
-#include <consmgmt.h>
+#include "consmgmt.h"
 #include <sys/time.h>
 #include <time.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #ifdef VDE_PQ
-#include <packetq.h>
+#include "packetq.h"
 #endif
 
 static struct swmodule *swmh;

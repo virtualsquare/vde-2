@@ -3,11 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include "vdeplugin.h"
+#include <vdeplugin.h>
 
 
 int testevent(struct dbgcl *tag,va_list v);

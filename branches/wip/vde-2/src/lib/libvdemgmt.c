@@ -24,11 +24,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include "libvdemgmt.h"
+#include <libvdemgmt.h>
 
 
 #define OPENMACHINE_RC INSTALLPATH"/etc/vde2/libvdemgmt/openmachine.rc"

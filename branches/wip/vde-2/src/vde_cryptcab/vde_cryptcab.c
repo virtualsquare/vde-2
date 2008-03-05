@@ -25,9 +25,9 @@
 #include <signal.h>
 #include "blowfish.h"
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 
 #define PORTNO 7667

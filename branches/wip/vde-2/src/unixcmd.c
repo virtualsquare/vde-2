@@ -27,9 +27,9 @@
 #include <libgen.h>
 #include <errno.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #define STD_SOCK_DIR INSTALLPATH"/var/run"
 #define STD_RC_DIR INSTALLPATH"/etc/vde2"

@@ -7,8 +7,8 @@
 #define __PORT_H__
 
 #include <sys/socket.h>
-#include <switch.h>
-#include <bitarray.h>
+#include "switch.h"
+#include "bitarray.h"
 
 #define ETH_HEADER_SIZE 14
 /* a full ethernet 802.3 frame */

@@ -42,16 +42,16 @@
  * terms and conditions of the copyright.
  */
 
-#include <slirp.h>
-#include <ip_icmp.h>
+#include "slirp.h"
+#include "ip_icmp.h"
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 struct socket tcb;
 

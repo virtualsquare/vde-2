@@ -24,16 +24,16 @@
 #include <getopt.h>
 #include <dlfcn.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
-#include <port.h>
-#include <switch.h>
-#include <sockutils.h>
-#include <consmgmt.h>
-#include <qtimer.h>
-#include <packetq.h>
+#include "port.h"
+#include "switch.h"
+#include "sockutils.h"
+#include "consmgmt.h"
+#include "qtimer.h"
+#include "packetq.h"
 
 #define MAXCMD 128
 

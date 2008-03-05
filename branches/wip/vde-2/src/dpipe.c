@@ -10,9 +10,9 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include "config.h"
-#include "vde.h"
-#include "vdecommon.h"
+#include <config.h>
+#include <vde.h>
+#include <vdecommon.h>
 
 #if 0
 #define execvp(X,Y) \
