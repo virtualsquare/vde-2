@@ -1,3 +1,29 @@
+VDE 2.2.0-pre3, UNRELEASED
+	* New contact email address: <info@v2.cs.unibo.it>
+	* Code cleanup (some more warnings removed)
+	* [vde_crytcab] Cleared large memory leak due to missing
+	  EVP_CIPHER_CTX_cleanup() after encryption/decryption
+	* [vde_cryptcab] Cleared (very small) memory leak in crc32 calls
+	* [vde_cryptcab] Fixed bug on handover after session timeout: now client
+	  re-establishes the connection when it sees some traffic, after session
+	  timeout.
+	* Heavy directories reorganization, all source code moved under src and
+	  include
+	* New internal library libvdecommon.la with common utilities and LIBOBJ
+	  replacement/compatibility functions
+	* [common] Fix in poll emulation management
+	* Fix to distclean problem due to wrong LIBOBJ management
+
+VDE 2.2.0-pre2, 2008-01-31
+
+	* [vde_autolink][unixcmd] Added man pages
+	* Code cleanup (removed warnings, added missing prototypes to header
+	  files, etc.)
+	* Debian cleanup (in order to make lintian happier)
+	* [slirpvde] Fix for 64 bit architectures (thanks to Andrea Arcangeli)
+	* Added very very very experimental kvde_switch (using IPN)
+	* Minor fixes
+
 VDE 2.2.0-pre1, 2007-11-02
 	* Fixes in vde_cryptcab, libvdeplug, vdeq, slirpvde
 	* wirefilter can connect directly to two local plugs

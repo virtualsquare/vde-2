@@ -2,11 +2,11 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([vde2], [2.2.0-pre2], [info@v2.cs.unibo.it])
+AC_INIT([vde2], [2.2.0-pre3], [info@v2.cs.unibo.it])
 AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects])
-AC_CONFIG_SRCDIR([vde.h])
-AC_CONFIG_HEADER([config.h])
-AC_CONFIG_LIBOBJ_DIR(compat)
+AC_CONFIG_SRCDIR([include/vde.h])
+AC_CONFIG_HEADER([include/config.h])
+AC_CONFIG_LIBOBJ_DIR(src/common)
 
 # Checks for programs.
 AC_PROG_CXX
@@ -63,7 +63,7 @@ AC_CHECK_FUNC([poll],
 		if expr "$build_os" : "darwin8\..*" > /dev/null; then
 			AC_MSG_RESULT([present but broken, emulating with select])
 			AC_LIBOBJ([poll])
-			AC_DEFINE([poll], [rpl_poll], [Define to rpl_poll if the replacement function should be used.])
+			AC_DEFINE([poll], [vde_poll], [Define to vde_poll if the replacement function should be used.])
 		else
 			AC_DEFINE([HAVE_POLL], 1, [Define to 1 if your system has a working poll() function.])
 			AC_MSG_RESULT([yes])
@@ -168,31 +168,25 @@ fi
 CFLAGS="-Wall -O2 $CFLAGS"
 AC_SUBST(CFLAGS)
 
-AC_CONFIG_FILES([Makefile]
-		[compat/Makefile]
-		[utils/Makefile]
+AC_CONFIG_FILES(
+		[Makefile]
 		[doc/Makefile]
-		[qemu/Makefile]
-		[slirpvde/Makefile]
-		[vdetaplib/Makefile]
-		[libvdeplug/Makefile]
-		[vde_plug/Makefile]
-		[vde_switch/Makefile]
-		[vde_plug2tap/Makefile]
-		[vde_cryptcab/Makefile]
-		[bochs/Makefile]
-		[dpipe/Makefile]
-		[unixterm/Makefile]
-		[wirefilter/Makefile]
-		[vde_over_ns/Makefile]
-		[plugin/Makefile]
-		[vde_l3/Makefile]
-		[uml/Makefile]
-		[libvdemgmt/Makefile]
-		[unixcmd/Makefile]
-		[tunctl/Makefile]
-		[vde_autolink/Makefile]
-		[libvdesnmp/Makefile])
+		[include/Makefile]
+		[man/Makefile]
+		[src/Makefile]
+		[src/lib/Makefile]
+		[src/vde_switch/Makefile]
+		[src/vde_over_ns/Makefile]
+		[src/common/Makefile]
+		[src/vdetaplib/Makefile]
+		[src/vde_l3/Makefile]
+		[src/vde_cryptcab/Makefile]
+		[src/slirpvde/Makefile]
+		[src/vde_switch/plugins/Makefile]
+		)
+
+#		[src/kvde_switch/Makefile]
+
 AC_OUTPUT
 
 
@@ -201,33 +195,45 @@ echo
 echo "Configure results:"
 echo
 if test x$add_cryptcab_support = "xyes" ; then
-	echo " vde_cryptcab : enabled"
+	echo " + VDE CryptCab............ enabled"
 else
-	echo " vde_cryptcab : disabled"
+	echo " - VDE CryptCab............ disabled"
+fi
+
+if test x$warn_tuntap = "xyes" ; then
+	echo " - TAP support............. disabled"
+else
+	echo " + TAP support............. enabled"
+fi
+
+if test x$warn_pcap = "xyes" ; then
+	echo " - pcap support............ disabled"
+else
+	echo " + pcap support............ enabled"
+fi
+
+if test x$enable_experimental = "xyes" ; then
+	echo " + Experimental features... enabled"
+else
+	echo " - Experimental features... disabled"
+fi
+
+echo
+echo
+if ! test x$add_cryptcab_support = "xyes" ; then
 	if test x$warn_cryptcab = "xyes" ; then
 		AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
 not installed on your system, or because openssl/blowfish.h could not be
 found. Please install them if you want CryptCab to be compiled and installed.])
 	fi
 fi
-if test x$warn_tuntap = "xyes" ; then
-	echo " tuntap support : disabled"
-else
-	echo " tuntap support : enabled"
-fi
+
 if test x$warn_pcap = "xyes" ; then
-	echo " pcap support : disabled"
 	AC_MSG_WARN([VDE packet dump plugin has been disabled because libpcap is
 not installed on your system, or because it's too old.
 Please install it if you want pdump to be compiled and installed.])
-else
-	echo " pcap support : enabled"
 fi
-if test x$enable_experimental = "xyes" ; then
-	echo " experimental features : enabled"
-else
-	echo " experimental features : disabled"
-fi
+
 echo
 echo "Type 'make' to compile $PACKAGE $VERSION"
 echo "and then type 'make install' to install it into $prefix"
