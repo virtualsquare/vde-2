@@ -266,22 +266,31 @@ static void hash_gc(void *arg)
 	 }\
 	 })
 
-#define PO2ROUND(VX) \
-	({ register int i=0; \
-	 register int x=(VX)-1; \
-	 while (x) { x>>=1; i++; } \
-	 if ((VX) != 1<<i) \
-	 printlog(LOG_WARNING,"Hash size must be a power of 2. %d rounded to %d",(VX),1<<i);\
-	 i; })
+static inline int po2round(int vx)
+{
+	if (vx == 0)
+		return 0;
+	else {
+		register int i=0;
+		register int x=vx-1;
+		while (x) { x>>=1; i++; }
+		if (vx != 1<<i)
+			printlog(LOG_WARNING,"Hash size must be a power of 2. %d rounded to %d",vx,1<<i);
+		return i;
+	}
+}
 
 int hash_resize(int hash_size)
 {
-	hash_flush();
-	qtime_csenter();
-	free(h);
-	HASH_INIT(PO2ROUND(hash_size));
-	qtime_csexit();
-	return 0;
+	if (hash_size > 0) {
+		hash_flush();
+		qtime_csenter();
+		free(h);
+		HASH_INIT(po2round(hash_size));
+		qtime_csexit();
+		return 0;
+	} else
+		return EINVAL;
 }
 
 int hash_set_gc_interval(int p)
@@ -328,7 +337,7 @@ static int find_hash(FILE *fd,char *strmac)
 		rv=sscanf(strmac,"%x.%x.%x.%x.%x.%x %d", maci+0, maci+1, maci+2, maci+3, maci+4, maci+5, &vlan);
 	if (rv < 6)
 		return EINVAL;
-  else	{
+	else	{
 		register int i;
 		for (i=0;i<ETH_ALEN;i++)
 			mac[i]=maci[i];
@@ -387,7 +396,7 @@ static struct comlist cl[]={
 /* sets sig_alarm as handler for SIGALRM, and run it a first time */
 void hash_init(int hash_size)
 {
-	HASH_INIT(PO2ROUND(hash_size));
+	HASH_INIT(po2round(hash_size));
 
 	gc_interval=GC_INTERVAL;
 	gc_expire=GC_EXPIRE;
