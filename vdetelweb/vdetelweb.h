@@ -2,11 +2,20 @@
 #define _VDETELWEB_H
 #define BUFSIZE 1024
 #define LWIPV6DL
+typedef void (*voidfun)();
+
 extern void *status[];
 
 extern char *banner;
-extern char *passwd;
 extern char *prompt;
+
+int sha1passwdok(const char *pw);
+int addpfd(int fd,voidfun cb);
+void delpfd(int fn);
+int pfdsearch(int fd);
+int openextravdem();
+void telnet_init(int vdefd);
+void web_init(int vdefd);
 
 void printlog(int priority, const char *format, ...);
 

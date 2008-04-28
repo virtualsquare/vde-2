@@ -3,9 +3,12 @@
  *
  *   vdetelweb.c: main
  *   
- *   Copyright 2005 Renzo Davoli University of Bologna - Italy
+ *   Copyright 2005,2008 Virtual Square Team University of Bologna - Italy
+ *   2005 written by Renzo Davoli 
  *   --pidfile/-p and cleanup management by Mattia Belletti (C) 2004
  *                            (copied from vde_switch code).
+ *   2008 updated Renzo Davoli
+ *   2008 sha1sum by Marco Dalla Via
  *   
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -25,23 +28,25 @@
  *
  */
 #include <config.h>
-#include  <stdio.h>
-#include  <signal.h>
+#include <stdio.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <syslog.h>
-#include  <errno.h>
+#include <errno.h>
+#include <unistd.h>
 #include <netdb.h>
 #include <libgen.h>
 #include <unistd.h>
-#include  <sys/types.h>
-#include  <sys/socket.h>
-#include  <sys/select.h>
-#include  <sys/poll.h>
-#include  <sys/utsname.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <sys/poll.h>
+#include <sys/wait.h>
+#include <sys/utsname.h>
 #include <linux/un.h>
-#include  <netinet/in.h>
-#include  <arpa/inet.h>
-#include  <string.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <string.h>
 #include <getopt.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -56,15 +61,15 @@ char *banner;
 char *progname;
 char *prompt;
 int logok;
-char *passwd;
+static char *passwd;
 static char *pidfile = NULL;
 static char pidfile_path[_POSIX_PATH_MAX];
 
 #define MAXFD 16
+#define HASH_SIZE 40
 int npfd=0;
 struct pollfd pfd[MAXFD];
-typedef int (*intfun)();
-intfun fpfd[MAXFD];
+voidfun fpfd[MAXFD];
 void *status[MAXFD];
 
 #define ROOTCONFFILE "/etc/vde/vdetelwebrc"
@@ -90,6 +95,38 @@ static void cleanup(void)
 {
 	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
 		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
+	}
+}
+
+int sha1passwdok(const char *pw) {
+	char buf[HASH_SIZE + 1];
+	int pfd_fc[2];
+	int pfd_cf[2];
+	pid_t pid;
+
+	pipe(pfd_fc);
+	pipe(pfd_cf);
+	pid = fork();
+
+	if (!pid) {
+		close(pfd_fc[1]);
+		close(pfd_cf[0]);
+		dup2(pfd_fc[0], STDIN_FILENO);
+		dup2(pfd_cf[1], STDOUT_FILENO);
+
+		execl("/usr/bin/sha1sum", "/usr/bin/sha1sum", NULL);
+		exit(1);
+	} else {
+		close(pfd_cf[1]);
+		close(pfd_fc[0]);
+
+		write(pfd_fc[1], pw, strlen(pw));
+		close(pfd_fc[1]);
+		read(pfd_cf[0], buf, sizeof(buf));
+		close(pfd_cf[0]);
+
+		waitpid(pid, NULL, 0);
+		return (strncmp(buf,passwd,strlen(passwd))==0);
 	}
 }
 
@@ -257,7 +294,7 @@ static void readip(char *arg,struct netif *nif,int af)
 		int err;
 		memset(&hint,0,sizeof(hint));
 		hint.ai_family=af;
-		if (err=getaddrinfo(arg,NULL,&hint,&res))
+		if ((err=getaddrinfo(arg,NULL,&hint,&res))!=0)
 			printlog(LOG_ERR,"ip address %s error %s",arg,gai_strerror(err));
 		else {
 			switch(res->ai_family) {
@@ -275,7 +312,6 @@ static void readip(char *arg,struct netif *nif,int af)
 											break;
 				case PF_INET6:{
 												struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
-												char i;
 												unsigned char *addr=in->sin6_addr.s6_addr;
 												sockaddr2ip_6addr(&ipaddr,addr);
 												bitno2mask(addr,bitno,16);
@@ -294,11 +330,11 @@ static void readip(char *arg,struct netif *nif,int af)
 static void readdefroute(char *arg,struct netif *nif,int af)
 {
 	struct addrinfo *res,hint;
-	struct ip_addr ipaddr,netmask;
+	struct ip_addr ipaddr;
 	int err;
 	memset(&hint,0,sizeof(hint));
 	hint.ai_family=af;
-	if (err=getaddrinfo(arg,NULL,&hint,&res))
+	if ((err=getaddrinfo(arg,NULL,&hint,&res))!=0)
 		printlog(LOG_ERR,"ip address %s error %s",arg,gai_strerror(err));
 	else {
 		switch(res->ai_family) {
@@ -314,7 +350,6 @@ static void readdefroute(char *arg,struct netif *nif,int af)
 										break;
 			case PF_INET6:{
 											struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
-											char i;
 											sockaddr2ip_6addr(&ipaddr,in->sin6_addr.s6_addr);
 											lwip_add_route(IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
 										}
@@ -381,7 +416,7 @@ int readconffile(char *path,struct netif *nif)
 	return 0;
 }
 
-int addpfd(int fd,intfun cb)
+int addpfd(int fd,voidfun cb)
 {
 	if (npfd < MAXFD) {
 		pfd[npfd].fd=fd;
@@ -551,7 +586,6 @@ int main(int argc, char *argv[])
 		printlog(LOG_ERR,"configuration file not found");
 		exit(1);
 	}
-	//sleep(10);
 	if (telnet)
 		telnet_init(vdefd);
 	if (web)
