@@ -5,4 +5,7 @@ defroute=192.168.250.1
 #defroute4=192.168.250.1
 ip=2001:760:2e00:ff00::5556/64
 defroute=2001:760:2e00:ff00::1
-password=piripicchio
+# to create a new passwd run the following command:
+# $ echo -n piripicchio | sha1sum
+# typing your passwd instead of "piripicchio"
+password=e8b32ad31b34a21d9fa638c2ee6cf52d46d5106b

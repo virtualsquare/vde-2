@@ -29,6 +29,8 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <ctype.h>
 #include  <errno.h>
 #include  <sys/types.h>
 #include  <sys/socket.h>
@@ -99,13 +101,12 @@ static int commonprefix(char *x, char *y,int maxlen)
 static void showexpand(char *linebuf,int bufindex, int fd)
 {
 	char *buf;
-	int bufsize;
+	size_t bufsize;
 	FILE *ms=open_memstream(&buf,&bufsize);
 	int nmatches=0;
 	if (ms) {
 		if (commandlist && bufindex>0) {
 			char **s=commandlist;
-			char *match;
 			while (*s) {
 				if (strncmp(linebuf,*s,bufindex)==0) {
 					nmatches++;
@@ -126,8 +127,9 @@ static int tabexpand(char *linebuf,int bufindex,int maxlength)
 {
 	if (commandlist && bufindex>0) {
 		char **s=commandlist;
-		int nmatches=0,len;
-		char *match;
+		int nmatches=0;
+		int len=0;
+		char *match=NULL;
 		while (*s) {
 			if (strncmp(linebuf,*s,bufindex)==0) {
 				nmatches++;
@@ -166,7 +168,6 @@ static int qstrcmp(const void *a,const void *b)
 static void create_commandlist()
 {
 	int vdefd=openextravdem();
-	char buf[BUFSIZE];
 	char linebuf[BUFSIZE];
 	char *localclist[MAX_KEYWORDS];
 	int nkeywords=0;
@@ -190,7 +191,7 @@ static void create_commandlist()
 					//fprintf(stderr,"%s\n",linebuf);
 					localclist[nkeywords]=strdup(linebuf);
 					if (nkeywords<MAX_KEYWORDS) nkeywords++;
-					char *thiskeyword=strdup(linebuf);
+					//char *thiskeyword=strdup(linebuf);
 				}
 			}
 		}
@@ -220,7 +221,7 @@ static void erase_line(struct telnetstat *st,int prompt_too)
 	int j;
 	int size=st->bufindex+(prompt_too != 0)*strlen(prompt);
 	char *buf;
-	int bufsize;
+	size_t bufsize;
 	FILE *ms=open_memstream(&buf,&bufsize);
 	if (ms) {
 		for (j=0;j<size;j++)
@@ -242,7 +243,7 @@ static void redraw_line(struct telnetstat *st,int prompt_too)
 	int j;
 	int tail=strlen(st->linebuf)-st->bufindex;
 	char *buf;
-	int bufsize;
+	size_t bufsize;
 	FILE *ms=open_memstream(&buf,&bufsize);
 	if (ms) {
 		if (prompt_too)
@@ -312,7 +313,7 @@ void telnet_getanswer(struct telnetstat *st)
 	}
 }
 
-int vdedata(int fn,int fd,int vdefd)
+void vdedata(int fn,int fd,int vdefd)
 {
 	struct telnetstat *st=status[fn];
 	erase_line(st,1);
@@ -341,7 +342,8 @@ void telnet_core(int fn,int fd,int vdefd)
 		case TELNET_PASSWD+2:
 			while (st->linebuf[st->bufindex-1] == '\n')
 				st->linebuf[--st->bufindex]=0;
-			if (strcmp(st->linebuf,passwd) != 0) {
+
+			if (!sha1passwdok(st->linebuf)) {
 				st->status++;
 				if (st->status < TELNET_PASSWD + 3)
 					lwip_write(fd,"\r\nlogin incorrect\r\n\r\nPassword: ",30);
@@ -471,7 +473,7 @@ static void shift_history(struct telnetstat *st)
 	st->history[0]=NULL;
 }
 
-int telnetdata(int fn,int fd,int vdefd)
+void telnetdata(int fn,int fd,int vdefd)
 {
 	unsigned char buf[BUFSIZE];
 	int n,i;
@@ -607,7 +609,7 @@ int telnetdata(int fn,int fd,int vdefd)
 	}
 }
 
-int telnetaccept(int fn,int fd,int vdefd)
+void telnetaccept(int fn,int fd,int vdefd)
 {
 	struct sockaddr_in  cli_addr;
 	int newsockfd;
@@ -637,7 +639,6 @@ int telnetaccept(int fn,int fd,int vdefd)
 		st->history[i]=0;
 	lwip_write(newsockfd,banner,strlen(banner));
 	lwip_write(newsockfd,"\r\nLogin: ",9);
-	return 0;
 }
 
 void telnet_init(int vdefd)

@@ -3,7 +3,10 @@
  *
  *   web.c: http micro server for vde mgmt
  *   
- *   Copyright 2005 Renzo Davoli University of Bologna - Italy
+ *   Copyright 2005 Virtual Square Team University of Bologna - Italy
+ *   written by Renzo Davoli 2005
+ *   management of sha1 Marco Dalla Via 2008
+ *   modified by Renzo Davoli 2008
  *   
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -29,6 +32,8 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <ctype.h>
 #include  <errno.h>
 #include  <sys/types.h>
 #include  <sys/socket.h>
@@ -50,9 +55,9 @@
 #define WEB_OP_POST 0x1
 #define WEB_OP_POSTDATA 0x2
 
-static char base64ab[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-static char *base64passwd;
-typedef void (*voidfun)();
+const char b64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+//static char *base64passwd;
 struct webstat {
 	unsigned char status;
 	unsigned char op;
@@ -62,45 +67,83 @@ struct webstat {
 	int  bufindex;
 };
 
-
 static void lowercase(char *s)
 {
 	while (*s != 0) {
-		tolower(*s);
+		*s = tolower(*s);
 		s++;
 	}
 }
 
-static convert2base64(char *from,char *to,int tosize)
-{
+void encode64(const char *from, char *to, int tosize) {
+
 	int convbuf;
-	int n=strlen(from);
-	while (n>0  && tosize>3) {
-		convbuf=*from;
-		from++;n--;
-		convbuf<<=8;
-		if (n>0) convbuf|=*from;
-		from++;n--;
-		convbuf<<=8;
-		if (n>0) convbuf|=*from;
-		from++;n--;
-		*(to++)=base64ab[convbuf>>18];
-		*(to++)=base64ab[convbuf>>12 & 0x3f];
-		*(to++)=(n<-1)?'=':base64ab[convbuf>>6 & 0x3f];
-		*(to++)=(n<0)?'=':base64ab[convbuf & 0x3f];
+	int n = strlen(from);
+
+	while ((n > 0) && (tosize > 3)) {
+
+		convbuf = *from;
+		from++;
+		n--;
+		convbuf <<= 8;
+		if (n > 0)
+			convbuf |= *from;
+		from++;
+		n--;
+		convbuf <<= 8;
+		if (n > 0)
+			convbuf |= *from;
+		from++;
+		n--;
+		*(to++) = b64_chars[convbuf >> 18];
+		*(to++) = b64_chars[(convbuf >> 12) & 0x3f];
+		*(to++) = (n < -1) ? '=' : b64_chars[(convbuf >> 6) & 0x3f];
+		*(to++) = (n < 0)  ? '=' : b64_chars[convbuf & 0x3f];
 		tosize -= 4;
 	}
-	*to=0;
+	*to = 0;
 }
 
+void decode64(const char *src, char *dest, int dest_size) {
+
+	int convbuf;
+	int l = strlen(src);
+	char c_src[l];
+	char *c;
+
+	int i, j;
+
+	strcpy(c_src, src);
+
+	/* Sostitute '=' (paddings) with 0 ['A'] */
+	while ((c = strchr(c_src, '=')) != NULL)
+		*c = 'A';
+
+	/* Convert 4 byte in 6 bit (64) to 3 byte in 8 bit */
+	for (i = 0, j = 0; i < l; i += 4, j += 3) {
+
+		convbuf = (((int)(strchr(b64_chars, c_src[i]) - b64_chars) << 18) +
+				((int)(strchr(b64_chars, c_src[i + 1]) - b64_chars) << 12) +
+				((int)(strchr(b64_chars, c_src[i + 2]) - b64_chars) << 6) +
+				((int)(strchr(b64_chars, c_src[i + 3]) - b64_chars)));
+		dest[j]     = ((convbuf >> 16) & 255);
+		dest[j + 1] = ((convbuf >> 8) & 255);
+		dest[j + 2] = ((convbuf & 255));
+	}
+
+	dest[j] = '\0';
+}
+
+#if 0
 static void createbase64passwd()
 {
 	char buf[BUFSIZE];
 	char buf64[BUFSIZE*4/3];
 	snprintf(buf,BUFSIZE,"admin:%s",passwd);
-	convert2base64(buf,buf64,BUFSIZE*4/3);
+	encode64(buf,buf64,BUFSIZE*4/3);
 	base64passwd=strdup(buf64);
 }
+#endif
 
 static void lwip_printf(int fd, const char *format, ...)
 {
@@ -237,7 +280,6 @@ static void vde_helpline(struct vdemenu **headp,char *buf,int len,int indata,int
 		helppos=i;
 	}
 	else if (nl > 2 && indata && (strncmp(buf,"debug",5) !=0 )) {
-		int i;
 		char *name;
 		char *syntax;
 		char *help;
@@ -327,7 +369,7 @@ static void postdata_parse(int fd,int vdefd,char *menu,char *postdata)
 			int l=strlen(token);
 			char *targ=index(token,'=');
 			if(strncmp("X=",token,2) != 0) {
-				if (targ+1 < token+l)
+				if (targ+1 < token+l) {
 					if(cmd==NULL) {
 						char *point;
 						if ((point=strstr(token,".arg")) != NULL)
@@ -336,6 +378,7 @@ static void postdata_parse(int fd,int vdefd,char *menu,char *postdata)
 						arg=targ+1;
 					} else 
 						cmd="";
+				}
 			}
 		}
 		if(cmd!=NULL && *cmd != 0) {
@@ -450,7 +493,7 @@ static void web_menu_index(int fd)
 
 static void web_create_page(char *path,int fd,int vdefd,char *postdata)
 {
-	struct vdemenu *this;
+	struct vdemenu *this=NULL;
 	char *tail;
 	if ((tail=strstr(path,".html")) != NULL)
 		*tail=0;
@@ -537,9 +580,21 @@ int web_core(int fn,int fd,int vdefd)
 		//printf("BODYLEN %d\n",st->bodylen);
 		return 0;
 	} else if (strncmp(st->linebuf,"Authorization: Basic",20) == 0) {
+		char passwd_buf[BUFSIZE];
+		char *passwd_buf_shift;
+		int len=strlen(st->linebuf);
 		int k=20;
 		while (st->linebuf[k] == ' ') k++;
-		if (strncmp(st->linebuf+k,base64passwd,strlen(base64passwd))==0)
+		while (st->linebuf[len-1] == '\n' ||
+				st->linebuf[len-1] == '\r' ||
+				st->linebuf[len-1] == ' ') {
+			len--;
+			st->linebuf[len]=0;
+		}
+		/* SHA1 */
+		decode64((st->linebuf + k), passwd_buf, strlen(st->linebuf + k));
+		passwd_buf_shift = (char *)(strchr(passwd_buf, ':') + 1);
+		if (sha1passwdok(passwd_buf_shift))
 			st->status=WEB_AUTHORIZED;
 		return 0;
 	} else if (st->linebuf[0]=='\n' || st->linebuf[0]=='\r') {
@@ -561,12 +616,14 @@ int web_core(int fn,int fd,int vdefd)
 					st->op=WEB_OP_POSTDATA;
 					return 0;
 				}
+			default:
+				return 0;
 		}
 	} else
 		return 0;
 }
 
-int webdata(int fn,int fd,int vdefd)
+void webdata(int fn,int fd,int vdefd)
 {
 	char buf[BUFSIZE];
 	int n,i;
@@ -592,7 +649,7 @@ int webdata(int fn,int fd,int vdefd)
 	}
 }
 
-int webaccept(int fn,int fd,int vdefd)
+void webaccept(int fn,int fd,int vdefd)
 {
 	struct sockaddr_in  cli_addr;
 	int newsockfd;
@@ -612,7 +669,6 @@ int webaccept(int fn,int fd,int vdefd)
 	st->status=WEB_IDENTIFY;
 	st->op=0;
 	st->bufindex=0;
-	return 0;
 }
 
 void web_init(int vdefd)
@@ -646,7 +702,7 @@ void web_init(int vdefd)
 
 	lwip_listen(sockfd, 5);
 
-	createbase64passwd();
+	//createbase64passwd();
 	menuhead=vde_gethelp(vdefd);
 	addpfd(sockfd,webaccept);
 }
