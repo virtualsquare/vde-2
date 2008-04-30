@@ -4,7 +4,6 @@ SUBDIRS = \
 	vde_switch \
 	vde_over_ns \
 	vde_l3 \
-	vde_cryptcab \
 	slirpvde
 #	kvde_switch
 
