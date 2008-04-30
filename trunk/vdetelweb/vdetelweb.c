@@ -580,7 +580,10 @@ int main(int argc, char *argv[])
 	 * server: save PID file if needed */
 	if(pidfile) save_pidfile();
 
-  LOADLWIPV6DL;
+  if (loadlwipv6dl() == NULL) {
+		perror("vdetelweb: cannot load lwipv6 library:");
+		exit(-1);
+	}
 	vdefd=openvdem(mgmt,argv[0],&nif,nodename);
 	if (readconffile(conffile,nif) < 0) {
 		printlog(LOG_ERR,"configuration file not found");
