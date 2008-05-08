@@ -14,6 +14,7 @@ AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_LIBTOOL
+AM_PROG_CC_C_O
 
 # Checks for libraries.
 AC_CHECK_LIB([dl], [dlopen])
