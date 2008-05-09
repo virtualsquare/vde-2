@@ -205,6 +205,7 @@ static void create_commandlist()
 				j++;
 			}
 		nkeywords=j;
+		write(vdefd,"logout\n",7);
 		close(vdefd);
 	}
 	nkeywords++;
