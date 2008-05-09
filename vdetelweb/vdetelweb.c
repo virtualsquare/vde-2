@@ -64,6 +64,7 @@ int logok;
 static char *passwd;
 static char *pidfile = NULL;
 static char pidfile_path[_POSIX_PATH_MAX];
+struct stack *lwipstack;
 
 #define MAXFD 16
 #define HASH_SIZE 40
@@ -93,6 +94,7 @@ void printlog(int priority, const char *format, ...)
 
 static void cleanup(void)
 {
+	lwip_stack_free(lwipstack);
 	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
 		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
 	}
@@ -245,7 +247,7 @@ int openvdem(char *mgmt,char *progname, struct netif **nif,char *nodename)
 	ctrl=line2+8;
 	setprompt(ctrl,nodename);
 	strcat(ctrl,"[0]");
-	*nif=lwip_vdeif_add(ctrl);
+	*nif=lwip_vdeif_add(lwipstack,ctrl);
 	if (*nif == NULL) {
 		printlog(LOG_ERR,"cannot connect to the switch");
 		exit(-1);
@@ -345,13 +347,13 @@ static void readdefroute(char *arg,struct netif *nif,int af)
 											for (i=0;i<4;i++,addrh>>=8)
 												addr[3-i]=addrh;
 											IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
-											lwip_add_route(IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
+											lwip_add_route(lwipstack,IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
 										}
 										break;
 			case PF_INET6:{
 											struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
 											sockaddr2ip_6addr(&ipaddr,in->sin6_addr.s6_addr);
-											lwip_add_route(IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
+											lwip_add_route(lwipstack,IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
 										}
 										break;
 			default:
@@ -584,6 +586,10 @@ int main(int argc, char *argv[])
 		perror("vdetelweb: cannot load lwipv6 library:");
 		exit(-1);
 	}
+
+	lwipstack=lwip_stack_new();
+	lwip_stack_set(lwipstack);
+
 	vdefd=openvdem(mgmt,argv[0],&nif,nodename);
 	if (readconffile(conffile,nif) < 0) {
 		printlog(LOG_ERR,"configuration file not found");
