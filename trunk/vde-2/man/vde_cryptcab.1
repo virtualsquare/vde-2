@@ -18,7 +18,17 @@ vde_cryptcab \- Virtual Distributed Ethernet encrypted cable manager
 [ 
 .B \-P 
 .I  pre_shared.key 
+]|
+[
+.B \-x
 ] 
+[
+.B \-v
+.I [v][v][v]
+] 
+[
+.B \-k
+]
 .br
 .SH DESCRIPTION
 A
@@ -89,7 +99,16 @@ if specified, vde_cryptcab will run in pre-shared key mode, instead of generatin
 random key to transmit with ssh.
 Given option is the path to the pre-shared symmetric key file to use for data encryption.
 The same key has to be used on both client and server.
-.SH KNOWN ISSUE
+.TP
+.B \-x
+Disable symmetric key encryption.
+.TP
+.B \-k 
+Send periodic "keepalive" packets to avoid server timeouts. Useful when you want to keep a low-traffic link available.
+.TP
+.B \-v
+Verbose. (Use -vv -vvv or -vvvv for more verbosity) 
+.SH KNOWN ISSUES
 Encapsulating IP packets into session+udp layer results in real datagrams larger
 than tap device mtu. Since vde_cryptcab gets confused by packet fragmentation, the 
 tap device mtu must be set to a smaller value than real interface mtu. Use 
@@ -98,6 +117,8 @@ or
 .BR ifconfig (8) 
 to set up your tap device mtu.
 
+
+Explicitly disabling encryption leads to obvious security problems. It is advised to avoid unencrypted mode (-x) in non-controlled networks.
 
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
