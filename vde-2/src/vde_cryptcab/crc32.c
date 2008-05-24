@@ -1,17 +1,16 @@
 /*
- * efone - Distributed internet phone system.
+ * VDE Cryptcab
+ * Copyright © 2006-2008 Daniele Lacamera
+ * from an idea by Renzo Davoli
  *
- * (c) 1999,2000 Krzysztof Dabrowski
- * (c) 1999,2000 ElysiuM deeZine
+ * Released under the terms of GNU GPL v.2
+ * (http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
+ * with the additional exemption that
+ * compiling, linking, and/or using OpenSSL is allowed.
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version
- * 2 of the License, or (at your option) any later version.
+ * based on implementation by Finn Yannick Jacobs  Krzysztof Dabrowski, ElysiuM deeZine 
  *
  */
-
-/* based on implementation by Finn Yannick Jacobs */
 
 #include <stdio.h>
 #include <stdlib.h>
