@@ -4,8 +4,8 @@ SUBDIRS = \
 	vde_switch \
 	vde_over_ns \
 	vde_l3 \
+	kvde_switch \
 	slirpvde
-#	kvde_switch
 
 bin_PROGRAMS = \
 	dpipe \

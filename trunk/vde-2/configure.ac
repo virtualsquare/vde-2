@@ -177,6 +177,7 @@ AC_CONFIG_FILES(
 		[src/Makefile]
 		[src/lib/Makefile]
 		[src/vde_switch/Makefile]
+		[src/kvde_switch/Makefile]
 		[src/vde_over_ns/Makefile]
 		[src/common/Makefile]
 		[src/vdetaplib/Makefile]

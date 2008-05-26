@@ -31,7 +31,7 @@
 #include <vde.h>
 #include <vdecommon.h>
 
-#include <switch.h>
+#include "../vde_switch/switch.h"
 #include "sockutils.h"
 #include "consmgmt.h"
 
@@ -40,7 +40,7 @@
 #define AF_IPN    34  /* IPN sockets      */
 #define PF_IPN    AF_IPN
 #endif
-#define AF_IPN_STOLEN    33  /* IPN temporary sockets      */
+#define AF_IPN_STOLEN    AF_NETBEUI  /* IPN temporary sockets      */
 #define PF_IPN_STOLEN    AF_IPN_STOLEN
 
 #define IPN_ANY 0
@@ -94,9 +94,6 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 
 static void cleanup(unsigned char type,int fd,int arg)
 {
-	struct sockaddr_un clun;
-	int test_fd;
-
 	unlink(ctl_socket);
 }
 
@@ -205,10 +202,10 @@ static void init(void)
 	int kvdefd;
 	struct sockaddr_un sun;
 	int family = AF_IPN;
-	kvdefd = socket(AF_IPN,SOCK_RAW,IPN_BROADCAST);
+	kvdefd = socket(AF_IPN,SOCK_RAW,IPN_VDESWITCH);
 	if (kvdefd < 0) {
 		family=AF_IPN_STOLEN;
-		kvdefd = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_BROADCAST);
+		kvdefd = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_VDESWITCH);
 		if (kvdefd < 0) {
 			printlog(LOG_ERR,"kvde_switch requires ipn and kvde_switch kernel modules loaded");
 			exit(-1);
@@ -244,12 +241,14 @@ static struct comlist cl[]={
 	{"ds/showinfo","","show ds info",showinfo,NOARG|WITHFILE},
 };
 
+/*
 static void delep (int fd, void* data, void *descr)
 {
 	if (fd>=0) remove_fd(fd);
 	if (data) free(data);
 	if (descr) free(descr);
 }
+*/
 
 void start_datasock(void)
 {

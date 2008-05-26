@@ -45,7 +45,7 @@
 #define AF_IPN    34  /* IPN sockets      */
 #define PF_IPN    AF_IPN
 #endif
-#define AF_IPN_STOLEN    33  /* IPN temporary sockets      */
+#define AF_IPN_STOLEN    AF_NETBEUI  /* IPN temporary sockets      */
 #define PF_IPN_STOLEN    AF_IPN_STOLEN
 #define IPN_ANY 0
 
