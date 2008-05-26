@@ -21,7 +21,7 @@
 #include <vde.h>
 #include <vdecommon.h>
 
-#include <switch.h>
+#include "../vde_switch/switch.h"
 #include "consmgmt.h"
 #undef VDE_PQ
 #undef OPTPOLL

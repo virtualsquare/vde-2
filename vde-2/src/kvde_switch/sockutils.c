@@ -21,7 +21,7 @@
 #include <vde.h>
 #include <vdecommon.h>
 
-#include <switch.h>
+#include "../vde_switch/switch.h"
 #include "consmgmt.h"
 
 /* check to see if given unix socket is still in use; if it isn't, remove the
