@@ -47,7 +47,7 @@ void ipn_netdev_fini(void);
 
 static inline struct ipn_node *ipn_netdev2node(struct net_device *dev)
 {
-	return rcu_dereference((struct ipn_node *)dev->ipn_port);
+	return (struct ipn_node *)rcu_dereference(dev->ipn_port);
 }
 
 static inline void ipn_netdevsync(void)

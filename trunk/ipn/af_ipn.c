@@ -1110,11 +1110,11 @@ void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg)
 			struct ipn_network *ipnn=to->ipn;
 			spin_lock(&to->msglock);
 			if (likely((to->shutdown & RCV_SHUTDOWN)==0)) {
-				if (unlikely((ipnn->flags & IPN_FLAG_LOSSLESS) == 0 ||
+				/*if (unlikely((ipnn->flags & IPN_FLAG_LOSSLESS) == 0 ||
 							            to->totmsgcount >= ipnn->msgpool_size))
-					schedule();
-				if (ipnn->flags & IPN_FLAG_LOSSLESS ||
-						to->totmsgcount < ipnn->msgpool_size) { 
+					yield();*/
+				if (likely(ipnn->flags & IPN_FLAG_LOSSLESS ||
+						to->totmsgcount < ipnn->msgpool_size)) { 
 					if ((msgitem=kmem_cache_alloc(ipn_msgitem_cache,GFP_KERNEL))!=NULL) {
 						msgitem->msg=msg;
 						to->totmsgcount++;
