@@ -7,7 +7,7 @@
 #include <linux/if.h>
 #include <linux/if_tun.h>
 
-#define AF_IPN 33
+#define AF_IPN AF_NETBEUI
 #define PF_IPN AF_IPN
 #define IPN_ANY 0
 #define IPN_BROADCAST 1

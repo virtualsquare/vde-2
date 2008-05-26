@@ -2,7 +2,8 @@
 #define __LINUX_NET_AFIPN_H
 
 #ifdef IPN_STEALING
-#define AF_IPN 33
+/* AF_NETBEUI seems to be unused */
+#define AF_IPN AF_NETBEUI
 #define PF_IPN AF_IPN
 #define ipn_handle_frame_hook br_handle_frame_hook
 #endif
