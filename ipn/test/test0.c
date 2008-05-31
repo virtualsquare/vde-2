@@ -4,8 +4,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#define AF_IPN AF_NETBEUI
+#define AF_IPN 34
 #define PF_IPN AF_IPN
+#define AF_IPNS AF_NETBEUI
+#define PF_IPNS AF_IPNS
 #define IPN_ANY 0
 #define IPN_BROADCAST 1
 #define IPN_HUB 1
@@ -37,8 +39,11 @@ main()
 	int flags=IPN_FLAG_LOSSLESS;
 	int size=128;
 	int mode=0770;
-	if (s< 0)
+	if (s< 0) {
+		s=socket(AF_IPNS,SOCK_RAW,IPN_BROADCAST);
+		if (s< 0) 
 		perror("socket");
+	}
 	printf("s=%d\n",s);
 #if 0
 	err=setsockopt(s,0,IPN_SO_FLAGS,&flags,sizeof(flags));
