@@ -4,8 +4,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#define AF_IPN AF_NETBEUI
+#define AF_IPN 34
 #define PF_IPN AF_IPN
+#define AF_IPNS AF_NETBEUI
+#define PF_IPNS AF_IPNS
 #define IPN_ANY 0
 #define IPN_BROADCAST 1
 #define IPN_HUB 1
@@ -19,8 +21,11 @@ main()
 	int s=socket(AF_IPN,SOCK_RAW,IPN_BROADCAST);
 	int err;
 	int len;
-	if (s< 0)
-		perror("socket");
+	if (s< 0) {
+		s=socket(AF_IPNS,SOCK_RAW,IPN_BROADCAST);
+		if (s< 0)
+			perror("socket");
+	}
 	printf("s=%d\n",s);
 	err=connect(s,(struct sockaddr *)&sun,sizeof(sun));
 	if (err<0)
