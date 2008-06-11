@@ -113,10 +113,13 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 	oldport=e->port;
 	now=qtime();
 	if (oldport!=port) {
-		if ((now - e->last_seen) > min_persistence)
+		if ((now - e->last_seen) > min_persistence) {
 			e->port=port;
+			e->last_seen = now;
+		}
+	} else {
+		e->last_seen = now;
 	}
-	e->last_seen = now;
 	return oldport;
 }
 
