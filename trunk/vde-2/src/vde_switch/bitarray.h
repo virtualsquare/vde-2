@@ -94,14 +94,14 @@ typedef bitarrayelem *bitarray;
 	 if(nb != NULL) \
 	 for(__i=__WORDSIZEROUND(N);__i<__WORDSIZEROUND(M);__i++) \
 	 nb[__i]=0; \
-	 nb[__WORDSIZEROUND(N)-1] &= (1<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
+	 nb[__WORDSIZEROUND(N)-1] &= (1L<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
 	 nb;})
 
-#define BA_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1 << ((I) & __WORDSIZEMASK)))) 
+#define BA_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1L << ((I) & __WORDSIZEMASK)))) 
 
-#define BA_SET(X,I) ((X)[(I)>>__LOG_WORDSIZE] |= (1 << ((I) & __WORDSIZEMASK)))
+#define BA_SET(X,I) ((X)[(I)>>__LOG_WORDSIZE] |= (1L << ((I) & __WORDSIZEMASK)))
 
-#define BA_CLR(X,I) ((X)[(I)>>__LOG_WORDSIZE] &= ~(1 << ((I) & __WORDSIZEMASK)))
+#define BA_CLR(X,I) ((X)[(I)>>__LOG_WORDSIZE] &= ~(1L << ((I) & __WORDSIZEMASK)))
 
 #define BA_ZAP(X,N) \
 	({ register unsigned int __i; \
@@ -159,7 +159,7 @@ typedef bitarrayelem *bitarray;
 	 int max=__WORDSIZEROUND(N); \
 	 for (__i=0; __i< max; __i++) \
 	 (DST)[__i] &= ~((SRC)[__i]); \
-	 nb[max-1] &= (1<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
+	 nb[max-1] &= (1L<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
 	 0; })
 
 #define BA_NEGATE(X,N) \
@@ -167,7 +167,7 @@ typedef bitarrayelem *bitarray;
 	 int max=__WORDSIZEROUND(N); \
 	 for (__i=0; __i< max; __i++) \
 	 (X)[__i] = ~((X)[__i]); \
-	 nb[max-1] &= (1<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
+	 nb[max-1] &= (1L<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
 	 0; })
 
 /* Bit Array with Cardinality (Count of set bit) */
@@ -183,23 +183,23 @@ typedef bitarrayelem *bitarray;
 	 (B)[__WORDSIZEROUND(M)]=__size; \
 	 for(__i=__WORDSIZEROUND(N);__i<__WORDSIZEROUND(M);__i++) \
 	 nb[__i]=0; }\
-	 nb[__WORDSIZEROUND(N)-1] &= (1<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
+	 nb[__WORDSIZEROUND(N)-1] &= (1L<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
 	 nb;})
 
 /* BA_CHECK and BAC_CHECK are the same */
-#define BAC_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1 << ((I) & __WORDSIZEMASK))))
+#define BAC_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1L << ((I) & __WORDSIZEMASK))))
 
 #define BAC_SET(X,N,I) \
-	({ register int __v=(X)[(I)>>__LOG_WORDSIZE]; \
-		register int __w=__v; \
-		__v |= (1 << ((I) & __WORDSIZEMASK)); \
+	({ register bitarrayelem __v=(X)[(I)>>__LOG_WORDSIZE]; \
+		register bitarrayelem __w=__v; \
+		__v |= (1L << ((I) & __WORDSIZEMASK)); \
 		if (__v != __w) (X)[(I)>>__LOG_WORDSIZE]=__v,((X)[__WORDSIZEROUND(N)]++); \
 		})
 
 #define BAC_CLR(X,N,I) \
-	({ register int __v=(X)[(I)>>__LOG_WORDSIZE]; \
-	 register int __w=__v; \
-	 __v &= ~(1 << ((I) & __WORDSIZEMASK)); \
+	({ register bitarrayelem __v=(X)[(I)>>__LOG_WORDSIZE]; \
+	 register bitarrayelem __w=__v; \
+	 __v &= ~(1L << ((I) & __WORDSIZEMASK)); \
 	 if (__v != __w) (X)[(I)>>__LOG_WORDSIZE]=__v,((X)[__WORDSIZEROUND(N)]--); \
 	 })
 
