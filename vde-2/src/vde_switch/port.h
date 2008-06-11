@@ -55,6 +55,7 @@ extern void handle_in_packet(int port, struct packet *packet, int len);
 
 extern bitarray validvlan;
 int portflag(int op, int f);
+#define P_GETFLAG 0
 #define P_SETFLAG 1
 #define P_ADDFLAG 2
 #define P_CLRFLAG 3

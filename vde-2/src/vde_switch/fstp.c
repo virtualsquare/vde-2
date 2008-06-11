@@ -362,6 +362,7 @@ static void fst_sendbpdu(int vlan,int port,int agr,int tc,int tcack)
 {
 	int now=qtime();
 	int age,nowvlan;
+	if (!(pflag & FSTP_TAG) || portflag(P_GETFLAG, HUB_TAG)) return;
 	nowvlan=(fsttab[vlan]->rootport==0)?0:now; /* This switch is the root */
 	if (BA_CHECK(fsttab[vlan]->untag,port)) {
 		memcpy(outpacket.stp_root,fsttab[vlan]->root,SWITCHID_LEN);
@@ -454,8 +455,8 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 	/* XXX check the header for fake info? */
 	struct vlst *v=fsttab[vlan];
 	int val,valroot;  
-	if (!(pflag & FSTP_TAG) || (BA_CHECK(fsttab[vlan]->edge,port))) 
-		return; /*FST IS TURNED OFF or EDGE*/
+	if (BA_CHECK(fsttab[vlan]->edge,port))
+		return;
 #ifdef DEBUGOPT
 	if (!FSTP_ACTIVE(vlan,port)) {
 		 DBGOUT(DBGFSTPPLUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
@@ -549,6 +550,7 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 void fstaddport(int vlan,int port,int tagged)
 {
 	/*printf("F addport V %d  - P %d  - T%d\n",vlan,port,tagged);*/
+
 	if (tagged) {
 		BA_SET(fsttab[vlan]->tagged,port);
 	  BA_CLR(fsttab[vlan]->untag,port);
@@ -608,9 +610,13 @@ static void fstnewvlan2(int vlan, void *arg)
 	fstnewvlan(vlan);
 }
 
-static int fstpsetonoff(int val)
+static int fstpsetonoff(FILE *fd, int val)
 {
 	int oldval=((pflag & FSTP_TAG) != 0);
+	if (portflag(P_GETFLAG, HUB_TAG)){
+		printoutc(fd, "Can't use fstp in hub mode");
+		return 0;
+	}
 	val=(val != 0);
 	if (oldval != val)
 	{
@@ -715,7 +721,7 @@ static int fstsetedge(char *arg)
 static struct comlist cl[]={
 	{"fstp","============","FAST SPANNING TREE MENU",NULL,NOARG},
 	{"fstp/showinfo","","show fstp info",fstpshowinfo,NOARG|WITHFILE},
-	{"fstp/setfstp","0/1","Fast spanning tree protocol 1=ON 0=OFF",fstpsetonoff,INTARG},
+	{"fstp/setfstp","0/1","Fast spanning tree protocol 1=ON 0=OFF",fstpsetonoff,INTARG|WITHFILE},
 	{"fstp/setedge","VLAN PORT 1/0","Define an edge port for a vlan 1=Y 0=N",fstsetedge,STRARG},
 	{"fstp/bonus","VLAN PORT COST","set the port bonus for a vlan",fstsetbonus,STRARG},
 	{"fstp/print","[N]","print fst data for the defined vlan",fstprint,STRARG|WITHFILE},
@@ -725,6 +731,7 @@ int fstflag(int op,int f)
 {
 	int oldflag=pflag;
 	switch(op)  {
+		case P_GETFLAG: oldflag = pflag & f; break;
 		case P_SETFLAG: pflag=f; break;
 		case P_ADDFLAG: pflag |= f; break;
 		case P_CLRFLAG: pflag &= ~f; break;
@@ -736,7 +743,7 @@ void fst_init(int initnumports)
 {
 	numports=initnumports;
 	SETFSTID(myid,switchmac,priority);
-	if (pflag & FSTP_TAG)
+	if ((pflag & FSTP_TAG) && !portflag(P_GETFLAG, HUB_TAG))
 		fstinitpkt();
 	ADDCL(cl);
 #ifdef DEBUGOPT
