@@ -304,6 +304,7 @@ int portflag(int op,int f)
 {
 	int oldflag=pflag;
 	switch(op)  {
+		case P_GETFLAG: oldflag = pflag & f; break;
 		case P_SETFLAG: pflag=f; break;
 		case P_ADDFLAG: pflag |= f; break;
 		case P_CLRFLAG: pflag &= ~f; break;
@@ -467,8 +468,8 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 		}
 
 #ifdef FSTP
-		/* when it works as a HUB, MST packet must be forwarded */
-		if (ISBPDU(packet) && !(pflag & HUB_TAG)) {
+		/* when it works as a HUB or FSTP is off, MST packet must be forwarded */
+		if (ISBPDU(packet) && !(pflag & HUB_TAG) && fstflag(P_GETFLAG, FSTP_TAG)) {
 			fst_in_bpdu(port,packet,len,vlan,tagged);
 			return; /* BPDU packets are not forwarded */
 		}
