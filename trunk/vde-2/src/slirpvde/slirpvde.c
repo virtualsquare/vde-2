@@ -25,6 +25,7 @@
 #include <stdarg.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <limits.h>
 
 
 #include <config.h>
@@ -36,7 +37,6 @@
 #include "tcp2unix.h"
 
 #if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
-#	include <limits.h>
 #	if defined HAVE_SYSLIMITS_H
 #		include <syslimits.h>
 #	elif defined HAVE_SYS_SYSLIMITS_H
