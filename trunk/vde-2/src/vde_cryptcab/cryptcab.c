@@ -224,7 +224,7 @@ vde_plug(struct peer *p, char *plugname)
 		perror ("libvdeplug");
 		exit(1);
 	}
-	vc_printlog(3,"Socket to local switch created.");
+	vc_printlog(3,"Socket to local switch created: fd=%d",vde_datafd(p->plug));
 }
 
 /*
