@@ -43,7 +43,8 @@ static unsigned int wd_type;
 static unsigned int data_type;
 static int mode = 0700;
 
-static char *ctl_socket;
+static char real_ctl_socket[PATH_MAX];
+static char *ctl_socket = real_ctl_socket;
 static gid_t grp_owner = -1;
 
 #define MODULENAME "unix prog"
@@ -328,11 +329,11 @@ static void cleanup(unsigned char type,int fd,int arg)
 		if(connect(test_fd, (struct sockaddr *) &clun, sizeof(clun))){
 			close(test_fd);
 			if(unlink(clun.sun_path) < 0)
-				printlog(LOG_WARNING,"Couldn't remove ctl socket '%s' : %s", ctl_socket, strerror(errno));
+				printlog(LOG_WARNING,"Could not remove ctl socket '%s': %s", ctl_socket, strerror(errno));
 			else if(rmdir(ctl_socket) < 0)
-				printlog(LOG_WARNING,"Couldn't remove ctl dir '%s' : %s", ctl_socket, strerror(errno));
+				printlog(LOG_WARNING,"Could not remove ctl dir '%s': %s", ctl_socket, strerror(errno));
 		}
-		else printlog(LOG_WARNING,"cleanup not removing files");
+		else printlog(LOG_WARNING,"Cleanup not removing files");
 	} else {
 		if (type == data_type && arg>=0) {
 			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d",ctl_socket,arg);
@@ -370,7 +371,9 @@ static int parseopt(int c, char *optarg)
 	struct group *grp;
 	switch (c) {
 		case 's':
-			ctl_socket=strdup(optarg);
+			/* This should return NULL as the path probably does not exist */
+			vde_realpath(optarg, real_ctl_socket);
+			ctl_socket = real_ctl_socket;
 			break;
 		case 'm':
 			sscanf(optarg,"%o",&mode);
@@ -395,45 +398,45 @@ static void init(void)
 	int one = 1;
 
 	if((connect_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
-		printlog(LOG_ERR,"socket: %s",strerror(errno));
+		printlog(LOG_ERR,"Could not obtain a BSD socket: %s", strerror(errno));
 		return;
 	}
 	if(setsockopt(connect_fd, SOL_SOCKET, SO_REUSEADDR, (char *) &one,
 				sizeof(one)) < 0){
-		printlog(LOG_ERR,"setsockopt: %s",strerror(errno));
+		printlog(LOG_ERR,"Could not set socket options on %d: %s", connect_fd, strerror(errno));
 		return;
 	}
 	if(fcntl(connect_fd, F_SETFL, O_NONBLOCK) < 0){
-		printlog(LOG_ERR,"Setting O_NONBLOCK on connection fd: %s",strerror(errno));
+		printlog(LOG_ERR,"Could not set O_NONBLOCK on connection fd %d: %s", connect_fd, strerror(errno));
 		return;
 	}
 	if (((mkdir(ctl_socket, 0777) < 0) && (errno != EEXIST))){
-		printlog(LOG_ERR,"creating vde ctl dir: %s",strerror(errno));
+		printlog(LOG_ERR,"Could not create the VDE ctl directory '%s': %s", ctl_socket, strerror(errno));
 		exit(-1);
 	}
 	if ((chmod(ctl_socket, 02000 | (mode & 0700 ? 0700 : 0) | (mode & 0070 ? 0070 : 0) | (mode & 0007 ? 0005 : 0)) < 0)) {
-		printlog(LOG_ERR,"setting up vde ctl dir: %s",strerror(errno));
+		printlog(LOG_ERR,"Could not set the VDE ctl directory '%s' permissions: %s", ctl_socket, strerror(errno));
 		exit(-1);
 	}
 	sun.sun_family = AF_UNIX;
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		if((errno == EADDRINUSE) && still_used(&sun)){
-			printlog(LOG_ERR, "bind %s", strerror(errno));
+			printlog(LOG_ERR, "Could not bind to socket '%s/ctl': %s", ctl_socket, strerror(errno));
 			exit(-1);
 		}
 		else if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-			printlog(LOG_ERR,"bind %s",strerror(errno));
+			printlog(LOG_ERR, "Could not bind to socket '%s/ctl' (second attempt): %s", ctl_socket, strerror(errno));
 			exit(-1);
 	 	}
 	} 
 	chmod(sun.sun_path,mode);
 	if(chown(sun.sun_path,-1,grp_owner) < 0) {
-		printlog(LOG_ERR, "chown: %s", strerror(errno));
+		printlog(LOG_ERR, "Could not chown socket '%s': %s", sun.sun_path, strerror(errno));
 		exit(-1);
 	}
 	if(listen(connect_fd, 15) < 0){
-		printlog(LOG_ERR,"listen: %s",strerror(errno));
+		printlog(LOG_ERR,"Could not listen on fd %d: %s", connect_fd, strerror(errno));
 		exit(-1);
 	}
 	ctl_type=add_type(&swmi,0);

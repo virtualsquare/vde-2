@@ -14,6 +14,9 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "switch.h"
 #include "qtimer.h"
 #include "hash.h"
@@ -434,9 +437,21 @@ static void parse_args(int argc, char **argv)
 static void init_mods(void)
 {
 	struct swmodule *swmp;
+
+	/* Keep track of the initial cwd */
+	int cwfd = open(".", O_RDONLY);
+
 	for(swmp=swmh;swmp != NULL;swmp=swmp->next)
 		if (swmp->init != NULL)
+		{
 			swmp->init();
+			if (cwfd >= 0)
+				/* Restore cwd so each module will be initialized with the
+				 * original cwd also if the previous one changed it. */
+				fchdir(cwfd);
+		}
+
+	close(cwfd);
 }
 
 static void cleanup(void)

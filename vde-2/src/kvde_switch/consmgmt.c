@@ -23,6 +23,7 @@
 #include <stdarg.h>
 #include <getopt.h>
 #include <dlfcn.h>
+#include <time.h>
 
 #include <config.h>
 #include <vde.h>

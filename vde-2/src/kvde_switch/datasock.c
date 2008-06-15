@@ -82,7 +82,8 @@ static struct swmodule swmi;
 static unsigned int ctl_type;
 static int mode = 0700;
 
-static char *ctl_socket;
+static char real_ctl_socket[PATH_MAX];
+static char *ctl_socket = real_ctl_socket;
 static gid_t grp_owner = -1;
 
 #define MODULENAME "kernel module interface"
@@ -175,7 +176,8 @@ static int parseopt(int c, char *optarg)
 	struct group *grp;
 	switch (c) {
 		case 's':
-			ctl_socket=strdup(optarg);
+			/* This should returns NULL as the path probably does not exist */
+			realpath(optarg, ctl_socket);
 			break;
 		case 'm':
 			sscanf(optarg,"%o",&mode);

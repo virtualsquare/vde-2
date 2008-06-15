@@ -6,5 +6,6 @@
 #include <strndup.h>
 
 #include <cmdparse.h>
+#include <canonicalize.h>
 
 #endif
