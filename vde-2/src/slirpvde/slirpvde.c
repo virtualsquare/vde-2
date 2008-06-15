@@ -424,6 +424,15 @@ int main(int argc, char **argv)
 		printlog(LOG_ERR, "getcwd: %s", strerror(errno));
 		exit(1);
 	}
+	
+	conn=vde_open(sockname,"slirpvde:",&open_args);
+	if (!conn)
+	{
+		printlog(LOG_ERR, "Could not connect to the VDE switch at '%s': %s",
+				sockname, strerror(errno));
+		exit(1);
+	}
+	
 	strcat(pidfile_path, "/");
 	if (daemonize && daemon(0, 0)) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
@@ -432,7 +441,6 @@ int main(int argc, char **argv)
 
 	if(pidfile) save_pidfile();
 
-	conn=vde_open(sockname,"slirpvde:",&open_args);
 	lfd=stderr;
 	slirp_init(netw);
 
@@ -446,8 +454,16 @@ int main(int argc, char **argv)
 		FD_ZERO(&xs);
 		nfds= -1;
 		slirp_select_fill(&nfds,&rs,&ws,&xs);
-		datafd=vde_datafd(conn);
-		ctlfd=vde_ctlfd(conn);
+		datafd = vde_datafd(conn);
+		ctlfd = vde_ctlfd(conn);
+		
+		if (datafd < 0 || ctlfd < 0)
+		{
+			printlog(LOG_ERR, "Wrong file descriptor(s) for the VDE plug: (%d, %d)",
+					datafd, ctlfd);
+			exit(1);
+		}
+
 		FD_SET(datafd,&rs);
 		FD_SET(ctlfd,&rs);
 		if (datafd>nfds) nfds=datafd;
