@@ -16,7 +16,7 @@ vde_plug \- Virtual Distributed Ethernet plug (two plugs creates a vde cable)
 .I octal-mode  
 ] 
 [
-.I socketpath
+.I socketdir
 ]
 .br
 .SH DESCRIPTION
@@ -82,11 +82,12 @@ so that the network traffic cannot be sniffed.
 .B \-m "\fIoctal-mode\fP" 
 octal chmod like permissions for the comm sockets
 .TP
-.B "\fIsocketpath\fP"
+.B "\fIsocketdir\fP"
 (This option can be also set as: 
-.B -sock "\fIsocketpath\fP"
-) specify the UNIX socket to be used by local programs for joining the VDE.
-The default value is "/tmp/vde.ctl".
+.B -sock "\fIsocketdir\fP"
+) specify the directory which contains the UNIX socket to be used by local programs for joining the VDE.
+The default value is "/tmp/vde.ctl", which corresponds to the socket
+"/tmp/vde.ctl/ctl".
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
