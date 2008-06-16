@@ -304,29 +304,31 @@ static void readip(char *arg,struct netif *nif,int af)
 			printlog(LOG_ERR,"IP address %s error %s",arg,gai_strerror(err));
 		else {
 			switch(res->ai_family) {
-				case PF_INET: {
-												struct sockaddr_in *in=(struct sockaddr_in *)res->ai_addr;
-												int addrh=ntohl(in->sin_addr.s_addr);
-												unsigned char i,addr[4];
-												for (i=0;i<4;i++,addrh>>=8)
-													addr[3-i]=addrh;
-												IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
-												bitno2mask(addr,bitno,4);
-												IP64_MASKADDR(&netmask, addr[0],addr[1],addr[2],addr[3]);
-												lwip_add_addr(nif,&ipaddr,&netmask);
-											}
-											break;
-				case PF_INET6:{
-												struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
-												unsigned char *addr=in->sin6_addr.s6_addr;
-												sockaddr2ip_6addr(&ipaddr,addr);
-												bitno2mask(addr,bitno,16);
-												sockaddr2ip_6addr(&netmask,addr);
-												lwip_add_addr(nif,&ipaddr,&netmask);
-											}
-											break;
+				case PF_INET:
+					{
+						struct sockaddr_in *in=(struct sockaddr_in *)res->ai_addr;
+						int addrh=ntohl(in->sin_addr.s_addr);
+						unsigned char i,addr[4];
+						for (i=0;i<4;i++,addrh>>=8)
+							addr[3-i]=addrh;
+						IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
+						bitno2mask(addr,bitno,4);
+						IP64_MASKADDR(&netmask, addr[0],addr[1],addr[2],addr[3]);
+						lwip_add_addr(nif,&ipaddr,&netmask);
+					}
+					break;
+				case PF_INET6:
+					{
+						struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
+						unsigned char *addr=in->sin6_addr.s6_addr;
+						sockaddr2ip_6addr(&ipaddr,addr);
+						bitno2mask(addr,bitno,16);
+						sockaddr2ip_6addr(&netmask,addr);
+						lwip_add_addr(nif,&ipaddr,&netmask);
+					}
+					break;
 				default:
-											printlog(LOG_ERR,"Unsupported Address Family: %s",arg);
+					printlog(LOG_ERR,"Unsupported Address Family: %s",arg);
 			}
 			freeaddrinfo(res);
 		}
@@ -344,24 +346,26 @@ static void readdefroute(char *arg,struct netif *nif,int af)
 		printlog(LOG_ERR,"IP address %s error %s",arg,gai_strerror(err));
 	else {
 		switch(res->ai_family) {
-			case PF_INET: {
-											struct sockaddr_in *in=(struct sockaddr_in *)res->ai_addr;
-											int addrh=ntohl(in->sin_addr.s_addr);
-											unsigned char i,addr[4];
-											for (i=0;i<4;i++,addrh>>=8)
-												addr[3-i]=addrh;
-											IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
-											lwip_add_route(lwipstack,IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
-										}
-										break;
-			case PF_INET6:{
-											struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
-											sockaddr2ip_6addr(&ipaddr,in->sin6_addr.s6_addr);
-											lwip_add_route(lwipstack,IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
-										}
-										break;
+			case PF_INET:
+				{
+					struct sockaddr_in *in=(struct sockaddr_in *)res->ai_addr;
+					int addrh=ntohl(in->sin_addr.s_addr);
+					unsigned char i,addr[4];
+					for (i=0;i<4;i++,addrh>>=8)
+						addr[3-i]=addrh;
+					IP64_ADDR(&ipaddr, addr[0],addr[1],addr[2],addr[3]);
+					lwip_add_route(lwipstack,IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
+				}
+				break;
+			case PF_INET6:
+				{
+					struct sockaddr_in6 *in=(struct sockaddr_in6 *)res->ai_addr;
+					sockaddr2ip_6addr(&ipaddr,in->sin6_addr.s6_addr);
+					lwip_add_route(lwipstack,IP_ADDR_ANY,IP_ADDR_ANY,&ipaddr,nif,0);
+				}
+				break;
 			default:
-										printlog(LOG_ERR,"Unsupported Address Family: %s",arg);
+				printlog(LOG_ERR,"Unsupported Address Family: %s",arg);
 		}
 		freeaddrinfo(res);
 	}
