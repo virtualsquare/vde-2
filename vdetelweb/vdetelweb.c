@@ -97,7 +97,8 @@ void printlog(int priority, const char *format, ...)
 
 static void cleanup(void)
 {
-	lwip_stack_free(lwipstack);
+	if (lwipstack)
+		lwip_stack_free(lwipstack);
 	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
 		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
 	}
@@ -389,31 +390,37 @@ int readconffile(char *path,struct netif *nif)
 {
 	FILE *f;
 	char buf[BUFSIZE],*s;
+	int line = 0;
+
 	if (path==NULL)
 		return -1;
 	if((f=fopen(path,"r"))==NULL)
 		return -1;
-	while (fgets(buf,BUFSIZE,f) != NULL) {
+	while (fgets(buf,BUFSIZE,f) != NULL)
+	{
+		line++;
+
 		if ((s=rindex(buf,'\n')) != NULL)
 			*s=0;
-		for(s=buf;*s == ' ' || *s == '\t';s++)
-			;
-		if (*s != '#') {
+
+		for(s=buf;*s == ' ' || *s == '\t';s++);
+
+		if (*s != '#' && *s != '\n' && *s != '\0')
+		{
 			struct cf *scf;
 			for (scf=cft;scf->tag != NULL;scf++)
-				if(strncmp(s,scf->tag,strlen(scf->tag)) == 0){
+				if(strncmp(s,scf->tag,strlen(scf->tag)) == 0)
+				{
 					s+=strlen(scf->tag);
-					for(;*s == ' ' || *s == '\t';s++)
-						;
-					if (*s == '=') s++;
-					for(;*s == ' ' || *s == '\t';s++)
-						;
+					for(;*s == ' ' || *s == '\t';s++);
+					if (*s == '=')
+						s++;
+					for(;*s == ' ' || *s == '\t';s++);
 					scf->f(s,nif,scf->arg);
 					break;
 				}
-			if (scf->tag == NULL) {
-				printlog(LOG_ERR,"rc file syntax error: %s",buf);
-			}
+			if (scf->tag == NULL) 
+				printlog(LOG_ERR,"Error parsing configuration file: line %d: %s", line, buf);
 		}
 	}
 	return 0;
@@ -560,11 +567,11 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
-	lwipstack=lwip_stack_new();
-	lwip_stack_set(lwipstack);
-
 	atexit(cleanup);
 	setsighandlers();
+
+	lwip_init();
+
 	if (daemonize) {
 		openlog(basename(argv[0]), LOG_PID, 0);
 		logok=1;
@@ -578,6 +585,11 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	strcat(pidfile_path, "/");
+	
+	lwipstack=lwip_stack_new();
+	lwip_stack_set(lwipstack);
+	
+	vdefd = openvdem(mgmt, argv[0], &nif, nodename);
 	
 	/* If rcfile is specified, try it and nothing else */
 	if (conffile && readconffile(conffile,nif) < 0)
@@ -608,7 +620,6 @@ int main(int argc, char *argv[])
 		}
 	}
 	
-	vdefd = openvdem(mgmt, argv[0], &nif, nodename);
 
 	if (daemonize && daemon(0, 1)) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
