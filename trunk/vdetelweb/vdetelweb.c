@@ -582,11 +582,6 @@ int main(int argc, char *argv[])
 	 * server: save PID file if needed */
 	if(pidfile) save_pidfile();
 
-  if (loadlwipv6dl() == NULL) {
-		perror("vdetelweb: cannot load lwipv6 library:");
-		exit(-1);
-	}
-
 	lwipstack=lwip_stack_new();
 	lwip_stack_set(lwipstack);
 
