@@ -102,7 +102,6 @@ static void cleanup(void)
 	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
 		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
 	}
-	lwip_fini();
 }
 
 int sha1passwdok(const char *pw) {
@@ -513,8 +512,6 @@ int main(int argc, char *argv[])
 	char *nodename=NULL;
 	int c;
 	
-	lwip_init();
-
 	progname=argv[0];
 
 	while (1) {
