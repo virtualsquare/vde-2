@@ -12,9 +12,9 @@ AC_PROG_CC
 AC_PROG_INSTALL
 
 # Checks for libraries.
-AC_CHECK_LIB([dl], [dlopen])
-AC_CHECK_LIB([lwipv6], [lwip_initstack])
+AC_CHECK_LIB([dl], [dlopen],, AC_MSG_ERROR([libdl missing]))
 AC_CHECK_LIB([pthread], [pthread_key_create],, AC_MSG_ERROR([libpthread missing]))
+AC_CHECK_LIB([lwipv6], [lwip_init],, AC_MSG_ERROR([liblwipv6 missing]), [-lpthread])
 
 # Checks for header files.
 AC_HEADER_STDC

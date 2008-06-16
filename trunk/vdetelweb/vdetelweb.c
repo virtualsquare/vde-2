@@ -102,6 +102,7 @@ static void cleanup(void)
 	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
 		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
 	}
+	lwip_fini();
 }
 
 int sha1passwdok(const char *pw) {
@@ -510,58 +511,61 @@ int main(int argc, char *argv[])
 	int vdefd;
 	char *conffile=NULL;
 	char *nodename=NULL;
+	int c;
+	
+	lwip_init();
+
 	progname=argv[0];
-	{
-		int c;
-		while (1) {
-			int option_index = 0;
 
-			static struct option long_options[] = {
-				{"daemon", 0, 0, 'd'},
-				{"mgmt", 1, 0, 'M'},
-				{"telnet", 0, 0, 't'},
-				{"web", 0, 0, 'w'},
-				{"help",0,0,'h'},
-				{"rcfile",1,0,'f'},
-				{"nodename",1,0,'n'},
-				{"pidfile", 1, 0, 'p'},
-				{0, 0, 0, 0}
-			};
-			c = getopt_long_only (argc, argv, "hdwtM:f:n:",
-					long_options, &option_index);
-			if (c == -1)
+	while (1) {
+		int option_index = 0;
+
+		static struct option long_options[] = {
+			{"daemon", 0, 0, 'd'},
+			{"mgmt", 1, 0, 'M'},
+			{"telnet", 0, 0, 't'},
+			{"web", 0, 0, 'w'},
+			{"help",0,0,'h'},
+			{"rcfile",1,0,'f'},
+			{"nodename",1,0,'n'},
+			{"pidfile", 1, 0, 'p'},
+			{0, 0, 0, 0}
+		};
+		c = getopt_long_only (argc, argv, "hdwtM:f:n:",
+				long_options, &option_index);
+		if (c == -1)
+			break;
+
+		switch (c) {
+			case 'M':
+				mgmt=strdup(optarg);
 				break;
-
-			switch (c) {
-				case 'M':
-					mgmt=strdup(optarg);
-					break;
-				case 'f':
-					conffile=strdup(optarg);
-					break;
-				case 'n':
-					nodename=strdup(optarg);
-					break;
-				case 't':
-					telnet=1;
-					break;
-				case 'w':
-					web=1;
-					break;
-				case 'd':
-					daemonize=1;
-					break;
-				case 'p':
-					pidfile=strdup(optarg);
-					break;
-				case 'h':
-					usage(argv[0]); //implies exit
-					break;
-			}
+			case 'f':
+				conffile=strdup(optarg);
+				break;
+			case 'n':
+				nodename=strdup(optarg);
+				break;
+			case 't':
+				telnet=1;
+				break;
+			case 'w':
+				web=1;
+				break;
+			case 'd':
+				daemonize=1;
+				break;
+			case 'p':
+				pidfile=strdup(optarg);
+				break;
+			case 'h':
+				usage(argv[0]); //implies exit
+				break;
 		}
-		if (optind < argc && mgmt==NULL)
-			mgmt=argv[optind];
 	}
+	if (optind < argc && mgmt==NULL)
+		mgmt=argv[optind];
+
 	if (mgmt==NULL) {
 		printlog(LOG_ERR,"mgmt_socket not defined");
 		exit(-1);
@@ -573,8 +577,6 @@ int main(int argc, char *argv[])
 
 	atexit(cleanup);
 	setsighandlers();
-
-	lwip_init();
 
 	if (daemonize) {
 		openlog(basename(argv[0]), LOG_PID, 0);
