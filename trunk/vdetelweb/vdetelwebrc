@@ -1,11 +1,20 @@
-#vdetelweb rc sample
+### vdetelweb sample configuration file
+
+## IP address and default gateway for the telnet/web server, using the default
+## address family (probably IPv4)
 ip=192.168.250.6/24
 defroute=192.168.250.1
-#ip4=switch.a.b.it/24
-#defroute4=192.168.250.1
-ip=2001:760:2e00:ff00::5556/64
-defroute=2001:760:2e00:ff00::1
-# to create a new passwd run the following command:
-# $ echo -n piripicchio | sha1sum
-# typing your passwd instead of "piripicchio"
+
+## The same but for specific address families
+# ip4=10.0.0.1/24
+# defroute4=192.168.250.1
+# ip6=2001:760:2e00:ff00::5556/64
+# defroute6=2001:760:2e00:ff00::1
+
+## Password SHA1 hash for the "admin" telnet/web user. To create a new
+## password use the following command:
+##
+## $ echo -n new_password | sha1sum
+##
+## and paste here the output. The sample password is "piripicchio".
 password=e8b32ad31b34a21d9fa638c2ee6cf52d46d5106b
