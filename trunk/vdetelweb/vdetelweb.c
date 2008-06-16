@@ -75,6 +75,9 @@ void *status[MAXFD];
 
 #define ROOTCONFFILE "/etc/vde/vdetelwebrc"
 
+/* This will be prefixed by getenv("HOME") */
+#define USERCONFFILE "/.vde/vdetelwebrc"
+
 void printlog(int priority, const char *format, ...)
 {
 	va_list arg;
@@ -196,7 +199,7 @@ int openextravdem()
 	snprintf(sun.sun_path,UNIX_PATH_MAX,"%s",mgmt);
 	fd=socket(PF_UNIX,SOCK_STREAM,0);
 	if (connect(fd,(struct sockaddr *)(&sun),sizeof(sun)) < 0) {
-		printlog(LOG_ERR,"mgmt extra connect %s",strerror(errno));
+		printlog(LOG_ERR,"Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
 		return(-1);
 	}
 	if ((n=read(fd,buf,BUFSIZE))<=0) {
@@ -215,11 +218,11 @@ int openvdem(char *mgmt,char *progname, struct netif **nif,char *nodename)
 	snprintf(sun.sun_path,UNIX_PATH_MAX,"%s",mgmt);
 	fd=socket(PF_UNIX,SOCK_STREAM,0);
 	if (connect(fd,(struct sockaddr *)(&sun),sizeof(sun)) < 0) {
-		printlog(LOG_ERR,"mgmt connect %s",strerror(errno));
+		printlog(LOG_ERR,"Error connecting to the management socket '%s': %s", mgmt, strerror(errno));
 		exit(-1);
 	}
 	if ((n=read(fd,buf,BUFSIZE))<=0) {
-		printlog(LOG_ERR,"banner %s",strerror(errno));
+		printlog(LOG_ERR,"Error reading banner from VDE switch: %s",strerror(errno));
 		exit(-1);
 	}
 	buf[n]=0;
@@ -228,17 +231,17 @@ int openvdem(char *mgmt,char *progname, struct netif **nif,char *nodename)
 	banner=strdup(buf);
 	write(fd,"ds/showinfo\n",13);
 	if ((n=read(fd,buf,BUFSIZE))<=0) {
-		printlog(LOG_ERR,"read ctl socket %s",strerror(errno));
+		printlog(LOG_ERR,"Error reading ctl socket from VDE switch: %s",strerror(errno));
 		exit(-1);
 	}
 	buf[n]=0;
 	if ((line2=index(buf,'\n')) == NULL) {
-		printlog(LOG_ERR,"read ctl socket parse error 1");
+		printlog(LOG_ERR,"Error parsing first line of ctl socket information");
 		exit(-1);
 	}
 	line2++;
 	if (strncmp(line2,"ctl dir ",8) != 0) {
-		printlog(LOG_ERR,"read ctl socket parse error");
+		printlog(LOG_ERR,"Error parsing ctl socket information");
 		exit(-1);
 	}
 	for(ctrl=line2+8;*ctrl!='\n' && ctrl<buf+n;ctrl++)
@@ -249,7 +252,7 @@ int openvdem(char *mgmt,char *progname, struct netif **nif,char *nodename)
 	strcat(ctrl,"[0]");
 	*nif=lwip_vdeif_add(lwipstack,ctrl);
 	if (*nif == NULL) {
-		printlog(LOG_ERR,"cannot connect to the switch");
+		printlog(LOG_ERR,"Cannot connect to the VDE switch");
 		exit(-1);
 	}
 	lwip_ifup(*nif);
@@ -287,7 +290,7 @@ static void readip(char *arg,struct netif *nif,int af)
 {
 	char *bit=rindex(arg,'/');
 	if (bit == 0) 
-		printlog(LOG_ERR,"ip addresses must include the netmask i.e. addr/maskbits");
+		printlog(LOG_ERR,"IP addresses must include the netmask i.e. addr/maskbits");
 	else {
 		int bitno=atoi(bit+1);
 		*bit=0; 
@@ -297,7 +300,7 @@ static void readip(char *arg,struct netif *nif,int af)
 		memset(&hint,0,sizeof(hint));
 		hint.ai_family=af;
 		if ((err=getaddrinfo(arg,NULL,&hint,&res))!=0)
-			printlog(LOG_ERR,"ip address %s error %s",arg,gai_strerror(err));
+			printlog(LOG_ERR,"IP address %s error %s",arg,gai_strerror(err));
 		else {
 			switch(res->ai_family) {
 				case PF_INET: {
@@ -322,7 +325,7 @@ static void readip(char *arg,struct netif *nif,int af)
 											}
 											break;
 				default:
-											printlog(LOG_ERR,"unsupported Address Family: %s",arg);
+											printlog(LOG_ERR,"Unsupported Address Family: %s",arg);
 			}
 			freeaddrinfo(res);
 		}
@@ -337,7 +340,7 @@ static void readdefroute(char *arg,struct netif *nif,int af)
 	memset(&hint,0,sizeof(hint));
 	hint.ai_family=af;
 	if ((err=getaddrinfo(arg,NULL,&hint,&res))!=0)
-		printlog(LOG_ERR,"ip address %s error %s",arg,gai_strerror(err));
+		printlog(LOG_ERR,"IP address %s error %s",arg,gai_strerror(err));
 	else {
 		switch(res->ai_family) {
 			case PF_INET: {
@@ -357,7 +360,7 @@ static void readdefroute(char *arg,struct netif *nif,int af)
 										}
 										break;
 			default:
-										printlog(LOG_ERR,"unsupported Address Family: %s",arg);
+										printlog(LOG_ERR,"Unsupported Address Family: %s",arg);
 		}
 		freeaddrinfo(res);
 	}
@@ -386,8 +389,6 @@ int readconffile(char *path,struct netif *nif)
 {
 	FILE *f;
 	char buf[BUFSIZE],*s;
-	if (path == NULL && geteuid() == 0)
-		path=ROOTCONFFILE;
 	if (path==NULL)
 		return -1;
 	if((f=fopen(path,"r"))==NULL)
@@ -558,6 +559,10 @@ int main(int argc, char *argv[])
 		printlog(LOG_ERR,"at least one service option (-t -w) must be specified");
 		exit(-1);
 	}
+
+	lwipstack=lwip_stack_new();
+	lwip_stack_set(lwipstack);
+
 	atexit(cleanup);
 	setsighandlers();
 	if (daemonize) {
@@ -573,23 +578,48 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	strcat(pidfile_path, "/");
+	
+	/* If rcfile is specified, try it and nothing else */
+	if (conffile && readconffile(conffile,nif) < 0)
+	{
+		printlog(LOG_ERR, "Error reading configuration file '%s': %s", conffile, strerror(errno));
+		exit(1);
+	}
+	/* Else try default ones */
+	else if (!conffile)
+	{
+		int rv;
+		char *homedir = getenv("HOME");
+		if (homedir)
+		{
+			int len = strlen(homedir) + strlen(USERCONFFILE) + 1;
+			conffile = malloc(len);
+			snprintf(conffile, len, "%s%s", homedir, USERCONFFILE);
+			if ((rv = readconffile(conffile, nif)) >= 0)
+				free(conffile);
+		}
+		if (!homedir || rv < 0)
+			rv = readconffile(conffile = ROOTCONFFILE, nif);
+
+		if (rv < 0)
+		{
+			printlog(LOG_ERR, "Error reading configuration file '%s': %s", conffile, strerror(errno));
+			exit(1);
+		}
+	}
+	
+	vdefd = openvdem(mgmt, argv[0], &nif, nodename);
 
 	if (daemonize && daemon(0, 1)) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
 		exit(1);
 	}
+
 	/* once here, we're sure we're the true process which will continue as a
 	 * server: save PID file if needed */
 	if(pidfile) save_pidfile();
 
-	lwipstack=lwip_stack_new();
-	lwip_stack_set(lwipstack);
 
-	vdefd=openvdem(mgmt,argv[0],&nif,nodename);
-	if (readconffile(conffile,nif) < 0) {
-		printlog(LOG_ERR,"configuration file not found");
-		exit(1);
-	}
 	if (telnet)
 		telnet_init(vdefd);
 	if (web)
