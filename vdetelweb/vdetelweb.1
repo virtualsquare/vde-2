@@ -1,4 +1,4 @@
-.\" Copyright (c) 2004 Renzo Davoli
+.\" Copyright (c) 2004-2005 Renzo Davoli, 2008 Ludovico Gardenghi
 .\"
 .\" This is free documentation; you can redistribute it and/or
 .\" modify it under the terms of the GNU General Public License as
@@ -20,58 +20,67 @@
 .\" Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
 .\" USA.
 
-.TH VDETELWEB 1 "October 10, 2005" "Virtual Distributed Ethernet"
+.TH VDETELWEB 1 "June 16, 2008" "Virtual Distributed Ethernet"
 .SH NAME
 vdetelweb \- Virtual Distributed Ethernet Telnet and/or Web management module
 .SH SYNOPSIS
 .B vdetelweb 
 [ 
-.BI \-web  
+.BI \-\-web  
 ] 
 [ 
-.BI \-telnet 
+.BI \-\-telnet 
 ]  
 [ 
-.BI \-nodename
+.BI \-\-nodename
 .I nodename
 ] 
 [
-.BI \-daemon 
+.BI \-\-daemon 
+]
+[
+.BI \-\-rcfile
+.I rcfile
 ]
 .I mgmt_socket
 .br
 .SH DESCRIPTION
-A
 \fBvdetelweb\fP 
 implements a tiny telnet server and/or a tiny web server for the remote management
 of a VDE2 switch.
 .br
 .SH OPTIONS
 .TP
-.B \-web, 
-starts the web server.
+.B \-w, \-\-web
+start the web server. At least one of \fB\-\-web\fP or \fB\-\-telnet\fP \fImust\fP be set.
 .TP
-.B \-telnet, 
-starts the telnet server. At least one option \-web or \-telnet must be set
+.B \-t, \-\-telnet
+start the telnet server. At least one of \fB\-\-web\fP or \fB\-\-telnet\fP \fImust\fP be set.
 .TP
-.B \-nodename "\fInodename\fP"
-Specify the nodename as seen from remote connections (e.g. in the command prompt or
+.B \-n, \-\-nodename \fInodename\fP
+specify the nodename as seen from remote connections (e.g. in the command prompt or
 in the web page title). uname nodename is used when this option is not specified.
 .TP
-.B \-daemon
-Run as a daemon. Use syslog for logging.
+.B \-d, \-\-daemon
+run as a daemon, using syslog for logging.
 .TP
-.B \-f \fIrcfile\fP
-rc file to set the initial switch configuration. 
-When not specified, vdetelweb searches for /etc/vde/vdetelwebrc and
-~/etc/vde/vdetelwebrc. One rc file must be accessible.
+.B \-f, \-\-rcfile \fIrcfile\fP
+rc file to set the initial switch configuration.
+When not specified, vdetelweb searches for \fI~/.vde/vdetelwebrc\fP and
+\fI/etc/vde/vdetelwebrc\fP. At leas one rc file must exist and be readable.
 .TP
-.B \-h 
-help. please use it for a more complete list of options.
+.B \-h, \-\-help
+print help. please use it for a more complete list of options.
 .TP
 .B \fImgmt_socket\fP
-is the managemnt socket used to communicate with the vde_switch. 
+is the managemnt socket used to communicate with the vde_switch.
 (This option must match the path used in the -M option for the vde_switch).
+.SH NOTICE
+Virtual Distributed Ethernet is not related in any way with
+www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
+i.e. the German "Association for Electrical, Electronic & Information
+Technologies").
+
 .SH SEE ALSO
 .BR vde_switch (1),
 .BR vde_plug (1),
