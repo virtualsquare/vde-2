@@ -58,7 +58,7 @@ static const char *nullstring="";
 struct utmstate {
 	int num;
 	enum command command;
-	const char *string;
+	char *string;
 #define value nextnum;
 	int nextnum;
 	struct utmstate *next;
@@ -138,7 +138,10 @@ struct utmstate *sgoto(struct utmstate *head,int nextnum)
 
 void utm_freestate(struct utmstate *head)
 {
+	if (head == NULL) return;
 	struct utmstate* rest = head->next;
+	if (head->string != NULL && head->string != nullstring)
+		free(head->string);
 	free(head);
 	utm_freestate(rest);
 }
@@ -202,7 +205,7 @@ struct utm *utm_alloc(char *conf)
 					s=blankskip(s);
 					currfield=s;
 				} else {
-					new->string=nullstring;
+					new->string = (char*) nullstring;
 				}
 				new->nextnum=atoi(currfield);
 				utm->head=utmsadd(utm->head,new);
@@ -385,9 +388,12 @@ struct utm_out *utmout_alloc(void)
 
 void utmout_free(struct utm_out *out)
 {
+	struct utm_out *next;
 	while(out) {
 		if(out->buf) free(out->buf);
-		out = out->next;
+		next = out->next;
+		free(out);
+		out = next;
 	}
 }
 

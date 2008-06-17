@@ -1,4 +1,4 @@
-VDE 2.2.0-pre3, UNRELEASED
+VDE 2.2.1, 2008-06-17
 	* New contact email address: <info@v2.cs.unibo.it>
 	* Code cleanup (some more warnings removed)
 	* [vde_crytcab] Cleared large memory leak due to missing
@@ -13,9 +13,47 @@ VDE 2.2.0-pre3, UNRELEASED
 	  replacement/compatibility functions
 	* [common] Fix in poll emulation management
 	* Fix to distclean problem due to wrong LIBOBJ management
+	* [vde_switch] hash/setsize 0 was not recognized as an error and caused vde_switch
+	  to hang due to an infinite loop
+	* Don't compile cryptcab if configure detects not to.
+	* Fix for autotools in Slackware
+	* [vde_cryptcab] refactoring:
+	  - simplified protocol (though keeping it back-compatible)
+	  - fixed some bugs and memory leaks
+	  - added some new features
+	* [vde_switch] fix on BPDU generation/handling: do not generate BPDU if FSTP is not active
+	  or we are HUB, forward BPDU if FSTP is not active (Closes #1943973 on SF).
+	* [slirpvde] include limits.h on linux as well.
+	* [vde_switch] Applied patch from Bjorn Mork to remove 32/64 bit confusion from bitarray.h
+	  (Closes #1984460 on SF).
+	* [vde_switch] do not update last_seen in hash entry if data arrives from
+	  a new port and entry still contains old port (Closes #469098 debian).
+	* [vde_cryptcab] server side:
+	  - Added feature: cleanup key files on exit
+	  - Bugfix: avoid using several switch ports for the same client
+	* [vde_switch][libvdeplug] fixed path management: as paths are sent between
+	  different processes with potentially different CWDs, we must assure that the
+	  exchanged paths are always absolute ones.
+	  - added vde_realpath (similar to realpath(3) but with the resulting path
+	    well-defined also in case of partial resolution), taken from xmview's
+	    canonicalize. vde_realpath is now part of libvdecommon.
+	  - [vde_switch, kvde_switch] socket name in datasock gets canonicalized
+	  - [vde_switch, kvde_switch] restored CWD of the switch after each module
+	    initialization (so each module initializes with the same CWD. consmgmt
+	    called daemon(0, 0) which changed the CWD to /, so the behavior was
+	    different when the switch ran in background or in foreground.
+	  - [vde_switch] clarified some error messages
+	  - [libvdeplug] improved the fallback mechanism in case of no socket
+	    specified on the command line and for data socket directory. Now the
+	    default positions for the ctlfd are tried only if socket is specified.
+	  - [libvdeplug] socket names get canonicalized
+	  - [libvdeplug] added a missing / in datasock name
+	* [kvde_switch] added a missing include
+	* [slirpvde] added some checks for successful connection to the VDE switch.
+	* integrations and corrections to some manual pages
+	* [libvdemgmt] fixed memory leaks (Closes: #1948369 on SF)
 
 VDE 2.2.0-pre2, 2008-01-31
-
 	* [vde_autolink][unixcmd] Added man pages
 	* Code cleanup (removed warnings, added missing prototypes to header
 	  files, etc.)
