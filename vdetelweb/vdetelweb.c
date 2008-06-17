@@ -143,7 +143,7 @@ static void sig_handler(int sig)
 	kill(getpid(), sig);
 }
 
-static void setsighandlers()
+static void setsighandlers(void)
 {
 	/* setting signal handlers.
 	 *    * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
@@ -191,7 +191,7 @@ void setprompt(char *ctrl,char *nodename)
 	prompt=strdup(buf);
 }
 
-int openextravdem()
+int openextravdem(void)
 {
 	struct sockaddr_un sun;
 	int fd,n;
@@ -474,7 +474,7 @@ int setfds(fd_set *rds, fd_set *exc)
 	return max+1;
 }
 
-static void save_pidfile()
+static void save_pidfile(void)
 {
 	if(pidfile[0] != '/')
 		strncat(pidfile_path, pidfile, _POSIX_PATH_MAX - strlen(pidfile_path));
@@ -502,6 +502,49 @@ static void save_pidfile()
 	}
 
 	fclose(f);
+}
+
+/* this custom version of daemon(3) continue to receive stderr messages
+ * until the end of the startup phase, the foreground process terminates
+ * when stderr gets closed*/
+static int special_daemon(void)
+{
+	int fd;
+	int errorpipe[2];
+	char buf[256];
+	int n;
+
+	if (pipe(errorpipe))
+		return -1;
+
+	switch (fork()) {
+		case -1:
+			return (-1);
+		case 0:
+			break;
+		default:
+			close(errorpipe[1]);
+			while ((n=read(errorpipe[0],buf,128)) > 0) {
+				write(STDERR_FILENO,buf,n);
+			}
+			_exit(0);
+	}
+	close(errorpipe[0]);
+
+	if (setsid() == -1)
+		return (-1);
+
+	(void)chdir("/");
+
+	if ((fd = open("/dev/null", O_RDWR, 0)) != -1) {
+		(void)dup2(fd, STDIN_FILENO);
+		(void)dup2(fd, STDOUT_FILENO);
+		(void)dup2(errorpipe[1], STDERR_FILENO);
+		close(errorpipe[1]);
+		if (fd > 2)
+			(void)close (fd);
+	}
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -575,12 +618,6 @@ int main(int argc, char *argv[])
 	atexit(cleanup);
 	setsighandlers();
 
-	if (daemonize) {
-		openlog(basename(argv[0]), LOG_PID, 0);
-		logok=1;
-		syslog(LOG_INFO,"VDETELWEB started");
-	}
-
 	/* saves current path in pidfile_path, because otherwise with daemonize() we
 	 * forget it */
 	if(getcwd(pidfile_path, _POSIX_PATH_MAX-1) == NULL) {
@@ -591,7 +628,7 @@ int main(int argc, char *argv[])
 	
 	/* call daemon before starting the stack otherwise the stack threads
 	 * does not get inherited by the forked process */
-	if (daemonize && daemon(0, 1)) {
+	if (daemonize && special_daemon()) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
 		exit(1);
 	}
@@ -638,6 +675,18 @@ int main(int argc, char *argv[])
 		telnet_init(vdefd);
 	if (web)
 		web_init(vdefd);
+
+	if (daemonize) {
+		int fd;
+		if ((fd=open("/dev/null",O_RDWR)) >= 0) {
+			close(STDERR_FILENO);
+			dup2(fd,STDERR_FILENO);
+			close(fd);
+			openlog(basename(argv[0]), LOG_PID, 0);
+			logok=1;
+		}
+		printlog(LOG_INFO,"VDETELWEB started");
+	}
 
 	while (1)
 	{
