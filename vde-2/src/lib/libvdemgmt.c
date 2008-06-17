@@ -50,11 +50,6 @@
 
 #define DBGM 0
 
-static struct utm* open_utm=NULL;
-static struct utm* close_utm=NULL;
-static struct utm* sendcmd_utm=NULL;
-static struct utm* asyncrecv_utm=NULL;
-
 struct asynctab {
 	const char *event;
 	void (*callback)(const char *event, const int tag, const char *data);
@@ -68,6 +63,10 @@ struct vdemgmt {
 	const char *banner;
 	const char *prompt;
 	const char *version;
+	struct utm *open_utm;
+	struct utm *close_utm;
+	struct utm *sendcmd_utm;
+	struct utm *asyncrecv_utm;
 };
 
 /*
@@ -128,20 +127,16 @@ struct vdemgmt *vdemgmt_open(const char *path)
 	int myargc=0;
 	char *myargv = NULL, *sep;
 
-	if(!open_utm)
-		CHECK( open_utm = utm_alloc(OPENMACHINE_RC) , NULL );
-	if(!close_utm)
-		CHECK( close_utm = utm_alloc(CLOSEMACHINE_RC) , NULL );
-	if(!sendcmd_utm)
-		CHECK( sendcmd_utm = utm_alloc(SENDCMD_RC) , NULL );
-	if(!asyncrecv_utm)
-		CHECK( asyncrecv_utm = utm_alloc(ASYNCRECV_RC) , NULL );
-
 	/* vdemgmt connection struct */
 	CHECK( conn = (struct vdemgmt*)malloc(sizeof(struct vdemgmt)) , NULL );
 	memset(conn, 0, sizeof(struct vdemgmt));
 	CHECK( conn->pbuf = (struct utm_buf*)malloc(sizeof(struct utm_buf)) , NULL );
 	memset(conn->pbuf, 0, sizeof(struct utm_buf));
+	
+	CHECK(conn->open_utm = utm_alloc(OPENMACHINE_RC), NULL);
+	CHECK(conn->close_utm = utm_alloc(CLOSEMACHINE_RC), NULL);
+	CHECK(conn->sendcmd_utm = utm_alloc(SENDCMD_RC), NULL);
+	CHECK(conn->asyncrecv_utm = utm_alloc(ASYNCRECV_RC), NULL);
 
 	/* connect to management socket (non block fd) */
         sun.sun_family=PF_UNIX;
@@ -154,10 +149,10 @@ struct vdemgmt *vdemgmt_open(const char *path)
 
 	/* get welcome data */
 	out=utmout_alloc();
-	CHECK( utm_run(open_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM), -1 );
+	CHECK( utm_run(conn->open_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM), -1 );
 
 	/* split banner / prompt and extract version */
-	for( sep=out->buf+out->sz ; ! strstr(sep, "\n") ; sep--);
+	for( sep=out->buf+out->sz-1 ; ! strstr(sep, "\n") ; sep--);
 	conn->banner = strndup(out->buf, sep - out->buf-1);
 	conn->prompt = strndup(sep+1, (out->buf+out->sz)-sep+1);
 	sep=strstr(conn->banner, "V.")+2;
@@ -194,7 +189,7 @@ void vdemgmt_close(struct vdemgmt *conn)
 
 	/* logout */
 	out=utmout_alloc();
-	utm_run(close_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM);
+	utm_run(conn->close_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM);
 	utmout_free(out);
 
 	close(conn->fd);
@@ -204,6 +199,10 @@ void vdemgmt_close(struct vdemgmt *conn)
 	free((char *)conn->banner);
 	free((char *)conn->prompt);
 	free((char *)conn->version);
+	free(conn->open_utm);
+	free(conn->close_utm);
+	free(conn->sendcmd_utm);
+	free(conn->asyncrecv_utm);
 	free(conn);
 }
 
@@ -221,12 +220,12 @@ int vdemgmt_sendcmd(struct vdemgmt *conn, const char *cmd, struct vdemgmt_out *o
 {
 
 	int rv=-1, myargc=0;
-	char *token, *dupcmd, **myargv = NULL;
+	char *token, *dupcmd, *dupcmd_bck, **myargv = NULL;
 	struct utm_out *utmout, *p;
 	struct asynctab *t=NULL;
 
 	/* create myargv array from cmd */
-	for( dupcmd=strdup(cmd) ; ; dupcmd=NULL){
+	for( dupcmd_bck=dupcmd=strdup(cmd) ; ; dupcmd=NULL){
 		token = strtok(dupcmd, " ");
 		myargv=realloc(myargv, (myargc+1)*sizeof(char *));
 		if(!myargv) exit(1);
@@ -237,8 +236,10 @@ int vdemgmt_sendcmd(struct vdemgmt *conn, const char *cmd, struct vdemgmt_out *o
 
 	/* send command using machine */
 	utmout=utmout_alloc();
-	rv=utm_run(sendcmd_utm,conn->pbuf,conn->fd,myargc,myargv,utmout,DBGM);
+	rv=utm_run(conn->sendcmd_utm,conn->pbuf,conn->fd,myargc,myargv,utmout,DBGM);
 
+	free(myargv);
+	free(dupcmd_bck);
 	/* scan machine data for sync and async output */
 	p=utmout;
 	while(p) {
@@ -337,7 +338,7 @@ void vdemgmt_asyncrecv(struct vdemgmt *conn)
 	
 	/* run async machine and call the handler for the event */
 	do {
-		outtag=utm_run(asyncrecv_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM);
+		outtag=utm_run(conn->asyncrecv_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM);
 		CHECK( outtag, -1 );
 		t=atab_find(conn->atab, out->buf+SKIPHEAD);
 		if(t) t->callback(t->event, outtag, out->buf+strlen(t->event)+SKIPHEAD+1+prevpos);
