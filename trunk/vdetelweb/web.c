@@ -674,21 +674,11 @@ void webaccept(int fn,int fd,int vdefd)
 void web_init(int vdefd)
 {
 	int sockfd;
-	int one=1;
 	struct sockaddr_in  serv_addr;
 	sockfd=lwip_socket(AF_INET, SOCK_STREAM, 0);
 
 	if (!sockfd) {
 		printlog(LOG_ERR,"web socket err: %s",strerror(errno));
-	}
-	if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (char *) &one,
-				sizeof(one)) < 0){
-		printlog(LOG_ERR,"web setsockopt: %s",strerror(errno));
-		return;
-	}
-	if(fcntl(sockfd, F_SETFL, O_NONBLOCK) < 0){
-		printlog(LOG_ERR,"Setting O_NONBLOCK web: %s",strerror(errno));
-		return;
 	}
 
 	bzero((char *) &serv_addr, sizeof(serv_addr));
