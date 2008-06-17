@@ -589,6 +589,13 @@ int main(int argc, char *argv[])
 	}
 	strcat(pidfile_path, "/");
 	
+	/* call daemon before starting the stack otherwise the stack threads
+	 * does not get inherited by the forked process */
+	if (daemonize && daemon(0, 1)) {
+		printlog(LOG_ERR,"daemon: %s",strerror(errno));
+		exit(1);
+	}
+
 	lwipstack=lwip_stack_new();
 	lwip_stack_set(lwipstack);
 	
@@ -623,16 +630,9 @@ int main(int argc, char *argv[])
 		}
 	}
 	
-
-	if (daemonize && daemon(0, 1)) {
-		printlog(LOG_ERR,"daemon: %s",strerror(errno));
-		exit(1);
-	}
-
 	/* once here, we're sure we're the true process which will continue as a
 	 * server: save PID file if needed */
 	if(pidfile) save_pidfile();
-
 
 	if (telnet)
 		telnet_init(vdefd);
