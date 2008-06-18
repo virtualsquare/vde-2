@@ -13,6 +13,7 @@
 extern unsigned char bpduaddrp[];
 #define ISBPDU(P) (memcmp((P)->header.dest,bpduaddrp,ETH_ALEN)==0)
 
+void fstpshutdown(void);
 int fstnewvlan(int vlan);
 int fstremovevlan(int vlan);
 void fstsetnumports (int val);

@@ -312,6 +312,10 @@ static int parse_globopt(int c, char *optarg)
 	int outc=0;
 	switch (c) {
 		case 'x':
+			/* if it is a HUB FST is disabled */
+#ifdef FSTP
+			fstflag(P_CLRFLAG,FSTP_TAG);
+#endif
 			portflag(P_SETFLAG,HUB_TAG);
 			break;
 		case HASH_TABLE_SIZE_ARG:
@@ -319,7 +323,8 @@ static int parse_globopt(int c, char *optarg)
 			break;
 #ifdef FSTP
 		case 'F':
-			fstflag(P_SETFLAG,FSTP_TAG);
+			if (!portflag(P_GETFLAG,HUB_TAG))
+				fstflag(P_SETFLAG,FSTP_TAG);
 			break;
 		case PRIORITY_ARG:
 			sscanf(optarg,"%i",&priority);
