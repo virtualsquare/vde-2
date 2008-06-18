@@ -362,7 +362,7 @@ static void fst_sendbpdu(int vlan,int port,int agr,int tc,int tcack)
 {
 	int now=qtime();
 	int age,nowvlan;
-	if (!(pflag & FSTP_TAG) || portflag(P_GETFLAG, HUB_TAG)) return;
+	if (!(pflag & FSTP_TAG)) return;
 	nowvlan=(fsttab[vlan]->rootport==0)?0:now; /* This switch is the root */
 	if (BA_CHECK(fsttab[vlan]->untag,port)) {
 		memcpy(outpacket.stp_root,fsttab[vlan]->root,SWITCHID_LEN);
@@ -610,6 +610,16 @@ static void fstnewvlan2(int vlan, void *arg)
 	fstnewvlan(vlan);
 }
 
+void fstpshutdown(void)
+{
+	if (pflag & FSTP_TAG)
+	{
+		qtimer_del(fst_timerno);
+		fstflag(P_CLRFLAG,FSTP_TAG);
+		BAC_FORALLFUN(validvlan,NUMOFVLAN,fstnewvlan2,NULL);
+	}
+}
+
 static int fstpsetonoff(FILE *fd, int val)
 {
 	int oldval=((pflag & FSTP_TAG) != 0);
@@ -743,7 +753,7 @@ void fst_init(int initnumports)
 {
 	numports=initnumports;
 	SETFSTID(myid,switchmac,priority);
-	if ((pflag & FSTP_TAG) && !portflag(P_GETFLAG, HUB_TAG))
+	if (pflag & FSTP_TAG)
 		fstinitpkt();
 	ADDCL(cl);
 #ifdef DEBUGOPT

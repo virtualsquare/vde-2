@@ -1,4 +1,5 @@
 /* Copyright 2005 Renzo Davoli VDE-2
+ * 2008 Luca Saiu (Marionnet project): a better hub implementation
  * Some minor remain from uml_switch Copyright 2002 Yon Uriarte and Jeff Dike
  * Licensed under the GPLv2 
  */
@@ -456,76 +457,83 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 		portv[port]->pktsin++;
 		portv[port]->bytesin+=len;
 #endif
-		if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00) {
-			tagged=1;
-			vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
-			if (! BA_CHECK(vlant[vlan].table,port))
-				return; /*discard unwanted packets*/
-		} else {
-			tagged=0;
-			if ((vlan=portv[port]->vlanuntag) == NOVLAN)
-				return; /*discard unwanted packets*/
-		}
+		if (pflag & HUB_TAG) { /* this is a HUB */
+			register int i;
+			for(i = 1; i < numports; i++)
+				if((i != port) && (portv[i] != NULL))
+					SEND_PACKET_PORT(portv[i],i,packet,len);
+		} else { /* This is a switch, not a HUB! */
+			if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00) {
+				tagged=1;
+				vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
+				if (! BA_CHECK(vlant[vlan].table,port))
+					return; /*discard unwanted packets*/
+			} else {
+				tagged=0;
+				if ((vlan=portv[port]->vlanuntag) == NOVLAN)
+					return; /*discard unwanted packets*/
+			}
 
 #ifdef FSTP
-		/* when it works as a HUB or FSTP is off, MST packet must be forwarded */
-		if (ISBPDU(packet) && !(pflag & HUB_TAG) && fstflag(P_GETFLAG, FSTP_TAG)) {
-			fst_in_bpdu(port,packet,len,vlan,tagged);
-			return; /* BPDU packets are not forwarded */
-		}
+			/* when it works as a HUB or FSTP is off, MST packet must be forwarded */
+			if (ISBPDU(packet) && fstflag(P_GETFLAG, FSTP_TAG)) {
+				fst_in_bpdu(port,packet,len,vlan,tagged);
+				return; /* BPDU packets are not forwarded */
+			}
 #endif
-		/* The port is in blocked status, no packet received */
-		if (BA_CHECK(vlant[vlan].notlearning,port)) return; 
+			/* The port is in blocked status, no packet received */
+			if (BA_CHECK(vlant[vlan].notlearning,port)) return; 
 
-		/* We don't like broadcast source addresses */
-		if(! ((IS_BROADCAST(packet->header.src)) || (pflag & HUB_TAG))) {
+			/* We don't like broadcast source addresses */
+			if(! (IS_BROADCAST(packet->header.src))) {
 
-			int last = find_in_hash_update(packet->header.src,vlan,port);
-			/* old value differs from actual input port */
-			if(last >=0 && (port != last)){
-				printlog(LOG_INFO,"MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d",packet->header.src[0],packet->header.src[1],packet->header.src[2],packet->header.src[3],packet->header.src[4],packet->header.src[5],last,port);
+				int last = find_in_hash_update(packet->header.src,vlan,port);
+				/* old value differs from actual input port */
+				if(last >=0 && (port != last)){
+					printlog(LOG_INFO,"MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d",packet->header.src[0],packet->header.src[1],packet->header.src[2],packet->header.src[3],packet->header.src[4],packet->header.src[5],last,port);
+				}
 			}
-		}
-		/* static void send_dst(int port,struct packet *packet, int len) */
-		if(IS_BROADCAST(packet->header.dest) || (pflag & HUB_TAG) || 
-				(tarport = find_in_hash(packet->header.dest,vlan)) < 0 ){
-			/* FST HERE! broadcast only on active ports*/
-			/* no cache or broadcast/multicast == all ports *except* the source port! */
-			/* BROADCAST: tag/untag. Broadcast the packet untouched on the ports
-			 * of the same tag-ness, then transform it to the other tag-ness for the others*/
-			if (tagged) {
-				register int i;
-				BA_FORALL(vlant[vlan].bctag,numports,
-						({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
-				packet=TAG2UNTAG(packet,len);
-				BA_FORALL(vlant[vlan].bcuntag,numports,
-						({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
-			} else { /* untagged */
-				register int i;
-				BA_FORALL(vlant[vlan].bcuntag,numports,
-						({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
-				packet=UNTAG2TAG(packet,vlan,len);
-				BA_FORALL(vlant[vlan].bctag,numports,
-						({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+			/* static void send_dst(int port,struct packet *packet, int len) */
+			if(IS_BROADCAST(packet->header.dest) || 
+					(tarport = find_in_hash(packet->header.dest,vlan)) < 0 ){
+				/* FST HERE! broadcast only on active ports*/
+				/* no cache or broadcast/multicast == all ports *except* the source port! */
+				/* BROADCAST: tag/untag. Broadcast the packet untouched on the ports
+				 * of the same tag-ness, then transform it to the other tag-ness for the others*/
+				if (tagged) {
+					register int i;
+					BA_FORALL(vlant[vlan].bctag,numports,
+							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+					packet=TAG2UNTAG(packet,len);
+					BA_FORALL(vlant[vlan].bcuntag,numports,
+							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+				} else { /* untagged */
+					register int i;
+					BA_FORALL(vlant[vlan].bcuntag,numports,
+							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+					packet=UNTAG2TAG(packet,vlan,len);
+					BA_FORALL(vlant[vlan].bctag,numports,
+							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
+				}
 			}
-		}
-		else {
-			/* the hash table should not generate tarport not in vlan 
-			 * any time a port is removed from a vlan, the port is flushed from the hash */
-			if (tarport==port)
-				return; /*do not loop!*/
-			if (tagged) {
-				if (portv[tarport]->vlanuntag==vlan) /* TAG->UNTAG */
-					SEND_PACKET_PORT(portv[tarport],tarport,TAG2UNTAG(packet,len),len);
-				else                               /* TAG->TAG */
-					SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
-			} else {
-				if (portv[tarport]->vlanuntag==vlan) /* UNTAG->UNTAG */
-					SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
-				else                               /* UNTAG->TAG */
-					SEND_PACKET_PORT(portv[tarport],tarport,UNTAG2TAG(packet,vlan,len),len);
-			}
-		} /* if(BROADCAST) */
+			else {
+				/* the hash table should not generate tarport not in vlan 
+				 * any time a port is removed from a vlan, the port is flushed from the hash */
+				if (tarport==port)
+					return; /*do not loop!*/
+				if (tagged) {
+					if (portv[tarport]->vlanuntag==vlan) /* TAG->UNTAG */
+						SEND_PACKET_PORT(portv[tarport],tarport,TAG2UNTAG(packet,len),len);
+					else                               /* TAG->TAG */
+						SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
+				} else {
+					if (portv[tarport]->vlanuntag==vlan) /* UNTAG->UNTAG */
+						SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
+					else                               /* UNTAG->TAG */
+						SEND_PACKET_PORT(portv[tarport],tarport,UNTAG2TAG(packet,vlan,len),len);
+				}
+			} /* if(BROADCAST) */
+		} /* if(HUB) */
 	} /* if(PACKETFILTER) */
 }
 
@@ -725,7 +733,13 @@ static int portresetcounters(char *arg)
 
 static int portsethub(int val)
 {
-	(val)?portflag(P_SETFLAG,HUB_TAG):portflag(P_CLRFLAG,HUB_TAG);
+	if (val) {
+#ifdef FSTP
+		fstpshutdown();
+#endif
+		portflag(P_SETFLAG,HUB_TAG);
+	} else
+		portflag(P_CLRFLAG,HUB_TAG);
 	return 0;
 }
 
