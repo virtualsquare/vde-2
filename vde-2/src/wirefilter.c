@@ -9,6 +9,7 @@
  * on a unix socket (see unixterm).
  */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -85,12 +86,18 @@ int daemonize; // daemon mode
 static char *pidfile = NULL;
 static char pidfile_path[PATH_MAX];
 static int logok=0;
+static int blinksock;
+static struct sockaddr_un blinksun;
+static char *blinkmsg;
+static char blinkidlen;
 
 #define BUFSIZE 2048
 #define MAXCMD 128
 #define MGMTMODEARG 129
 #define DAEMONIZEARG 130
 #define PIDFILEARG 131
+#define LOGSOCKETARG 132
+#define LOGIDARG 133
 #define KILO (1<<10)
 #define MEGA (1<<20)
 #define GIGA (1<<30)
@@ -227,6 +234,13 @@ static int nextms()
 
 static inline int outpacket(int dir,const unsigned char *buf,int size)
 {
+	if (blinksock) {
+		snprintf(blinkmsg+blinkidlen,20,"%s %d\n",
+				(ndirs==2)?((dir==0)?"LR":"RL"):"--",
+				size);
+		sendto(blinksock,blinkmsg,strlen(blinkmsg+blinkidlen)+blinkidlen,0,
+				(struct sockaddr *)&blinksun, sizeof(blinksun));
+	}
 	if (vdeplug[1-dir]) 
 		return vde_send(vdeplug[1-dir],buf+2,size-2,0);
 	else
@@ -237,9 +251,8 @@ int writepacket(int dir,const unsigned char *buf,int size)
 {
 	/* NOISE */
 	if (noise[dir]+noiseplus[dir] > 0) {
-		double noiseval=noise[dir];
+		double noiseval=noise[dir]+offset_distr(noisealg[dir],noiseplus[dir]);
 		int nobit=0;
-		if (noiseplus[dir]) noiseval+=offset_distr(noisealg[dir],noiseplus[dir]);
 		while ((drand48()*8*MEGA) < (size-2)*8*noiseval)
 			nobit++;
 		if (nobit>0) {
@@ -294,9 +307,7 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	/* CAPACITY */
 	/* when bandwidth is limited, packets exceeding capacity are discarded */
 	if (capacity[dir]+capacityplus[dir] > 0) {
-		double capval=capacity[dir];
-		if (capacityplus[dir])
-			capval+=offset_distr(capacityalg[dir],capacityplus[dir]);
+		double capval=capacity[dir]+offset_distr(capacityalg[dir],capacityplus[dir]);
 		if ((delay_bufsize[dir]+size) > capval)
 			return;
 	}
@@ -393,11 +404,8 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 		/* SPEED */
 		/* speed limit, if packets arrive too fast, delay the sender */
 		if (speed[dir]+speedplus[dir] > 0) {
-			double speedval=speed[dir];
-			if (speedplus[dir]) {
-				speedval+=offset_distr(speedalg[dir],speedplus[dir]);
-				if (speedval<=0) return;
-			}
+			double speedval=speed[dir]+offset_distr(speedalg[dir],speedplus[dir]);
+			if (speedval<=0) return;
 			if (speedval>0) {
 				unsigned int commtime=((unsigned)size)*1000000/((unsigned int)speedval);
 				struct timeval tv;
@@ -414,11 +422,8 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 		/* BANDWIDTH */
 		/* band, when band overflows, delay just the delivery */
 		if (band[dir]+bandplus[dir] > 0) {
-			double bandval=band[dir];
-			if (bandplus[dir]) {
-				bandval+=offset_distr(bandalg[dir],bandplus[dir]);
-				if (bandval<=0) return;
-			}
+			double bandval=band[dir]+offset_distr(bandalg[dir],bandplus[dir]);
+			if (bandval<=0) return;
 			if (bandval >0) {
 				unsigned int commtime=((unsigned)size)*1000000/((unsigned int)bandval);
 				struct timeval tv;
@@ -911,6 +916,11 @@ static int showinfo(int fd,char *s)
 	}
 	printoutc(fd,"Fifoness %s",(nofifo == 0)?"TRUE":"FALSE");
 	printoutc(fd,"Waiting packets in delay queues %d",npq);
+	if (blinksock) {
+		blinkmsg[(int)blinkidlen]=0;
+		printoutc(fd,"Blink socket: %s",blinksun.sun_path);
+		printoutc(fd,"Blink id:     %s",blinkmsg);
+	}
 	return 0;
 }
 
@@ -1019,6 +1029,8 @@ void usage(void)
 			"\t--vde-plug plug1:plug2 | -v plug1:plug2\n"
 			"\t--daemon\n"
 			"\t--pidfile pidfile\n"
+			"\t--blink blinksocket\n"
+			"\t--blinkid blink_id_string\n"
 			,progname);
 	exit (1);
 }
@@ -1046,13 +1058,14 @@ int main(int argc,char *argv[])
 		{"mgmtmode", 1, 0, MGMTMODEARG},
 		{"vde-plug",1,0,'v'},
 		{"daemon",0 , 0, DAEMONIZEARG},
-		{"pidfile", 1, 0, PIDFILEARG}
+		{"pidfile", 1, 0, PIDFILEARG},
+		{"blink",1,0,LOGSOCKETARG},
+		{"blinkid",1,0,LOGIDARG}
 	};
 	progname=basename(argv[0]);
 
 	setsighandlers();
 	atexit(cleanup);
-
 
 	while(1) {
 		int c;
@@ -1119,6 +1132,15 @@ int main(int argc,char *argv[])
 			case PIDFILEARG:
 				pidfile=strdup(optarg);
 				break;
+			case LOGSOCKETARG:
+				blinksun.sun_family = PF_UNIX;
+				snprintf(blinksun.sun_path,sizeof(blinksun.sun_path),"%s",optarg);
+				break;
+			case LOGIDARG:
+				if (blinkmsg) free(blinkmsg);
+				blinkidlen=strlen(optarg)+1;
+				asprintf(&blinkmsg,"%s 12345678901234567890",optarg);
+				break;
 			default:
 				usage();
 				break;
@@ -1126,6 +1148,14 @@ int main(int argc,char *argv[])
 	}
 	if (optind < argc)
 		usage();
+
+	if (blinksun.sun_path[0] != 0) {
+		blinksock=socket(AF_UNIX, SOCK_DGRAM, 0);
+		if (blinkmsg==NULL) {
+			blinkidlen=7;
+			asprintf(&blinkmsg,"%06d 12345678901234567890",getpid());
+		}
+	}
 
 	/* pfd structure:
 	 * monodir: 0 input LR, 1 mgmtctl, >1  mgmt open conn (mgmtindex==ndirs==1)
