@@ -5,6 +5,7 @@ wirefilter \- Wire packet filter for Virtual Distributed Ethernet
 .B wirefilter
 
 [\fB\-l\fI loss\fR]
+[\fB\-l\fI lostburst\fR]
 [\fB\-d\fI delay\fR]
 [\fB\-D\fI dup\fR]
 [\fB\-b\fI bandwidth\fR]
@@ -40,13 +41,24 @@ percentage of loss as a floating point number. It is possible to specify
 different loss percentage for the two channels: LR20.5 means 20.5% of packet
 flowing left to right are lost, RL10 means 10% from right to left.
 .TP
-.B \-d "\fIdelay\fP"
-Extra delay (in milliseconds). This delay is added to the real communication delay.
-Packets are temporarily stored and resent after the delay.
-It is possible to specify different values for LR and RL like in the previous option.
-When the delay is specified as two numbers with a + in between, the first is the standard
-delay and the second is a random variation. 1000+500 means that the delay can be 
-randomly chosen between half second and 1.5 seconds.
+.B \-L "\fIlostburst\fP"
+when this is not zero, wirefilter uses the Gilbert model for bursty errors.
+This is the mean length of lost packet bursts. (it is a two state Markov
+chain: the probability to exit from the faulty state is \fI1/lostburst\fP, the
+probability to enter the faulty state is \fIloss/(lostburst-(1-loss))\fP. The
+loss rate converges to the value \fIloss\fR.
+.TP
+.B \-d "\fIdelay\fP" 
+Extra delay (in milliseconds). This delay is added to the
+real communication delay.  Packets are temporarily stored and resent after the
+delay.  It is possible to specify different values for LR and RL like in the
+previous option.  When the delay is specified as two numbers with a + in
+between, the first is the standard delay and the second is a random variation.
+1000+500 means that the delay can be randomly chosen between half second and
+1.5 seconds. It is possible to add 'U' or 'N' at the end. 1000+500U means that
+the dealys are uniformly distributed, 1000+500N means that the delays follow
+a Gaussian normal distribution (more than 98% of the values are inside the
+limits).
 .TP
 .B \-D "\fIdup\fP"
 percentage of dup packet. It has the same syntax of -l. Do not use dup factor 100% 
@@ -58,6 +70,8 @@ use suffixes K,M,G to abbreviate 2^10, 2^20, 2^30.
 128K means 128KBytes/sec. 128+64K means 64i to 196KBytes/sec.
 Sender is not prevented from sending packets, delivery is delayed to limit the bandwidth
 to the desired value. (Like a bottleneck along the path)
+U and N after the values (e.g. 128+64KN) set the statistic distribution to
+use (uniform or normal).
 .TP
 .B \-s "\fIspeed\fP"
 Interface speed in Bytes/sec. It has the same syntax of -b. Input is blocked for
