@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <signal.h>
+#include <math.h>
 #include <stdarg.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -56,6 +57,7 @@ int mgmtmode=0700;
 #define LR 0
 #define RL 1
 double loss[2],lossplus[2];
+double lostburst[2],lostburstplus[2];
 double delay[2],delayplus[2];
 double ddup[2],ddupplus[2];
 double band[2],bandplus[2];
@@ -63,6 +65,15 @@ double speed[2],speedplus[2];
 double capacity[2],capacityplus[2];
 double noise[2],noiseplus[2];
 double mtu[2],mtuplus[2];
+#define ALGO_UNIFORM      0
+#define ALGO_GAUSS_NORMAL 1
+static char charalgo[]="UN";
+char lossalg[2],lostburstalg[2],delayalg[2],ddupalg[2];
+char bandalg[2],speedalg[2],capacityalg[2],noisealg[2],mtualg[2];
+/*for the Gilber model */
+#define OK_BURST 0
+#define FAULTY_BURST 1
+char loss_status[2];
 struct timeval nextband[2];
 struct timeval nextspeed[2];
 int nofifo; 
@@ -84,6 +95,37 @@ static int logok=0;
 #define MEGA (1<<20)
 #define GIGA (1<<30)
 
+static void initrand()
+{
+	struct timeval v;
+	gettimeofday(&v,NULL);
+	srand48(v.tv_sec ^ v.tv_usec ^ getpid());
+}
+
+/*more than 98% inside the bell */
+#define SIGMA (1.0/3.0)
+static double offset_distr(char algorithm,double range)
+{
+	if (range == 0)
+		return 0;
+	switch (algorithm) {
+		case ALGO_UNIFORM:
+			return range*((drand48()*2.0)-1.0);
+		case ALGO_GAUSS_NORMAL:
+			{
+				double x,y,r2;
+				do {
+					x = (2*drand48())-1;
+					y = (2*drand48())-1;
+					r2=x*x+y*y;
+				} while (r2 >= 1.0);
+				return range * SIGMA * x * sqrt ( (-2 * log(r2)) /r2);
+			}
+		default:
+			return 0.0;
+	}
+}
+
 void printlog(int priority, const char *format, ...)
 {
 	va_list arg;
@@ -100,17 +142,30 @@ void printlog(int priority, const char *format, ...)
 	va_end (arg);
 }
 
-static void readdualvalue(char *s,double *val,double *valplus)
+static void readdualvalue(char *s,double *val,double *valplus,char *algorithm)
 {
 	double v=0.0;
 	double vplus=0.0;
 	int n;
 	int mult;
+	char algo=ALGO_UNIFORM;
 	n=strlen(s)-1;
 	while ((s[n] == ' ' || s[n] == '\n' || s[n] == '\t') && n>0)
 	{
 		s[n]=0;
 		n--;
+	}
+	switch (s[n]) {
+		case 'u':
+		case 'U':
+			algo=ALGO_UNIFORM;
+			n--;
+			break;
+		case 'n':
+		case 'N':
+			algo=ALGO_GAUSS_NORMAL;
+			n--;
+			break;
 	}
 	switch (s[n]) {
 		case 'k':
@@ -132,12 +187,15 @@ static void readdualvalue(char *s,double *val,double *valplus)
 	if ((n=sscanf(s,"%lf+%lf",&v,&vplus)) > 0) {
 		val[LR]=val[RL]=v*mult;
 		valplus[LR]=valplus[RL]=vplus*mult;
+		algorithm[LR]=algorithm[RL]=algo;
 	} else if ((n=sscanf(s,"LR%lf+%lf",&v,&vplus)) > 0) {
 		val[LR]=v*mult;
 		valplus[LR]=vplus*mult;
+		algorithm[LR]=algo;
 	} else if ((n=sscanf(s,"RL%lf+%lf",&v,&vplus)) > 0) {
 		val[RL]=v*mult;
 		valplus[RL]=vplus*mult;
+		algorithm[RL]=algo;
 	}
 }
 
@@ -181,7 +239,7 @@ int writepacket(int dir,const unsigned char *buf,int size)
 	if (noise[dir]+noiseplus[dir] > 0) {
 		double noiseval=noise[dir];
 		int nobit=0;
-		if (noiseplus[dir]) noiseval+=((drand48()*2.0)-1.0)*noiseplus[dir];
+		if (noiseplus[dir]) noiseval+=offset_distr(noisealg[dir],noiseplus[dir]);
 		while ((drand48()*8*MEGA) < (size-2)*8*noiseval)
 			nobit++;
 		if (nobit>0) {
@@ -234,10 +292,11 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	struct timeval v;
 
 	/* CAPACITY */
+	/* when bandwidth is limited, packets exceeding capacity are discarded */
 	if (capacity[dir]+capacityplus[dir] > 0) {
 		double capval=capacity[dir];
 		if (capacityplus[dir])
-			capval+=((drand48()*2.0)-1.0)*capacityplus[dir];
+			capval+=offset_distr(capacityalg[dir],capacityplus[dir]);
 		if ((delay_bufsize[dir]+size) > capval)
 			return;
 	}
@@ -288,22 +347,43 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 void handle_packet(int dir,const unsigned char *buf,int size)
 {
 	/* MTU */
+	/* if the packet is incosistent with the MTU of the line just drop it */
 	if (mtu[dir] > 0 && size > mtu[dir])
 		return;
 
 	/* LOSS */
+	/* Total packet loss */
 	if (loss[dir]-lossplus[dir] >= 100.0)
 		return;
-	if (loss[dir]+lossplus[dir] > 0) {
-		double losval=(loss[dir]+((drand48()*2.0)-1.0)*lossplus[dir])/100;
+	/* probabilistic loss */
+	if (lostburst[dir]+ lostburstplus[dir] > 0) {
+		/* Gilbert model */
+		double losval=(loss[dir]+offset_distr(lossalg[dir],lossplus[dir]))/100;
+		double burstlen=(lostburst[dir]+offset_distr(lostburstalg[dir],lostburstplus[dir]));
+		double alpha=losval / (burstlen*(1-losval));
+		double beta=1.0 / burstlen;
+		switch (loss_status[dir]) {
+			case OK_BURST:
+				if (drand48() < alpha) loss_status[dir]=FAULTY_BURST;
+				break;
+			case FAULTY_BURST:
+				if (drand48() < beta) loss_status[dir]=OK_BURST;
+				break;
+		}
+		if (loss_status[dir] != OK_BURST)
+			return;
+	} else if (loss[dir]+lossplus[dir] > 0) {
+		/* standard non bursty model */
+		double losval=(loss[dir]+offset_distr(lossalg[dir],lossplus[dir]))/100;
 		if (drand48() < losval)
 			return;
 	}
 
 	/* DUP */
+	/* times is the number of dup packets */
 	int times=1;
 	if (ddup[dir]+ddupplus[dir] > 0) {
-		double dupval=(ddup[dir]+((drand48()*2.0)-1.0)*ddupplus[dir])/100;
+		double dupval=(ddup[dir]+offset_distr(ddupalg[dir],ddupplus[dir]))/100;
 		while (drand48() < dupval)
 			times++;
 	}
@@ -311,13 +391,14 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 		int banddelay=0;
 
 		/* SPEED */
+		/* speed limit, if packets arrive too fast, delay the sender */
 		if (speed[dir]+speedplus[dir] > 0) {
 			double speedval=speed[dir];
 			if (speedplus[dir]) {
-				speedval+=((drand48()*2.0)-1.0)*speedplus[dir];
+				speedval+=offset_distr(speedalg[dir],speedplus[dir]);
 				if (speedval<=0) return;
 			}
-			if (speed>0) {
+			if (speedval>0) {
 				unsigned int commtime=((unsigned)size)*1000000/((unsigned int)speedval);
 				struct timeval tv;
 				gettimeofday(&tv,NULL);
@@ -331,13 +412,14 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 		}
 
 		/* BANDWIDTH */
+		/* band, when band overflows, delay just the delivery */
 		if (band[dir]+bandplus[dir] > 0) {
 			double bandval=band[dir];
 			if (bandplus[dir]) {
-				bandval+=((drand48()*2.0)-1.0)*bandplus[dir];
+				bandval+=offset_distr(bandalg[dir],bandplus[dir]);
 				if (bandval<=0) return;
 			}
-			if (band>0) {
+			if (bandval >0) {
 				unsigned int commtime=((unsigned)size)*1000000/((unsigned int)bandval);
 				struct timeval tv;
 				gettimeofday(&tv,NULL);
@@ -356,9 +438,10 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 		}
 
 		/* DELAY */
+		/* line delay */
 		if (banddelay >= 0) {
 			if (banddelay > 0 || delay[dir]+delayplus[dir] > 0) {
-				double delval=(delay[dir]+((drand48()*2.0)-1.0)*delayplus[dir]);
+				double delval=(delay[dir]+offset_distr(delayalg[dir],delayplus[dir]));
 				delval=(delval >= 0)?delval+banddelay:banddelay;
 				if (delval > 0) {
 					packet_enqueue(dir,buf,size,(int) delval); 
@@ -434,13 +517,6 @@ static void packet_in(int dir)
 			exit (0);
 		splitpacket(buf,n,dir);
 	}
-}
-
-static void initrand()
-{
-	struct timeval v;
-	gettimeofday(&v,NULL);
-	srand48(v.tv_sec ^ v.tv_usec ^ getpid());
 }
 
 static int check_open_fifos_n_plugs(struct pollfd *pfd,int *outfd,char *vdepath[],VDECONN *vdeplug[])
@@ -694,49 +770,59 @@ static void printoutc(int fd, const char *format, ...)
 
 static int setdelay(int fd,char *s)
 {
-	readdualvalue(s,delay,delayplus);
+	readdualvalue(s,delay,delayplus,delayalg);
 	return 0;
 }
 
 static int setloss(int fd,char *s)
 {
-	readdualvalue(s,loss,lossplus);
+	readdualvalue(s,loss,lossplus,lossalg);
+	return 0;
+}
+
+static int setlostburst(int fd,char *s)
+{
+	readdualvalue(s,lostburst,lostburstplus,lostburstalg);
+	if (lostburst[LR]+lostburstplus[LR] == 0)
+		loss_status[LR]=OK_BURST;
+	if (lostburst[RL]+lostburstplus[RL] == 0)
+		loss_status[RL]=OK_BURST;
 	return 0;
 }
 
 static int setddup(int fd,char *s)
 {
-	readdualvalue(s,ddup,ddupplus);
+	readdualvalue(s,ddup,ddupplus,ddupalg);
 	return 0;
 }
 
 static int setband(int fd,char *s)
 {
-	readdualvalue(s,band,bandplus);
+	readdualvalue(s,band,bandplus,bandalg);
 	return 0;
 }
 
 static int setnoise(int fd,char *s)
 {
-	readdualvalue(s,noise,noiseplus);
+	readdualvalue(s,noise,noiseplus,noisealg);
 	return 0;
 }
 
 static int setmtu(int fd,char *s)
 {
-	readdualvalue(s,mtu,mtuplus);
+	readdualvalue(s,mtu,mtuplus,mtualg);
 	return 0;
 }
 
 static int setspeed(int fd,char *s)
 {
-	readdualvalue(s,speed,speedplus);
+	readdualvalue(s,speed,speedplus,speedalg);
 	return 0;
 }
 
 static int setcapacity(int fd,char *s)
 {
-	readdualvalue(s,capacity,capacityplus);
+	readdualvalue(s,capacity,capacityplus,capacityalg);
 	return 0;
 }
 
@@ -766,6 +852,7 @@ static int help(int fd,char *s)
 	printoutc(fd, "help:      print a summary of mgmt commands");
 	printoutc(fd, "showinfo:  show status and parameter values");
 	printoutc(fd, "loss:      set loss percentage");
+	printoutc(fd, "lostburst: mean length of lost packet bursts");
 	printoutc(fd, "delay:     set delay ms");
 	printoutc(fd, "dup:       set dup packet percentage");
 	printoutc(fd, "bandwidth: set channel bandwidth bytes/sec");
@@ -779,28 +866,47 @@ static int help(int fd,char *s)
 	return 0;
 }
 
+#define CHARALGO(X) (charalgo[(int)(X)])
 static int showinfo(int fd,char *s)
 {
 	printoutc(fd, "WireFilter: %sdirectional",(ndirs==2)?"bi":"mono");
 	if (ndirs==2) {
-		printoutc(fd, "Loss  L->R %g+%g   R->L %g+%g",loss[LR],lossplus[LR],loss[RL],lossplus[RL]);
-		printoutc(fd, "Delay L->R %g+%g   R->L %g+%g",delay[LR],delayplus[LR],delay[RL],delayplus[RL]);
-		printoutc(fd, "Dup   L->R %g+%g   R->L %g+%g",ddup[LR],ddupplus[LR],ddup[RL],ddupplus[RL]);
-		printoutc(fd, "Bandw L->R %g+%g   R->L %g+%g",band[LR],bandplus[LR],band[RL],bandplus[RL]);
-		printoutc(fd, "Speed L->R %g+%g   R->L %g+%g",speed[LR],speedplus[LR],speed[RL],speedplus[RL]);
-		printoutc(fd, "Noise L->R %g+%g   R->L %g+%g",noise[LR],noiseplus[LR],noise[RL],noiseplus[RL]);
-		printoutc(fd, "MTU   L->R %g      R->L %g   ",mtu[LR],mtu[RL]);
-		printoutc(fd, "Cap.  L->R %g+%g   R->L %g+%g",capacity[LR],capacityplus[LR],capacity[RL],capacityplus[RL]);
+		printoutc(fd, "Loss   L->R %g+%g%c   R->L %g+%g%c",
+				loss[LR],lossplus[LR],CHARALGO(lossalg[LR]),
+				loss[RL],lossplus[RL],CHARALGO(lossalg[RL]));
+		printoutc(fd, "Lburst L->R %g+%g%c   R->L %g+%g%c",
+				lostburst[LR],lostburstplus[LR],CHARALGO(lostburstalg[LR]),
+				lostburst[RL],lostburstplus[RL],CHARALGO(lostburstalg[RL]));
+		printoutc(fd, "Delay  L->R %g+%g%c   R->L %g+%g%c",
+				delay[LR],delayplus[LR],CHARALGO(delayalg[LR]),
+				delay[RL],delayplus[RL],CHARALGO(delayalg[RL]));
+		printoutc(fd, "Dup    L->R %g+%g%c   R->L %g+%g%c",
+				ddup[LR],ddupplus[LR],CHARALGO(ddupalg[LR]),
+				ddup[RL],ddupplus[RL],CHARALGO(ddupalg[RL]));
+		printoutc(fd, "Bandw  L->R %g+%g%c   R->L %g+%g%c",
+				band[LR],bandplus[LR],CHARALGO(bandalg[LR]),
+				band[RL],bandplus[RL],CHARALGO(bandalg[RL]));
+		printoutc(fd, "Speed  L->R %g+%g%c   R->L %g+%g%c",
+				speed[LR],speedplus[LR],CHARALGO(speedalg[LR]),
+				speed[RL],speedplus[RL],CHARALGO(speedalg[RL]));
+		printoutc(fd, "Noise  L->R %g+%g%c   R->L %g+%g%c",
+				noise[LR],noiseplus[LR],CHARALGO(noisealg[LR]),
+				noise[RL],noiseplus[RL],CHARALGO(noisealg[RL]));
+		printoutc(fd, "MTU    L->R %g     R->L %g   ",mtu[LR],mtu[RL]);
+		printoutc(fd, "Cap.   L->R %g+%g%c   R->L %g+%g%c",
+				capacity[LR],capacityplus[LR],CHARALGO(capacityalg[LR]),
+				capacity[RL],capacityplus[RL],CHARALGO(capacityalg[RL]));
 		printoutc(fd, "Current Delay Queue size:   L->R %d      R->L %d   ",delay_bufsize[LR],delay_bufsize[RL]);
 	} else {
-		printoutc(fd, "Loss  %g+%g",loss[0],lossplus[0]);
-		printoutc(fd, "Delay %g+%g",delay[0],delayplus[0]);
-		printoutc(fd, "Dup   %g+%g",ddup[0],ddupplus[0]);
-		printoutc(fd, "Bandw %g+%g",band[0],bandplus[0]);
-		printoutc(fd, "Speed %g+%g",speed[0],speedplus[0]);
-		printoutc(fd, "Noise %g+%g",noise[0],noiseplus[0]);
-		printoutc(fd, "MTU   %g",mtu[0]);
-		printoutc(fd, "Cap.  %g+%g",capacity[0],capacityplus[0]);
+		printoutc(fd, "Loss   %g+%g%c",loss[0],lossplus[0]);
+		printoutc(fd, "Lburst %g+%g%c",lostburst[0],lostburstplus[0]);
+		printoutc(fd, "Delay  %g+%g%c",delay[0],delayplus[0]);
+		printoutc(fd, "Dup    %g+%g%c",ddup[0],ddupplus[0]);
+		printoutc(fd, "Bandw  %g+%g%c",band[0],bandplus[0]);
+		printoutc(fd, "Speed  %g+%g%c",speed[0],speedplus[0]);
+		printoutc(fd, "Noise  %g+%g%c",noise[0],noiseplus[0]);
+		printoutc(fd, "MTU    %g",mtu[0]);
+		printoutc(fd, "Cap.   %g+%g%c",capacity[0],capacityplus[0]);
 		printoutc(fd, "Current Delay Queue size:   %d",delay_bufsize[0]);
 	}
 	printoutc(fd,"Fifoness %s",(nofifo == 0)?"TRUE":"FALSE");
@@ -818,6 +924,7 @@ static struct comlist {
 	{"showinfo",showinfo, WITHFD},
 	{"delay",setdelay, 0},
 	{"loss",setloss, 0},
+	{"lostburst",setlostburst, 0},
 	{"dup",setddup, 0},
 	{"bandwidth",setband, 0},
 	{"band",setband, 0},
@@ -898,6 +1005,7 @@ void usage(void)
 	fprintf(stderr,"Usage: %s OPTIONS\n"
 			"\t--help|-h\n"
 			"\t--loss|-l loss_percentage\n"
+			"\t--lostburst|-L lost_packet_burst_len\n"
 			"\t--delay|-d delay_ms\n"
 			"\t--dup|-D dup_percentage\n"
 			"\t--band|-b bandwidth(bytes/s)\n"
@@ -925,6 +1033,7 @@ int main(int argc,char *argv[])
 	static struct option long_options[] = {
 		{"help",0 , 0, 'h'},
 		{"loss", 1, 0, 'l'},
+		{"lostburst", 1, 0, 'L'},
 		{"delay",1 , 0, 'd'},
 		{"dup",1 , 0, 'D'},
 		{"band",1 , 0, 'b'},
@@ -947,7 +1056,7 @@ int main(int argc,char *argv[])
 
 	while(1) {
 		int c;
-		c = GETOPT_LONG (argc, argv, "hnl:d:M:D:m:b:s:c:v:",
+		c = GETOPT_LONG (argc, argv, "hnl:d:M:D:m:b:s:c:v:L:",
 				long_options, &option_index);
 		if (c<0)
 			break;
@@ -956,28 +1065,31 @@ int main(int argc,char *argv[])
 				usage();
 				break;
 			case 'd':
-				readdualvalue(optarg,delay,delayplus);
+				readdualvalue(optarg,delay,delayplus,delayalg);
 				break;
 			case 'l':
-				readdualvalue(optarg,loss,lossplus);
+				readdualvalue(optarg,loss,lossplus,lossalg);
+				break;
+			case 'L':
+				readdualvalue(optarg,lostburst,lostburstplus,lostburstalg);
 				break;
 			case 'D':
-				readdualvalue(optarg,ddup,ddupplus);
+				readdualvalue(optarg,ddup,ddupplus,ddupalg);
 				break;
 			case 'b':
-				readdualvalue(optarg,band,bandplus);
+				readdualvalue(optarg,band,bandplus,bandalg);
 				break;
 			case 'm':
-				readdualvalue(optarg,mtu,mtuplus);
+				readdualvalue(optarg,mtu,mtuplus,mtualg);
 				break;
 			case 'n':
-				readdualvalue(optarg,noise,noiseplus);
+				readdualvalue(optarg,noise,noiseplus,noisealg);
 				break;
 			case 's':
-				readdualvalue(optarg,speed,speedplus);
+				readdualvalue(optarg,speed,speedplus,speedalg);
 				break;
 			case 'c':
-				readdualvalue(optarg,capacity,capacityplus);
+				readdualvalue(optarg,capacity,capacityplus,capacityalg);
 				break;
 			case 'M':
 				mgmt=strdup(optarg);
@@ -1128,22 +1240,25 @@ int main(int argc,char *argv[])
 		}
 		if (n>0) { // if there are already events to handle (performance: packet switching first)
 			int mgmtfdstart=consoleindex;
+			if (mgmtindex >= 0) mgmtfdstart=mgmtindex+1;
+			if (mgmtfdstart >= 0 && npfd > mgmtfdstart) {
+				register int i;
+				for (i=mgmtfdstart;i<npfd;i++) {
+					if (pfd[i].revents & POLLIN && mgmtcommand(pfd[i].fd) < 0)
+						pfd[i].revents |= POLLHUP;
+					if (pfd[i].revents) n--;
+				}
+				for (i=mgmtfdstart;i<npfd;i++) {
+					if (pfd[i].revents & POLLHUP)
+						npfd=delmgmtconn(i,pfd,npfd);
+				}
+			} 
 			if (mgmtindex >= 0) {
 				if (pfd[mgmtindex].revents != 0) {
 					npfd=newmgmtconn(pfd[mgmtindex].fd,pfd,npfd);
 					n--;
 				}
-				mgmtfdstart=mgmtindex+1;
 			}
-			if (mgmtfdstart >= 0 && npfd > mgmtfdstart) {
-				register int i;
-				for (i=mgmtfdstart;i<npfd;i++) {
-					if (pfd[i].revents & POLLHUP ||
-							(pfd[i].revents & POLLIN && mgmtcommand(pfd[i].fd) < 0))
-						npfd=delmgmtconn(i,pfd,npfd);
-					if (pfd[i].revents) n--;
-				}
-			} 
 /*			if (n>0) // if there are already pending events, it means that a ctlfd has hunged up
 				exit(0);*/
 		}

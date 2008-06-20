@@ -30,7 +30,7 @@ if ENABLE_CRYPTCAB
 endif
 
 AM_CPPFLAGS = -I$(top_srcdir)/include
-LDADD = common/libvdecommon.la
+LDADD = common/libvdecommon.la -lm
 
 vde_autolink_LDADD = $(LDADD) lib/libvdemgmt.la
 vde_plug2tap_LDADD =$(LDADD) lib/libvdeplug.la
