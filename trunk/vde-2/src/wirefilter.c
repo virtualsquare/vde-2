@@ -2,6 +2,9 @@
  * Licensed under the GPLv2
  * Modified by Ludovico Gardenghi 2005
  * Modified by Renzo Davoli, Luca Bigliardi 2007
+ * Gauss normal distribution/blinking support, requested and parlty implemented
+ * by Luca Saiu and Jean-Vincent Loddo (Marionnet project)
+ * Gilbert model for packet loss requested by Leandro Galvao.
  *
  * This filter can be used for testing network protcols. 
  * It is possible to loose, delay or reorder packets.
