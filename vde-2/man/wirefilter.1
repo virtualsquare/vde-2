@@ -15,6 +15,10 @@ wirefilter \- Wire packet filter for Virtual Distributed Ethernet
 [\fB\-m\fI mtu_size\fR]
 [\fB\-M\fI mgmt socket\fR]
 [\fB\-v\fI vde_plug1:vde_plug2\fR]
+[\fB\--daemon\fI]
+[\fB\--pidfile\fI pidfile_path]
+[\fB\--blink\fI blink]
+[\fB\--blinkid\fI blink_identifier]
 [\fB-N\fR]
 .br
 .SH DESCRIPTION
@@ -97,6 +101,36 @@ changed runtime. unixterm(1) can be used as a remote terminal for wirefilter.
 .B \-v "\fIvde_plug1:vde_plug2\fP"
 If this option is used, the two local vde_plugs (vde_plug1 and vde_plug2) will be connected each other instead of stdin/stdout,
 using the libvdeplug libraries. 
+.TP
+.B \--mgmtmode "\fImode\fP" 
+this option sets the access mode of the mgmt socket.
+.TP
+.B \--daemon\fP 
+wirefilter becomes a daemon
+.TP
+.B \--pidfile "\fIpathnamefP"
+wirefilter saves its pid into the  file.
+.TP
+.B \--blinkid "\fIname\fP"                       
+This option defines the id sent for each packet to the blink server 
+(see the --blink option below).
+The stardard identifier for a wirefilter is the process pid.
+.TP
+.B \--blink "\fIsocket\fP"        
+wirefilter sends a log message to the specified PF_UNIX/DATAGRAM socket 
+for each packet sent. Each packet has the format: id direction length.
+e.g:
+.sp
+.in +4n
+.nf
+6768 LR 44
+6768 LR 44
+6768 RL 100
+6768 LR 100
+6768 LR 44
+.fi
+.in
+.sp
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
