@@ -492,7 +492,10 @@ int main(int argc, char **argv)
 					exit(1);
 				} else {
 					if ((exit_value < 256) || !daemonize)
+					{
+						cleanup();
 						exit(exit_value);
+					}
 				}
 			} else {
 				for (i=0; i<nb_nics; i++) {
@@ -540,3 +543,5 @@ int main(int argc, char **argv)
 	cleanup();
 	return(0);
 }
+
+/* vim: set ts=2 sts=2 sw=2: */

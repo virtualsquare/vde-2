@@ -1,5 +1,11 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include
 bin_PROGRAMS = vde_over_ns
+
+if ENABLE_PROFILE
+  AM_CFLAGS = -pg --coverage
+  AM_LDFLAGS = -pg --coverage
+endif
+
 vde_over_ns_SOURCES = \
 	vde_over_ns.c \
 	dns.c \

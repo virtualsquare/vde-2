@@ -97,6 +97,12 @@ Linux, Darwin and FreeBSD are supported. Contributions are appreciated! :-)])
 		;;
 esac
 
+# Enable profiling options
+AC_ARG_ENABLE([profile],
+	AS_HELP_STRING([--enable-profile],
+		[Compile with debugging/profiling options]),
+	[if test $enableval = "yes"; then enable_profile=yes; fi])
+
 # Enable experimental features
 AC_ARG_ENABLE([experimental],
 	AS_HELP_STRING([--enable-experimental],
@@ -158,6 +164,7 @@ AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
 AM_CONDITIONAL(ENABLE_EXPERIMENTAL, test "$enable_experimental" = yes)
+AM_CONDITIONAL(ENABLE_PROFILE, test "$enable_profile" = yes)
 AM_CONDITIONAL(DARWIN_GCC, test "$darwin_gcc" = yes)
 
 if test "x${prefix}" = "xNONE"; then
@@ -218,6 +225,12 @@ if test x$enable_experimental = "xyes" ; then
 	echo " + Experimental features... enabled"
 else
 	echo " - Experimental features... disabled"
+fi
+
+if test x$enable_profile = "xyes" ; then
+	echo " + Profiling options....... enabled"
+else
+	echo " - Profiling options....... disabled"
 fi
 
 echo

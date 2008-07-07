@@ -27,6 +27,11 @@ vde_switch_LDADD = $(top_srcdir)/src/common/libvdecommon.la
 AM_CPPFLAGS = -I$(top_srcdir)/include
 AM_CFLAGS = -Wall
 
+if ENABLE_PROFILE
+  AM_CFLAGS += -pg --coverage
+  AM_LDFLAGS = -pg --coverage
+endif
+
 if DARWIN_GCC
  EXP_CFLAGS = -dynamic
 else
