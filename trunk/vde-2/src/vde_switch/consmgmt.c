@@ -340,7 +340,7 @@ static int runscript(int fd,char *path)
 	FILE *f=fopen(path,"r");
 	char buf[MAXCMD];
 	if (f==NULL)
-		return ENOENT;
+		return errno;
 	else {
 		while (fgets(buf,MAXCMD,f) != NULL) {
 			if (strlen(buf) > 1 && buf[strlen(buf)-1]=='\n') buf[strlen(buf)-1]= '\0';
@@ -352,6 +352,7 @@ static int runscript(int fd,char *path)
 			}
 			handle_cmd(mgmt_data, fd, buf);
 		}
+		fclose(f);
 		return 0;
 	}
 }
