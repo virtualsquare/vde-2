@@ -4,20 +4,32 @@ vdeq \- Virtual Distributed Ethernet wrapper for QEMU/KVM virtual machines
 .SH SYNOPSIS
 .B vdeq
 .B qemu
-.I ... qemu options ...
+[
+.B \-\-mod
+.I octalmode
+]
+.I QEMU_OPTIONS
 .B -net vde[,vlan=n][,sock=socketpath][,port=n]
-.I ... other qemu options ...
+.I QEMU_OPTIONS
 .br
 .B vdeq
 .B kvm
-.I ... kvm options ...
+[
+.B \-\-mod
+.I octalmode
+]
+.I KVM_OPTIONS
 .B -net vde[,vlan=n][,sock=socketpath][,port=n]
-.I ... other kvm options ...
+.I KVM_OPTIONS
 .br
 .B vde\fP{\fIqemu_name\fP}
-.I ... qemu options ...
+[
+.B \-\-mod
+.I octalmode
+]
+.I QEMU_OPTIONS
 .B -net vde[,vlan=n][,sock=socketpath][,port=n]
-.I ... other qemu options ...
+.I QEMU_OPTIONS
 .br
 
 .SH OLD SYNOPSIS
