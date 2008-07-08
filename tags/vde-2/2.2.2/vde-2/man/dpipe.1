@@ -1,0 +1,96 @@
+.TH DPIPE 1 "December 6, 2006" "Virtual Distributed Ethernet"
+.SH NAME
+dpipe \- bi-directional pipe command
+.SH SYNOPSIS
+.B dpipe 
+[ 
+.I command
+[
+.I args
+]
+]
+.BI =
+[
+.I command
+[
+.I args
+]
+]
+.br
+.B dpipe 
+[ 
+.I command
+[
+.I args
+]
+]
+.BI =
+[
+.I command
+[
+.I args
+]
+]
+[
+.BI =
+[
+.I command
+[
+.I args
+]
+]
+]
+\&...
+.br
+.SH DESCRIPTION
+\fBdpipe\fP is a general tool to run two commands diverting the
+standard output of the first command into the standard input of the second
+and vice-versa.
+It is the bi-directional
+extension of the \fB|\fP (pipe) syntax used by all the shells.
+The \fB=\fP has been chosen as a metaphor of two parallel communication lines
+between the commands.
+It is also possible to concatenate several tools. Intermediate programs communicate
+using standard input and standard output with the preceding tool and alternate standard input
+and output (respectively file descriptors number 3 and 4) towards the following tool.
+If an intermediate tool should process only the data flowing in one direction 
+use \fB{\fP or \fB}\fP
+as suffix for the preceding \fB=\fP and prefix of the following one.
+.br
+This tool has been written as a tool for the Virtual Distributed Ethernet.
+.SH EXAMPLE
+.B dpipe a = b
+.br
+processes a and b are bidirectionally connected: stdin of a is connected to stdout of b 
+and vice-versa
+.br
+.B dpipe a = b = c
+.br
+a and b are connected as above. Alternate stdin of b is connected to stdout of c and
+alternate stdout of b to stdin of c
+.br
+.B dpipe a =} b }= c
+.br
+This is a cycle of pipes: stdout of a is connected to stdin of b, stdout of b with stdin
+of c, and stdout of c to stdin of a
+.br
+.B dpipe a =} b }={ c {= d = e
+.br
+all the notations can be mixed together.
+this is a -> b -> d -> c and back to a; alternate ports of d are connected to e
+.SH OPTIONS
+no options.
+.SH NOTICE
+Virtual Distributed Ethernet is not related in any way with
+www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
+i.e. the German "Association for Electrical, Electronic & Information
+Technologies").
+.SH SEE ALSO
+\fBvde_switch\fP(1),
+\fBvde_plug\fP(1),
+\fBvde_plug2tap\fP(1),
+\fBvdeq\fP(1).
+\fBwirefilter\fP(1).
+.br
+.SH AUTHOR
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>.
