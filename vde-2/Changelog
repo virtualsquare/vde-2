@@ -1,3 +1,14 @@
+VDE 2.2.2, 2008-07-08
+	* Added --enable-profile to configure (for profiling)
+	* Added cleanup() in vdeq on successfull termination (thanks huslu)
+	* Added --mod to new syntax in vdeq man page
+	* Fixed fd leak in runscript() (Closes: #2009311 on SF)
+	* wirefilter man and code cleanup
+	* wirefilter option for blinking added.
+	* Gaussian distribution for range values, Gilbert bursty model for packet loss.
+	* Bugfix on mgmt sessions.
+	* Poor's man hub implemented. (patch by Luca Saiu)
+
 VDE 2.2.1, 2008-06-17
 	* New contact email address: <info@v2.cs.unibo.it>
 	* Code cleanup (some more warnings removed)
