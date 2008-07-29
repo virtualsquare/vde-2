@@ -15,7 +15,8 @@ bin_PROGRAMS = \
 	vde_plug2tap \
 	vde_plug \
 	vdeq \
-	wirefilter
+	wirefilter \
+	vdeterm
 
 sbin_PROGRAMS = \
 	vde_tunctl
@@ -42,6 +43,7 @@ vde_plug2tap_LDADD =$(LDADD) lib/libvdeplug.la
 vde_plug_LDADD = $(LDADD) lib/libvdeplug.la
 vdeq_LDADD = $(LDADD) lib/libvdeplug.la
 wirefilter_LDADD = $(LDADD) lib/libvdeplug.la
+vdeterm_LDADD = $(LDADD) lib/libvdeplug.la lib/libvdehist.la
 
 install-exec-hook:
 	rm -f $(DESTDIR)$(bindir)/vdecmd

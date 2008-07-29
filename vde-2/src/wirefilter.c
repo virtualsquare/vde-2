@@ -872,20 +872,22 @@ static int doshutdown(int fd,char *s)
 
 static int help(int fd,char *s)
 {
-	printoutc(fd, "help:      print a summary of mgmt commands");
-	printoutc(fd, "showinfo:  show status and parameter values");
-	printoutc(fd, "loss:      set loss percentage");
-	printoutc(fd, "lostburst: mean length of lost packet bursts");
-	printoutc(fd, "delay:     set delay ms");
-	printoutc(fd, "dup:       set dup packet percentage");
-	printoutc(fd, "bandwidth: set channel bandwidth bytes/sec");
-	printoutc(fd, "speed:     set interface speed bytes/sec");
-	printoutc(fd, "noise:     set noise factor bits/Mbyte");
-	printoutc(fd, "mtu:       set channel MTU (bytes)");
-	printoutc(fd, "capacity:  set channel capacity (bytes)");
-	printoutc(fd, "fifo:      set channel fifoness");
-	printoutc(fd, "shutdown:  shut the channel down");
-	printoutc(fd, "logout:    log out from this mgmt session");
+	printoutc(fd, "COMMAND      HELP");
+	printoutc(fd, "------------ ------------");
+	printoutc(fd, "help         print a summary of mgmt commands");
+	printoutc(fd, "showinfo     show status and parameter values");
+	printoutc(fd, "loss         set loss percentage");
+	printoutc(fd, "lostburst    mean length of lost packet bursts");
+	printoutc(fd, "delay        set delay ms");
+	printoutc(fd, "dup          set dup packet percentage");
+	printoutc(fd, "bandwidth    set channel bandwidth bytes/sec");
+	printoutc(fd, "speed        set interface speed bytes/sec");
+	printoutc(fd, "noise        set noise factor bits/Mbyte");
+	printoutc(fd, "mtu          set channel MTU (bytes)");
+	printoutc(fd, "capacity     set channel capacity (bytes)");
+	printoutc(fd, "fifo         set channel fifoness");
+	printoutc(fd, "shutdown     shut the channel down");
+	printoutc(fd, "logout       log out from this mgmt session");
 	return 0;
 }
 
