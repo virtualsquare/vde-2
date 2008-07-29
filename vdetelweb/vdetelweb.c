@@ -159,10 +159,14 @@ static void setsighandlers(void)
 		{ SIGPOLL, "SIGPOLL", 1 },
 		{ SIGPROF, "SIGPROF", 1 },
 		{ SIGVTALRM, "SIGVTALRM", 1 },
+#ifdef SIGSTKFLT
 		{ SIGSTKFLT, "SIGSTKFLT", 1 },
+#endif
 		{ SIGIO, "SIGIO", 1 },
 		{ SIGPWR, "SIGPWR", 1 },
+#ifdef SIGUNUSED
 		{ SIGUNUSED, "SIGUNUSED", 1 },
+#endif
 		{ 0, NULL, 0 }
 	};
 
