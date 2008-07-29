@@ -9,7 +9,8 @@ endif
 lib_LTLIBRARIES = \
 	libvdesnmp.la \
 	libvdemgmt.la \
-	libvdeplug.la
+	libvdeplug.la \
+	libvdehist.la
 
 libvdesnmp_la_LIBADD = $(LIBADD)
 libvdesnmp_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
@@ -19,3 +20,6 @@ libvdemgmt_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
 
 libvdeplug_la_LIBADD = $(LIBADD)
 libvdeplug_la_LDFLAGS = $(AM_LDFLAGS) -version-number 2:1 -export-dynamic
+
+libvdehist_la_LIBADD = $(LIBADD)
+libvdehist_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic

@@ -100,8 +100,8 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 			return -1;
 		}
 
-		DBGOUT(DBGHASHNEW,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x",
-				     esrc[0], esrc[1], esrc[2], esrc[3], esrc[4], esrc[5], esrc[6], esrc[7]);
+		DBGOUT(DBGHASHNEW,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d",
+				     esrc[0], esrc[1], esrc[2], esrc[3], esrc[4], esrc[5], esrc[6], esrc[7], port);
 		EVENTOUT(DBGHASHNEW,esrc);
 		memcpy(&e->dst, esrc, ETH_ALEN+2);
 		if(h[k] != NULL) h[k]->prev = &(e->next);
@@ -125,7 +125,7 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 
 #define delete_hash_entry(OLD) \
 	({ \
-	 DBGOUT(DBGHASHDEL,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x", OLD->dst[0], OLD->dst[1], OLD->dst[2], OLD->dst[3], OLD->dst[4], OLD->dst[5], OLD->dst[6], OLD->dst[7]);\
+	 DBGOUT(DBGHASHDEL,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d", OLD->dst[0], OLD->dst[1], OLD->dst[2], OLD->dst[3], OLD->dst[4], OLD->dst[5], OLD->dst[6], OLD->dst[7], OLD->port);\
 	 EVENTOUT(DBGHASHDEL,OLD->dst);\
 	 *((OLD)->prev)=(OLD)->next; \
 	 if((OLD)->next != NULL) (OLD)->next->prev = (OLD)->prev; \
