@@ -164,27 +164,6 @@ void printlog(int priority, const char *format, ...)
 	va_end (arg);
 }
 
-#if 0
-void printoutc(int fd, const char *format, ...)
-{
-	va_list arg;
-
-	va_start (arg, format);
-#if 0
-	if (fd < 0)
-		printlog(LOG_INFO,format,arg);
-	else {
-#endif
-		char outbuf[MAXCMD+1];
-		vsnprintf(outbuf,MAXCMD,format,arg);
-		strcat(outbuf,"\n");
-		write(fd,outbuf,strlen(outbuf));
-#if 0
-	}
-#endif
-}
-#endif
-
 void printoutc(FILE *f, const char *format, ...)
 {
 	va_list arg;
@@ -828,12 +807,16 @@ static int plugindel(char *arg) {
 	int rv=ENOENT;
 	struct plugin **p=&pluginh;
 	while (*p!=NULL){
+		void *handle;
 		if (strncmp((*p)->name, arg, strlen(arg)) == 0
 				&& ((*p)->handle != NULL)) {
 			struct plugin *this=*p;
 			delplugin(this);
-			dlclose(this->handle);
+			handle=this->handle;
+			this->handle=NULL;
+			dlclose(handle);
 			rv=0;
+			p=NULL;
 		} else
 			p=&(*p)->next;
 	}

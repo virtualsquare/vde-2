@@ -48,7 +48,7 @@ int testevent(struct dbgcl *event,va_list v)
 		case D_PACKET|D_IN: 
 			{
 				int port=va_arg(v,int);
-				char *buf=va_arg(v,char *);
+				unsigned char *buf=va_arg(v,unsigned char *);
 				int len=va_arg(v,int);
 				char *pktdump;
 				size_t dumplen;
