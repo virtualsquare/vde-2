@@ -206,7 +206,7 @@ void eventout(struct dbgcl* cl, ...)
 	va_list arg;
 	for (i=0; i<cl->nfun; i++) {
 		va_start (arg, cl);
-		(cl->fun[i])(cl,arg);
+		(cl->fun[i])(cl,cl->funarg[i],arg);
 		va_end(arg);
 	}
 }
@@ -223,7 +223,7 @@ int packetfilter(struct dbgcl* cl, ...)
 	va_end(arg);
 	for (i=0; i<cl->nfun && len>0; i++) {
 		va_start (arg, cl);
-		int rv=(cl->fun[i])(cl,arg);
+		int rv=(cl->fun[i])(cl,cl->funarg[i],arg);
 		va_end (arg);
 		if (rv!=0) 
 			len=rv;
@@ -804,7 +804,6 @@ static int pluginadd(char *arg) {
 }
 
 static int plugindel(char *arg) {
-	int rv=ENOENT;
 	struct plugin **p=&pluginh;
 	while (*p!=NULL){
 		void *handle;
@@ -815,12 +814,11 @@ static int plugindel(char *arg) {
 			handle=this->handle;
 			this->handle=NULL;
 			dlclose(handle);
-			rv=0;
-			p=NULL;
+			return 0;
 		} else
 			p=&(*p)->next;
 	}
-	return rv;
+	return ENOENT;
 }
 #endif
 

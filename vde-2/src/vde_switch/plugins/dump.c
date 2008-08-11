@@ -10,22 +10,13 @@
 #include <vdeplugin.h>
 
 
-int testevent(struct dbgcl *tag,va_list v);
+static int testevent(struct dbgcl *tag,void *arg,va_list v);
+static int dump(char *arg);
+
 struct plugin vde_plugin_data={
 	.name="dump",
 	.help="dump packets",
 };
-
-static int dump(char *arg)
-{
-	int active=atoi(arg);
-	int rv;
-	if (active)
-		rv=eventadd(testevent,"packet",NULL);
-	else
-		rv=eventdel(testevent,"packet",NULL);
-	return 0;
-}
 
 static struct comlist cl[]={
 	{"dump","============","DUMP Packets",NULL,NOARG},
@@ -38,10 +29,20 @@ static struct dbgcl dl[]= {
 	 {"dump/packetout","dump outgoing packet",D_DUMP|D_OUT},
 };
 
-
-int testevent(struct dbgcl *event,va_list v)
+static int dump(char *arg)
 {
-	struct dbgcl *this=dl;
+	int active=atoi(arg);
+	int rv;
+	if (active)
+		rv=eventadd(testevent,"packet",dl);
+	else
+		rv=eventdel(testevent,"packet",dl);
+	return 0;
+}
+
+static int testevent(struct dbgcl *event,void *arg,va_list v)
+{
+	struct dbgcl *this=arg;
 	switch (event->tag) {
 		case D_PACKET|D_OUT: 
 			this++;
