@@ -49,7 +49,7 @@ struct dbgcl {
 	char *help; /* help string. just event mgmt when NULL */
 	int tag;    /* tag for event mgmt and simple parsing */
 	int *fds;   /* file descriptors for debug */
-	intfun (*fun); /* function call dor plugin events */
+	intfun (*fun); /* function call or plugin events */
 	void **funarg; /* arg for function calls */
 	unsigned short nfds; /* number of active fds */
 	unsigned short nfun; /* number of active fun */
@@ -62,8 +62,8 @@ void adddbgcl(int ncl, struct dbgcl* cl);
 void debugout(struct dbgcl* cl, const char *format, ...);
 void eventout(struct dbgcl* cl, ...);
 int packetfilter(struct dbgcl* cl, ...);
-#define DBGOUT(CL, ...) \
-	if (__builtin_expect(((CL)->nfds) > 0, 0)) debugout((CL), __VA_ARGS__)
+#define DBGOUT(CL, FORMAT, ...) \
+	if (__builtin_expect(((CL)->nfds) > 0, 0)) debugout((CL), (FORMAT), __VA_ARGS__)
 #define EVENTOUT(CL, ...) \
 	if (__builtin_expect(((CL)->nfun) > 0, 0)) eventout((CL), __VA_ARGS__)
 #define PACKETFILTER(CL, PORT, BUF, LEN) \

@@ -19,7 +19,7 @@
  */
 
 // TODO per-port dump(file?)
-int pktevent(struct dbgcl *tag,va_list v);
+static int pktevent(struct dbgcl *tag, void *arg, va_list v);
 
 char errbuf[PCAP_ERRBUF_SIZE];
 pcap_t *desc = NULL;
@@ -94,9 +94,9 @@ static struct dbgcl dl[]= {
 };
 
 
-int pktevent(struct dbgcl *event,va_list v)
+static int pktevent(struct dbgcl *event,void * arg,va_list v)
 {
-	// forse meglio static? 
+	// is it better to define this static? 
 	struct pcap_pkthdr hdr;
 
 	if( (desc == NULL) || (dumper == NULL) ){

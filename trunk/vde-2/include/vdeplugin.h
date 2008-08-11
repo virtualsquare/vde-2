@@ -3,16 +3,13 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#include <config.h>
-#include <vde.h>
-
 /* command type constants */
 /* doit signature:
  * int doit (
  *            FILE *f,        *** only when WITHFILE
  *            int fd,         *** only when WITHFD
  *            int|char *arg)  *** when INTARG or STRARG */
-/* if type==NOARG  int doit()
+/* if type==NOARG  int doit(void)
  * if type==INTARG   int doit(int arg)
  * if type==WITHFILE|WITHFD|STRARG int doit(FILE *f,int fd,char *arg)
  * doit returns 0 on success otherwise it returns a valid errno code */
@@ -95,14 +92,14 @@ void mgmtnewfd(int new);
 #define ADDDBGCL(CL) adddbgcl(sizeof(CL)/sizeof(struct dbgcl),(CL))
 #define DELCL(CL) delcl(sizeof(CL)/sizeof(struct comlist),(CL))
 #define DELDBGCL(CL) deldbgcl(sizeof(CL)/sizeof(struct dbgcl),(CL))
-#define DBGOUT(CL, ...) \
-	  if (__builtin_expect(((CL)->nfds) > 0, 0)) debugout((CL), __VA_ARGS__)
+#define DBGOUT(CL, FORMAT, ...) \
+	  if (__builtin_expect(((CL)->nfds) > 0, 0)) debugout((CL), (FORMAT), __VA_ARGS__)
 #define EVENTOUT(CL, ...) \
 	  if (__builtin_expect(((CL)->nfun) > 0, 0)) eventout((CL), __VA_ARGS__)
 
 
-int eventadd(int (*fun)(),char *path,void *arg);
-int eventdel(int (*fun)(),char *path,void *arg);
+int eventadd(int (*fun)(struct dbgcl *event,void *arg,va_list v),char *path,void *arg);
+int eventdel(int (*fun)(struct dbgcl *event,void *arg,va_list v),char *path,void *arg);
 
 void debugout(struct dbgcl* cl, const char *format, ...);
 
