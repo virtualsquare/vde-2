@@ -23,6 +23,7 @@
 #include <sys/un.h>
 #include <net/if.h>
 #include <stdarg.h>
+#include <limits.h>
 #include <grp.h>
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -41,10 +42,12 @@ static struct mod_support modfun;
 static unsigned int ctl_type;
 static unsigned int wd_type;
 static unsigned int data_type;
-static int mode = 0700;
 
 static char real_ctl_socket[PATH_MAX];
 static char *ctl_socket = real_ctl_socket;
+
+static int mode = -1;
+static int dirmode = -1;
 static gid_t grp_owner = -1;
 
 #define MODULENAME "unix prog"
@@ -343,11 +346,15 @@ static void cleanup(unsigned char type,int fd,int arg)
 	}
 }
 
+#define DIRMODEARG	0x100
+
 static struct option long_options[] = {
 	{"sock", 1, 0, 's'},
 	{"vdesock", 1, 0, 's'},
 	{"unix", 1, 0, 's'},
 	{"mod", 1, 0, 'm'},
+	{"mode", 1, 0, 'm'},
+	{"dirmode", 1, 0, DIRMODEARG},
 	{"group", 1, 0, 'g'},
 };
 
@@ -360,7 +367,8 @@ static void usage(void)
 			"  -s, --sock SOCK            control directory pathname\n"
 			"  -s, --vdesock SOCK         Same as --sock SOCK\n"
 			"  -s, --unix SOCK            Same as --sock SOCK\n"
-			"  -m, --mod MODE             Standard access mode for comm sockets (octal)\n"
+			"  -m, --mode MODE            Permissions for the control socket (octal)\n"
+			"      --dirmode MODE         Permissions for the sockets directory (octal)\n"
 			"  -g, --group GROUP          Group owner for comm sockets\n"
 			);
 }
@@ -385,6 +393,9 @@ static int parseopt(int c, char *optarg)
 			}
 			grp_owner=grp->gr_gid;
 			break;
+		case DIRMODEARG:
+			sscanf(optarg, "%o", &dirmode);
+			break;
 		default:
 			outc=c;
 	}
@@ -396,6 +407,32 @@ static void init(void)
 	int connect_fd;
 	struct sockaddr_un sun;
 	int one = 1;
+
+	/* Set up default modes */
+	if (mode < 0 && dirmode < 0)
+	{
+		/* Default values */
+		mode = 00600;    /* -rw------- for the ctl socket */
+		dirmode = 02700; /* -rwx--S--- for the directory */
+	}
+	else if (mode >= 0 && dirmode < 0)
+	{
+		/* If only mode (-m) has been specified, we guess the dirmode from it,
+		 * adding the executable bit where needed */
+
+#		define ADDBIT(mode, conditionmask, add) ((mode & conditionmask) ? ((mode & conditionmask) | add) : (mode & conditionmask))
+
+		dirmode = 02000 | /* Add also setgid */
+			ADDBIT(mode, 0600, 0100) |
+			ADDBIT(mode, 0060, 0010) |
+			ADDBIT(mode, 0006, 0001);
+	}
+	else if (mode < 0 && dirmode >= 0)
+	{
+		/* If only dirmode (--dirmode) has been specified, we guess the ctl
+		 * socket mode from it, turning off the executable bit everywhere */
+		mode = dirmode & 0666;
+	}
 
 	if((connect_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
 		printlog(LOG_ERR,"Could not obtain a BSD socket: %s", strerror(errno));
@@ -414,7 +451,7 @@ static void init(void)
 		printlog(LOG_ERR,"Could not create the VDE ctl directory '%s': %s", ctl_socket, strerror(errno));
 		exit(-1);
 	}
-	if ((chmod(ctl_socket, 02000 | (mode & 0700 ? 0700 : 0) | (mode & 0070 ? 0070 : 0) | (mode & 0007 ? 0005 : 0)) < 0)) {
+	if (chmod(ctl_socket, dirmode) < 0) {
 		printlog(LOG_ERR,"Could not set the VDE ctl directory '%s' permissions: %s", ctl_socket, strerror(errno));
 		exit(-1);
 	}

@@ -18,6 +18,7 @@
 #include <libgen.h>
 #define _GNU_SOURCE
 #include <getopt.h>
+#include <limits.h>
 
 #include <config.h>
 #include <vde.h>
@@ -39,7 +40,6 @@
 
 #if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
 #	define TAP_PREFIX "/dev/"
-#	include <limits.h>
 #	if defined HAVE_SYSLIMITS_H
 #		include <syslimits.h>
 #	elif defined HAVE_SYS_SYSLIMITS_H
