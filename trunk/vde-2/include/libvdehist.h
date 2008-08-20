@@ -21,6 +21,7 @@
 #ifndef _LIBVDEHIST_H
 #define _LIBVDEHIST_H
 
+extern char *prompt;
 
 typedef ssize_t (* ssize_fun)();
 extern ssize_fun vdehist_vderead;
