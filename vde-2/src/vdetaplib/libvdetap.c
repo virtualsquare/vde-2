@@ -104,7 +104,6 @@ void libvdetap_fini(void)
 
 int open(const char *path, int flags, ...)
 {
-	/* static char buf[PATH_MAX]; */
 	va_list ap;
 	int data;
 
@@ -125,7 +124,6 @@ int open(const char *path, int flags, ...)
 
 int open64(const char *path, int flags, ...)
 {
-	/* static char buf[PATH_MAX]; */
 	va_list ap;
 	int data;
 

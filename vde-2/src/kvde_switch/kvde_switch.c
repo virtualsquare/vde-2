@@ -39,8 +39,8 @@ char *prog;
 unsigned char switchmac[ETH_ALEN];
 unsigned int priority=DEFAULT_PRIORITY;
 
-static int hash_size=INIT_HASH_SIZE;
-static int numports=INIT_NUMPORTS;
+/* static int hash_size=INIT_HASH_SIZE; */
+/* static int numports=INIT_NUMPORTS; */
 
 
 static void recaddswm(struct swmodule **p,struct swmodule *new)

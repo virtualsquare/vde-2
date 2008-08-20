@@ -107,7 +107,7 @@ static int pktevent(struct dbgcl *event,void * arg,va_list v)
 		case D_PACKET|D_OUT: 
 		case D_PACKET|D_IN: {
 							va_arg(v,int); /* port */
-							unsigned char *buf=va_arg(v,char *);
+							unsigned char *buf=va_arg(v,unsigned char *);
 							int len=va_arg(v,int);
 
 							gettimeofday(&hdr.ts, NULL);

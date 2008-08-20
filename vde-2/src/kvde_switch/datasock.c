@@ -23,6 +23,7 @@
 #include <sys/un.h>
 #include <net/if.h>
 #include <stdarg.h>
+#include <limits.h>
 #include <grp.h>
 #define _GNU_SOURCE
 #include <getopt.h>

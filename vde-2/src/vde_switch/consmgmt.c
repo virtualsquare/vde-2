@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <syslog.h>
 #include <stdlib.h>
+#include <grp.h>
 #include <libgen.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -23,6 +24,7 @@
 #include <stdarg.h>
 #include <getopt.h>
 #include <dlfcn.h>
+#include <limits.h>
 
 #include <config.h>
 #include <vde.h>
@@ -48,6 +50,8 @@ static unsigned int console_type=-1;
 static unsigned int mgmt_ctl=-1;
 static unsigned int mgmt_data=-1;
 static int mgmt_mode = 0600;
+static gid_t mgmt_group = -1;
+
 static char *mgmt_socket = NULL;
 static char header[]="VDE switch V.%s\n(C) Virtual Square Team (coord. R. Davoli) 2005,2006,2007 - GPLv2\n";
 static char prompt[]="\nvde$ ";
@@ -238,6 +242,7 @@ int packetfilter(struct dbgcl* cl, ...)
 void setmgmtperm(char *path)
 {
 	chmod(path,mgmt_mode);
+	chown(path, -1, mgmt_group);
 }
 
 static int help(FILE *fd,char *arg)
@@ -484,6 +489,7 @@ static void cleanup(unsigned char type,int fd,int arg)
 }
 
 #define MGMTMODEARG 0x100
+#define MGMTGROUPARG 0x101
 
 static struct option long_options[] = {
 	{"daemon", 0, 0, 'd'},
@@ -491,6 +497,7 @@ static struct option long_options[] = {
 	{"rcfile", 1, 0, 'f'},
 	{"mgmt", 1, 0, 'M'},
 	{"mgmtmode", 1, 0, MGMTMODEARG},
+	{"mgmtgroup", 1, 0, MGMTGROUPARG},
 #ifdef DEBUGOPT
 	{"debugclients",1,0,'D'},
 #endif
@@ -507,8 +514,9 @@ static void usage(void)
 			"  -f, --rcfile               Configuration file (overrides %s and ~/.vderc)\n"
 			"  -M, --mgmt SOCK            path of the management UNIX socket\n"
 			"      --mgmtmode MODE        management UNIX socket access mode (octal)\n"
+			"      --mgmtgroup GROUP      management UNIX socket group name\n"
 #ifdef DEBUGOPT
-			"  -D, --debugclients #        number of debug clients allowed\n"
+			"  -D, --debugclients #       number of debug clients allowed\n"
 #endif
 			,STDRCFILE);
 }
@@ -516,6 +524,7 @@ static void usage(void)
 static int parseopt(int c, char *optarg)
 {
 	int outc=0;
+	struct group *grp;
 	switch (c) {
 		case 'd':
 			daemonize=1;
@@ -532,6 +541,15 @@ static int parseopt(int c, char *optarg)
 		case MGMTMODEARG:
 			sscanf(optarg,"%o",&mgmt_mode);
 			break;
+		case MGMTGROUPARG:
+			if (!(grp = getgrnam(optarg)))
+			{
+				fprintf(stderr, "No such group '%s'\n", optarg);
+				exit(1);
+			}
+			mgmt_group = grp->gr_gid;
+			break;
+
 		default:
 			outc=c;
 	}
@@ -596,7 +614,7 @@ static void init(void)
 				return;
 			}
 		}
-		chmod(sun.sun_path,mgmt_mode);
+		setmgmtperm(sun.sun_path);
 		if(listen(mgmtconnfd, 15) < 0){
 			printlog(LOG_ERR,"mgmt listen: %s",strerror(errno));
 			return;
