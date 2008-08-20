@@ -75,10 +75,11 @@ static void setsighandlers()
 }
 
 #define BUFSIZE 1024
-char *copy_header (int vdefd,int termfd)
+static char *copy_header_prompt (int vdefd,int termfd,char *sock)
 {
 	char buf[BUFSIZE];
 	int n;
+	char *prompt;
 	while (1) {
 		struct pollfd wfd={vdefd,POLLIN|POLLHUP,0};
 		poll(&wfd,1,-1);
@@ -90,7 +91,8 @@ char *copy_header (int vdefd,int termfd)
 				while (n>0 && buf[n] !='\n')
 					n--;
 				write(termfd,buf,n+1);
-				return buf+n+1;
+				asprintf(&prompt,"%s[%s]: ",buf+n+1,sock);
+				return prompt;
 			} else
 				write(termfd,buf,n);
 		}
@@ -133,7 +135,7 @@ int main(int argc,char *argv[])
 	flags |= O_NONBLOCK;
 	fcntl(fd, F_SETFL, flags);
 	pfd[1].fd=fd;
-	asprintf(&prompt,"%s[%s]: ",copy_header(fd,STDOUT_FILENO),argv[1]);
+	prompt=copy_header_prompt(fd,STDOUT_FILENO,argv[1]);
 	vdehst=vdehist_new(STDIN_FILENO,fd);
 	write(STDOUT_FILENO,prompt,strlen(prompt)+1);
 	while(1) {
