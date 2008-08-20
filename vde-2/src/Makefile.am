@@ -30,6 +30,10 @@ if ENABLE_CRYPTCAB
   SUBDIRS += vde_cryptcab
 endif
 
+if ENABLE_PCAP
+  bin_PROGRAMS += vde_pcapplug
+endif
+
 AM_CPPFLAGS = -I$(top_srcdir)/include
 LDADD = common/libvdecommon.la -lm
 
@@ -39,7 +43,10 @@ if ENABLE_PROFILE
 endif
 
 vde_autolink_LDADD = $(LDADD) lib/libvdemgmt.la
-vde_plug2tap_LDADD =$(LDADD) lib/libvdeplug.la
+vde_plug2tap_LDADD = $(LDADD) lib/libvdeplug.la
+if ENABLE_PCAP
+  vde_pcapplug_LDADD = $(LDADD) lib/libvdeplug.la -lpcap
+endif
 vde_plug_LDADD = $(LDADD) lib/libvdeplug.la
 vdeq_LDADD = $(LDADD) lib/libvdeplug.la
 wirefilter_LDADD = $(LDADD) lib/libvdeplug.la

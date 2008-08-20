@@ -244,9 +244,9 @@ found. Please install them if you want CryptCab to be compiled and installed.])
 fi
 
 if test x$warn_pcap = "xyes" ; then
-	AC_MSG_WARN([VDE packet dump plugin has been disabled because libpcap is
-not installed on your system, or because it's too old.
-Please install it if you want pdump to be compiled and installed.])
+	AC_MSG_WARN([VDE vde_pcapplug and packet dump plugin have been disabled because
+libpcap is not installed on your system, or because it's too old.
+Please install it if you want vde_pcapplug and pdump to be compiled and installed.])
 fi
 
 echo
