@@ -1,6 +1,7 @@
 /* Copyright 2004 Renzo Davoli
  * Reseased under the GPLv2 */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -34,10 +35,11 @@ int main(int argc,char *argv[])
 	int result,nx;
 	register int i;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
+	char *descr;
 	/*printf("argc = %d\n",argc);
 	for (i=0;i<argc;i++)
 		printf("argv %d -%s-\n",i,argv[i]);*/
-	if (argc != 4 && argv[0][0] != '-') {
+	if (argc < 4 && argv[0][0] != '-') {
 		fprintf(stderr,"vdetap must be activated by libvdetap e.g.\n"
 				"   sh%% export LD_PRELOAD=%s/libvdetap.so\n"
 				"   csh%% setenv LD_PRELOAD %s/libvdetap.so\n", LIBEXECDIR, LIBEXECDIR);
@@ -52,8 +54,15 @@ int main(int argc,char *argv[])
 		perror("socket");
 		exit(1);
 	}
-	/* TODO insert argv[3] in descr */
-	conn=vde_open(argv[2],"tuntaplib",&open_args);
+	if (argc == 8) {
+		open_args.port=atoi(argv[5]);
+		open_args.group=argv[6];
+	  sscanf(argv[7],"%i",&open_args.mode);
+		//fprintf(stderr,"|%d|%s|%o|\n",open_args.port,open_args.group,open_args.mode);
+		asprintf(&descr,"tuntaplib %s/%s",argv[4],argv[3]);
+	} else
+		descr="tuntaplib";
+	conn=vde_open(argv[2],descr,&open_args);
 	pollv[0].fd=fd;
 	pollv[1].fd=vde_datafd(conn);
 	for(;;) {
