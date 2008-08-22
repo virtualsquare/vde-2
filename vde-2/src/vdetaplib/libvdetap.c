@@ -112,9 +112,8 @@ int open(const char *path, int flags, ...)
 	va_end(ap);
 
 	if (strcmp(path,TUNTAPPATH)==0 && tapfd[0] == -1) {
-		if (socketpair(PF_UNIX, SOCK_DGRAM, 0,tapfd) == 0) {
+		if (socketpair(PF_UNIX, SOCK_DGRAM, 0,tapfd) == 0)
 			return tapfd[0];
-		}
 		else
 			return -1;
 
@@ -132,14 +131,27 @@ int open64(const char *path, int flags, ...)
 	va_end(ap);
 
 	if (strcmp(path,TUNTAPPATH)==0 && tapfd[0] == -1) {
-		if (socketpair(PF_UNIX, SOCK_DGRAM, 0,tapfd) == 0) {
+		if (socketpair(PF_UNIX, SOCK_DGRAM, 0,tapfd) == 0) 
 			return tapfd[0];
-		}
 		else
 			return -1;
 
 	} else
 		return native_open64(path, flags | O_LARGEFILE, data);
+}
+
+static char *getvdeopt(struct ifreq *ifr,char *suffix)
+{
+	static char buf[16];
+	char *rv;
+	snprintf(buf,16,"%s_%s",ifr->ifr_name,suffix);
+	if ((rv=getenv(buf)) != NULL)
+		return rv;
+	snprintf(buf,16,"VDEALLTAP_%s",ifr->ifr_name,suffix);
+	if ((rv=getenv(buf)) != NULL)
+		return rv;
+	else
+		return "";
 }
 
 int ioctl(int fd, unsigned long int command, ...)
@@ -148,6 +160,7 @@ int ioctl(int fd, unsigned long int command, ...)
 	char *data;
 	char *vdesock;
 	int pid;
+	int callerpid=getpid();
 
 	va_start(ap, command);
 	data = va_arg(ap, char *);
@@ -158,6 +171,7 @@ int ioctl(int fd, unsigned long int command, ...)
 			struct ifreq *ifr = (struct ifreq *) data;
 			char num[5];
 			char name[10];
+			char scallerpid[6];
 
 			ifr->ifr_name[IFNAMSIZ-1] = '\0';
 			if (ifr->ifr_name[0] == 0) {
@@ -175,7 +189,7 @@ int ioctl(int fd, unsigned long int command, ...)
 					/* from env: single interface or VDEALLTAP */
 					((vdesock=getenv(ifr->ifr_name)) != NULL) ||
 						(vdesock=getenv(VDEALLTAP)) != NULL)
-				){
+				 ){
 				if ((pid=fork()) < 0) { 
 					close(tapfd[1]);
 					errno=EINVAL;
@@ -193,7 +207,13 @@ int ioctl(int fd, unsigned long int command, ...)
 					plh=NULL;
 					close(tapfd[0]);
 					sprintf(num,"%d",tapfd[1]);
-					return execlp(VDETAPEXEC,"-",num,vdesock,name,(char *) 0);
+					sprintf(scallerpid,"%d",callerpid);
+					return execlp(VDETAPEXEC,"-",num,vdesock,ifr->ifr_name,
+							scallerpid,
+							getvdeopt(ifr,"port"),
+							getvdeopt(ifr,"group"),
+							getvdeopt(ifr,"mode"),
+							(char *) 0);
 				}
 			}
 			else /*roll back to the native tuntap*/
