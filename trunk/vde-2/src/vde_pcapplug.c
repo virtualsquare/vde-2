@@ -26,6 +26,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include <stdarg.h>
 #include <syslog.h>
 #include <libgen.h>
@@ -189,6 +190,67 @@ void pcap_callback(u_char *u, const struct pcap_pkthdr *h, const u_char *data)
 	vde_send(conn, data, h->len, 0);
 }
 
+void setup_fd(int fd)
+{
+/* FreeBSD settings */
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+	/*
+	 * Tell the kernel that the header is fully-formed when it gets it.
+	 * This is required in order to fake the src address.
+	 */
+	{ unsigned int i = 1; ioctl(fd, BIOCSHDRCMPLT, &i); }
+	/*                    
+	 * Tell the kernel that the packet has to be processed immediately.
+	 */
+	{ unsigned int i = 1; ioctl(fd, BIOCIMMEDIATE, &i); }
+	/*
+	 * Allow guest-host communication.
+	 */
+	{ unsigned int i = 1; ioctl(fd, BIOCFEEDBACK, &i); }
+#endif
+/* 
+ * BIG TODO(shammash):
+ * let host and guest communicate under linux
+ */
+/*
+ * Most important parts of libpcap with PF_PACKET on Linux:
+	rawfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	iface_get_id(int fd, const char *device, char *ebuf)
+	{
+		struct ifreq    ifr;
+
+		memset(&ifr, 0, sizeof(ifr));
+		strncpy(ifr.ifr_name, device, sizeof(ifr.ifr_name));
+
+		if (ioctl(fd, SIOCGIFINDEX, &ifr) == -1) {
+			snprintf(ebuf, PCAP_ERRBUF_SIZE,
+					"SIOCGIFINDEX: %s", pcap_strerror(errno));
+			return -1;
+		}       
+
+		return ifr.ifr_ifindex;
+	}
+
+	struct packet_mreq mr;
+	memset(&mr, 0, sizeof(mr));
+        mr.mr_ifindex = handle->md.ifindex;
+        mr.mr_type    = PACKET_MR_PROMISC;
+        if (setsockopt(sock_fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mr, sizeof(mr)) == -1) {
+		snprintf(ebuf, PCAP_ERRBUF_SIZE, "setsockopt: %s", pcap_strerror(errno));
+        }
+*
+*/
+#if defined(VDE_LINUX)
+	{
+		unsigned int i = 1;
+		if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &i, sizeof(i)) == -1) {
+			printlog(LOG_ERR, "SO_BROADCAST: %s\n", strerror(errno));
+			exit(1);
+		}
+	}
+#endif
+}
+
 int main(int argc, char **argv)
 {
 	static char *sockname=NULL;
@@ -289,36 +351,17 @@ int main(int argc, char **argv)
 		printlog(LOG_ERR, "Open %s: %s\n", ifname, errbuf);
 		exit(1);
 	}
-#if 0
-	if (pcap_setnonblock(pcap, 1, errbuf) == -1) {
-		printlog(LOG_ERR, "Cannot set pcap non-blocking: %s\n", errbuf);
+	if (pcap_datalink(pcap) != DLT_EN10MB ) {
+		printlog(LOG_ERR, "Given interface is not ethernet\n");
 		exit(1);
 	}
-#endif
-#if defined(BIOCSHDRCMPLT)
-	/*
-	 * Tell the kernel that the header is fully-formed when it gets it.
-	 * This is required in order to fake the src address.
-	 */
-	{
-		unsigned int i = 1;
-		ioctl(pcap_fileno(pcap), BIOCSHDRCMPLT, &i);
-	}
-#endif /* BIOCSHDRCMPLT */    
-#if defined(BIOCIMMEDIATE)
-	/*                    
-	 * Tell the kernel that the packet has to be processed immediately.
-	 */
-	{
-		unsigned int i = 1;
-		ioctl(pcap_fileno(pcap), BIOCIMMEDIATE, &i);
-	}
-#endif /* BIOCIMMEDIATE */
 	pcapfd=pcap_get_selectable_fd(pcap);
 	if (pcapfd == -1) {
 		printlog(LOG_ERR, "pcap has no fd for poll()\n");
 		exit(1);
 	}
+	setup_fd(pcapfd);
+
 	conn=vde_open(sockname,"vde_pcapplug:",&open_args);
 	if (conn == NULL)
 		exit(1);
