@@ -126,9 +126,9 @@ static void usage(void)
 }
 
 struct extinterface {
-	  char type;
-		  char *name;
-			  struct extinterface *next;
+	char type;
+	char *name;
+	struct extinterface *next;
 };
 
 static struct extinterface *extifhead;
@@ -178,7 +178,7 @@ static int parseopt(int c, char *optarg)
 	switch (c) {
 		case 's':
 			/* This should returns NULL as the path probably does not exist */
-			realpath(optarg, ctl_socket);
+			vde_realpath(optarg, ctl_socket);
 			break;
 		case 'm':
 			sscanf(optarg,"%o",&mode);
@@ -255,7 +255,7 @@ static void delep (int fd, void* data, void *descr)
 
 void start_datasock(void)
 {
-	ctl_socket = (geteuid()==0)?VDESTDSOCK:VDETMPSOCK;
+	strcpy(ctl_socket,(geteuid()==0)?VDESTDSOCK:VDETMPSOCK);
 	swmi.swmnopts=Nlong_options;
 	swmi.swmopts=long_options;
 	swmi.usage=usage;
