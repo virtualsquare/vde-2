@@ -4,12 +4,15 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include <config.h>
 #include <vde.h>
 #include <vdecommon.h>
 
 #include <vdeplugin.h>
+
+#define DEFAULT_DUMPFILE "vde_dump.cap"
 
 /* usage:
  *
@@ -19,13 +22,19 @@
  * pdump/active 1
  */
 
-// TODO per-port dump(file?)
+/*
+ * TODO(godog):
+ *  - configurable snaplen
+ *  - per-port dump(file?)
+ *  TODO(shammash):
+ *  - configurable size for buffered dump
+ */
 static int pktevent(struct dbgcl *tag, void *arg, va_list v);
 
 char errbuf[PCAP_ERRBUF_SIZE];
 pcap_t *desc = NULL;
 pcap_dumper_t *dumper = NULL;
-char *dumpfile = "vde_dump.cap";
+char *dumpfile = NULL;
 static int buffered_dump = 0;
 
 struct plugin vde_plugin_data={
@@ -33,51 +42,54 @@ struct plugin vde_plugin_data={
 	.help="dump packets to file, in pcap format",
 };
 
-static int set_dumper(pcap_t *pcap_desc, char *file) {
+static int set_dumper(FILE *console) {
 	int fd;
 	FILE *fp;
-	if ((fd = open(file, O_WRONLY | O_NONBLOCK)) < 0)
+	if ((fd = open(dumpfile, O_WRONLY | O_CREAT, 0600)) < 0) {
+		printoutc(console, "%s() open(%s): %s", __FUNCTION__, dumpfile, strerror(errno));
 		return -1;
-	if ((fp = fdopen(fd, "w")) == NULL)
+	}
+	if ((fp = fdopen(fd, "w")) == NULL) {
+		printoutc(console, "%s() fdopen(): %s", __FUNCTION__, strerror(errno));
 		return -1;
-	dumper = pcap_dump_fopen(pcap_desc, fp);
+	}
+	if ((dumper = pcap_dump_fopen(desc, fp)) == NULL) {
+		printoutc(console, "%s() pcap_dump_fopen(): %s", __FUNCTION__, pcap_geterr(desc));
+		return -1;
+	}
 	return 0;
 }
 
 // FIXME check if dumpfile exists, it will be trucated 
-static int dump(char *arg)
+static int dump(FILE *fd, char *arg)
 {
 	int active=atoi(arg);
 	int rv;
 	if (active){
-		// TODO configurable snaplen 
-		if(!desc)
-			desc = pcap_open_dead(DLT_EN10MB, 96);
-		
-		if(!dumper)
-			set_dumper(desc, dumpfile);
-		
+		if(!dumper && set_dumper(fd)) {
+			printoutc(fd, "ERROR: cannot dump to %s", dumpfile);
+			return EINVAL;
+		}
 		rv=eventadd(pktevent,"packet",NULL);
 	}else{
 		rv=eventdel(pktevent,"packet",NULL);
-
 		if(dumper)
 			pcap_dump_flush(dumper);	
 	}
-	
 	return rv;
 }
 
 static int setfname(FILE *fd, char *arg)
 {
 	if(strlen(arg)){
-		if(dumper)
-			pcap_dump_close(dumper);	
-
+		free(dumpfile);
 		dumpfile = strdup(arg);
-		if(!desc)
-			desc = pcap_open_dead(DLT_EN10MB, 96);
-		set_dumper(desc, dumpfile);
+		if(dumper)
+			pcap_dump_close(dumper);
+		if (set_dumper(fd)) {
+			printoutc(fd, "ERROR: cannot dump to %s", dumpfile);
+			return EINVAL;
+		}
 	}
 	
 	printoutc(fd, "dumpfile=%s", dumpfile);	
@@ -97,7 +109,7 @@ static int setbuffered(char *arg)
 
 static struct comlist cl[]={
 	{"pdump","============","DUMP Packets to file",NULL,NOARG},
-	{"pdump/active","0/1","start dumping data",dump,STRARG},
+	{"pdump/active","0/1","start dumping data",dump,STRARG|WITHFILE},
 	{"pdump/filename", "<file>", "set/show output filename (default: vde_dump.cap)", setfname, STRARG|WITHFILE},
 	{"pdump/buffered", "0/1", "set buffered/unbuffered dump", setbuffered, STRARG},
 };
@@ -110,7 +122,7 @@ static struct comlist cl[]={
  *        void pcap_freecode(struct bpf_program *)
  */
 
-// TODO activate debug as well when activated? 
+/* TODO(godog): activate debug as well when activated? */
 #define D_DUMP 0100 
 static struct dbgcl dl[]= {
 	 {"pdump/packetin","dump incoming packet to file",D_DUMP|D_IN},
@@ -151,14 +163,21 @@ init (void)
 {
 	ADDCL(cl);
 	ADDDBGCL(dl);
+	desc = pcap_open_dead(DLT_EN10MB, 96);
+	dumpfile = strdup(DEFAULT_DUMPFILE);
 }
 
 	static void
 	__attribute__ ((destructor))
 fini (void)
 {
-	if(dumper)
+	if(dumper) {
 		pcap_dump_close(dumper);
+		dumper = NULL;
+	}
+	pcap_close(desc);
+	desc = NULL;
+	free(dumpfile);
 
 	DELCL(cl);
 	DELDBGCL(dl);
