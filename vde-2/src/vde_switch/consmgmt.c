@@ -330,7 +330,7 @@ static int runscript(int fd,char *path)
 			if (strlen(buf) > 1 && buf[strlen(buf)-1]=='\n') buf[strlen(buf)-1]= '\0';
 			if (fd >= 0) {
 				char *scriptprompt=NULL;
-				asprintf(&scriptprompt,"vde[%s]: %s",path,buf);
+				asprintf(&scriptprompt,"vde[%s]: %s\n",path,buf);
 				write(fd,scriptprompt,strlen(scriptprompt));
 				free(scriptprompt);
 			}
