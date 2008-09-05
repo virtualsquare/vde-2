@@ -3,6 +3,7 @@
 #include <pcap.h>
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
 
 #include <config.h>
 #include <vde.h>
@@ -25,11 +26,23 @@ char errbuf[PCAP_ERRBUF_SIZE];
 pcap_t *desc = NULL;
 pcap_dumper_t *dumper = NULL;
 char *dumpfile = "vde_dump.cap";
+static int buffered_dump = 0;
 
 struct plugin vde_plugin_data={
 	.name="pdump",
 	.help="dump packets to file, in pcap format",
 };
+
+static int set_dumper(pcap_t *pcap_desc, char *file) {
+	int fd;
+	FILE *fp;
+	if ((fd = open(file, O_WRONLY | O_NONBLOCK)) < 0)
+		return -1;
+	if ((fp = fdopen(fd, "w")) == NULL)
+		return -1;
+	dumper = pcap_dump_fopen(pcap_desc, fp);
+	return 0;
+}
 
 // FIXME check if dumpfile exists, it will be trucated 
 static int dump(char *arg)
@@ -42,7 +55,7 @@ static int dump(char *arg)
 			desc = pcap_open_dead(DLT_EN10MB, 96);
 		
 		if(!dumper)
-			dumper = pcap_dump_open(desc, dumpfile);
+			set_dumper(desc, dumpfile);
 		
 		rv=eventadd(pktevent,"packet",NULL);
 	}else{
@@ -64,7 +77,7 @@ static int setfname(FILE *fd, char *arg)
 		dumpfile = strdup(arg);
 		if(!desc)
 			desc = pcap_open_dead(DLT_EN10MB, 96);
-		dumper = pcap_dump_open(desc, dumpfile);
+		set_dumper(desc, dumpfile);
 	}
 	
 	printoutc(fd, "dumpfile=%s", dumpfile);	
@@ -72,10 +85,21 @@ static int setfname(FILE *fd, char *arg)
 	return 0;
 }
 
+static int setbuffered(char *arg)
+{
+	int b = atoi(arg);
+	if (b)
+		buffered_dump = 1;
+	else
+		buffered_dump = 0;
+	return 0;
+}
+
 static struct comlist cl[]={
 	{"pdump","============","DUMP Packets to file",NULL,NOARG},
 	{"pdump/active","0/1","start dumping data",dump,STRARG},
 	{"pdump/filename", "<file>", "set/show output filename (default: vde_dump.cap)", setfname, STRARG|WITHFILE},
+	{"pdump/buffered", "0/1", "set buffered/unbuffered dump", setbuffered, STRARG},
 };
 
 /*
@@ -114,6 +138,8 @@ static int pktevent(struct dbgcl *event,void * arg,va_list v)
 							hdr.caplen = len;
 							hdr.len = len;
 							pcap_dump((u_char *)dumper, &hdr, buf);
+							if (!buffered_dump)
+								pcap_dump_flush(dumper);	
 							}
 	}
 	return 0;
