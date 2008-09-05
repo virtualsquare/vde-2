@@ -171,7 +171,9 @@ init (void)
 	__attribute__ ((destructor))
 fini (void)
 {
+	eventdel(pktevent, "packet", NULL);
 	if(dumper) {
+		pcap_dump_flush(dumper);
 		pcap_dump_close(dumper);
 		dumper = NULL;
 	}
