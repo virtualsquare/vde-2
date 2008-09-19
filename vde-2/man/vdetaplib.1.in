@@ -16,17 +16,18 @@ To use it, the libvdetab.so library must be preloaded
 .RS
 .br
 .B 
-export LD_PRELOAD=%LIBEXECDIR%/libvdetap.so
+export LD_PRELOAD=%PKGLIBDIR%/libvdetap.so
 .RE
 (csh, tchs syntax):
 .RS
 .br
 .B
-setenv LD_PRELOAD %LIBEXECDIR%/libvdetap.so
+setenv LD_PRELOAD %PKGLIBDIR%/libvdetap.so
 .RE
 
 If you want to divert all tap requests to a single vde_switch set the
 variable VDEALLTAP to the vde socket. 
+.br
 (sh, ksh or bash syntax):
 .RS
 .br
@@ -40,8 +41,9 @@ export VDEALLTAP=/tmp/vde.ctl
 setenv VDEALLTAP /tmp/vde.ctl
 .RE
 
-It is also possible to set each single interface to different vde_switches
+It is possible to set each single interface to different vde_switches
 by setting the environment variable with the same name of the interface.
+.br
 (sh, ksh or bash syntax):
 .RS
 .br
@@ -65,6 +67,35 @@ setenv tap1 /tmp/myvde.ctl
 .br
 .B
 setenv ppc /tmp/ppc.ctl
+.RE
+.br
+
+It is also possible to specify \fBport\fP, \fBgroup\fP or \fBmode\fP for a given
+interface setting environment variables as in the following example.
+.br
+(sh, ksh or bash syntax):
+.RS
+.br
+.B
+export tap0_port=5
+.br
+.B
+export tap0_group=vde-net
+.br
+.B
+export tap0_mode=0660
+.RE
+(csh, tchs, syntax):
+.RS
+.br
+.B
+setenv tap0_port 5
+.br
+.B
+setenv tap0_group vde-net
+.br
+.B
+setenv tap0_mode 0660
 .RE
 .br
 
