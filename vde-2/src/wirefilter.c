@@ -26,6 +26,7 @@
 #include <signal.h>
 #include <math.h>
 #include <stdarg.h>
+#include <limits.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>

@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <syslog.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <libgen.h>
 #include <sys/types.h>
 #include <sys/stat.h>
