@@ -259,7 +259,7 @@ int main(int argc, char **argv)
 		switch (c) {
 			case 'p':
 				open_args.port=atoi(optarg);
-				if (open_args.port <= 0 || open_args.port > 255 )
+				if (open_args.port <= 0)
 					usage(); //implies exit
 				break;
 
