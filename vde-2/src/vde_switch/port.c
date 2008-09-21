@@ -579,6 +579,13 @@ static int portsetnumports(int val)
 					exit(1);
 				}
 			}
+			if (vlant[i].bcuntag) {
+				vlant[i].bcuntag=BA_REALLOC(vlant[i].bcuntag,numports,val);
+				if (vlant[i].bcuntag == NULL) {
+					printlog(LOG_ERR,"Numport resize failed vlan tables vlan bctag %s",strerror(errno));
+					exit(1);
+				}
+			}
 			if (vlant[i].notlearning) {
 				vlant[i].notlearning=BA_REALLOC(vlant[i].notlearning,numports,val);
 				if (vlant[i].notlearning == NULL) {
