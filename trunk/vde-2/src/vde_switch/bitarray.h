@@ -94,7 +94,7 @@ typedef bitarrayelem *bitarray;
 	 if(nb != NULL) \
 	 for(__i=__WORDSIZEROUND(N);__i<__WORDSIZEROUND(M);__i++) \
 	 nb[__i]=0; \
-	 nb[__WORDSIZEROUND(N)-1] &= (1L<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
+	 nb[__WORDSIZEROUND(N)-1] &= (-1UL) >>((0U-(N))%__VDEWORDSIZE); \
 	 nb;})
 
 #define BA_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1L << ((I) & __WORDSIZEMASK)))) 
@@ -183,7 +183,7 @@ typedef bitarrayelem *bitarray;
 	 (B)[__WORDSIZEROUND(M)]=__size; \
 	 for(__i=__WORDSIZEROUND(N);__i<__WORDSIZEROUND(M);__i++) \
 	 nb[__i]=0; }\
-	 nb[__WORDSIZEROUND(N)-1] &= (1L<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
+	 nb[__WORDSIZEROUND(N)-1] &= (-1UL) >>((0U-(N))%__VDEWORDSIZE); \
 	 nb;})
 
 /* BA_CHECK and BAC_CHECK are the same */
