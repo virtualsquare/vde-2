@@ -265,11 +265,7 @@ static int handle_cmd(int type,int fd,char *inbuf)
 	if (*inbuf != '\0' && *inbuf != '#') {
 		char *outbuf;
 		size_t outbufsize;
-		FILE *f;
-		if (fd >= 0)
-			f=open_memstream(&outbuf,&outbufsize);
-		else
-			f=NULL;
+		FILE *f=open_memstream(&outbuf,&outbufsize);
 		for (p=clh;p!=NULL && (p->doit==NULL || strncmp(p->path,inbuf,strlen(p->path))!=0); p=p->next)
 			;
 		if (p!=NULL)
@@ -277,21 +273,24 @@ static int handle_cmd(int type,int fd,char *inbuf)
 			inbuf += strlen(p->path);
 			while (*inbuf == ' ' || *inbuf == '\t') inbuf++;
 			if (p->type & WITHFD) {
-				if (p->type & WITHFILE) {
-					printoutc(f,"0000 DATA END WITH '.'");
-					switch(p->type & ~(WITHFILE | WITHFD)){
-						case NOARG: rv=p->doit(f,fd); break;
-						case INTARG: rv=p->doit(f,fd,atoi(inbuf)); break;
-						case STRARG: rv=p->doit(f,fd,inbuf); break;
+				if (fd >= 0) {
+					if (p->type & WITHFILE) {
+						printoutc(f,"0000 DATA END WITH '.'");
+						switch(p->type & ~(WITHFILE | WITHFD)){
+							case NOARG: rv=p->doit(f,fd); break;
+							case INTARG: rv=p->doit(f,fd,atoi(inbuf)); break;
+							case STRARG: rv=p->doit(f,fd,inbuf); break;
+						}
+						printoutc(f,".");
+					} else {
+						switch(p->type & ~WITHFD){
+							case NOARG: rv=p->doit(fd); break;
+							case INTARG: rv=p->doit(fd,atoi(inbuf)); break;
+							case STRARG: rv=p->doit(fd,inbuf); break;
+						}
 					}
-					printoutc(f,".");
-				} else {
-					switch(p->type & ~WITHFD){
-						case NOARG: rv=p->doit(fd); break;
-						case INTARG: rv=p->doit(fd,atoi(inbuf)); break;
-						case STRARG: rv=p->doit(fd,inbuf); break;
-					}
-				}
+				} else
+					rv = EBADF;
 			} else if (p->type & WITHFILE) {
 				printoutc(f,"0000 DATA END WITH '.'");
 				switch(p->type & ~WITHFILE){
@@ -308,13 +307,12 @@ static int handle_cmd(int type,int fd,char *inbuf)
 				}
 			}
 		}
-		if (rv >= 0 && (rv > 0 || fd >= 0))
+		if (rv >=0)
 			printoutc(f,"1%03d %s",rv,strerror(rv));
-		if (f) {
-			fclose(f);
+		fclose(f);
+		if (fd >= 0)
 			write(fd,outbuf,outbufsize);
-			free(outbuf);
-		}
+		free(outbuf);
 	}
 	return rv;
 }
