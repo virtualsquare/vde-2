@@ -193,7 +193,7 @@ void pcap_callback(u_char *u, const struct pcap_pkthdr *h, const u_char *data)
 void setup_fd(int fd)
 {
 /* FreeBSD settings */
-#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+#if defined(VDE_FREEBSD)
 	/*
 	 * Tell the kernel that the header is fully-formed when it gets it.
 	 * This is required in order to fake the src address.
