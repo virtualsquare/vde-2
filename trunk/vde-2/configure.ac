@@ -61,7 +61,7 @@ AC_REPLACE_FUNCS([open_memstream strndup])
 AC_CHECK_FUNC([poll],
 	[
 		AC_MSG_CHECKING([for poll sanity])
-		if expr "$build_os" : "darwin8\..*" > /dev/null; then
+		if expr "$build_os" : "darwin*" > /dev/null; then
 			AC_MSG_RESULT([present but broken, emulating with select])
 			AC_LIBOBJ([poll])
 			AC_DEFINE([poll], [vde_poll], [Define to vde_poll if the replacement function should be used.])
@@ -125,10 +125,11 @@ AC_ARG_ENABLE([tuntap],
 				[AC_DEFINE([HAVE_TUNTAP], 1, [If defined, tuntap support is compiled in])],
 				[warn_tuntap=yes])
 			can_make_libvdetap=yes
+			can_make_vdetunctl=yes
 			;;
 		darwin*)
 			# I don't use AC_CHECK_FILES because I need test -e and not test -r
-			for i in /dev/tap0 /Library/Extensions/tap.kext /System/Library/Extensions/tap.kext ; do
+			for i in /dev/tap0 /Library/Extensions/tap.kext ; do
 				AC_MSG_CHECKING([for $i])
 				if test -e "$i" ; then
 					AC_MSG_RESULT([yes])
@@ -150,7 +151,7 @@ configuration does work...])
 			else
 				warn_tuntap=yes
 				AC_MSG_WARN([You do not have tuntap support. You can get it here:
-http://www-user.rhrk.uni-kl.de/~nissler/tuntap/])
+http://tuntaposx.sourceforge.net/])
 			fi
 			;;
 		freebsd*)
@@ -160,12 +161,22 @@ http://www-user.rhrk.uni-kl.de/~nissler/tuntap/])
 			;;
 	esac])
 
+AC_ARG_ENABLE([kernel-switch],
+	AS_HELP_STRING([--enable-kernel-switch],
+		[Compile support for in-kernel switch. ]),
+	[if test $enableval = "yes"; then
+		enable_kernel_switch=yes
+		AC_DEFINE([USE_IPN], 1, [If defined, enable support for IPN socket])
+	fi])
+
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
+AM_CONDITIONAL(CAN_MAKE_VDETUNCTL, test "$can_make_vdetunctl" = yes)
 AM_CONDITIONAL(ENABLE_EXPERIMENTAL, test "$enable_experimental" = yes)
 AM_CONDITIONAL(ENABLE_PROFILE, test "$enable_profile" = yes)
 AM_CONDITIONAL(DARWIN_GCC, test "$darwin_gcc" = yes)
+AM_CONDITIONAL(ENABLE_KERNEL_SWITCH, test "$enable_kernel_switch" = yes)
 
 if test "x${prefix}" = "xNONE"; then
 	AC_DEFINE_UNQUOTED(INSTALLPATH, "${ac_default_prefix}",[PREFIX])
@@ -193,9 +204,6 @@ AC_CONFIG_FILES(
 		[src/slirpvde/Makefile]
 		[src/vde_switch/plugins/Makefile]
 		)
-
-#		[src/kvde_switch/Makefile]
-
 AC_OUTPUT
 
 
@@ -231,6 +239,12 @@ if test x$enable_profile = "xyes" ; then
 	echo " + Profiling options....... enabled"
 else
 	echo " - Profiling options....... disabled"
+fi
+
+if test x$enable_kernel_switch = "xyes" ; then
+	echo " + Kernel switch........... enabled"
+else
+	echo " - Kernel switch........... disabled"
 fi
 
 echo

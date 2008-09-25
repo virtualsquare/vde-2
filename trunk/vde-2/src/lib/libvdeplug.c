@@ -37,10 +37,6 @@
 
 #include <libvdeplug.h>
 
-/* IPN - Kernel VDE 
-*/
-#define USE_IPN
-
 #ifdef USE_IPN
 #ifndef AF_IPN
 #define AF_IPN    34  /* IPN sockets      */

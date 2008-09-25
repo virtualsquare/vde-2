@@ -4,7 +4,6 @@ SUBDIRS = \
 	vde_switch \
 	vde_over_ns \
 	vde_l3 \
-	kvde_switch \
 	slirpvde
 
 bin_PROGRAMS = \
@@ -18,16 +17,20 @@ bin_PROGRAMS = \
 	wirefilter \
 	vdeterm
 
-sbin_PROGRAMS = \
-	vde_tunctl
+if CAN_MAKE_VDETUNCTL
+  sbin_PROGRAMS = vde_tunctl
+endif
 
 if CAN_MAKE_LIBVDETAP
   SUBDIRS += vdetaplib
-  bin_PROGRAMS += vde_tunctl
 endif
 
 if ENABLE_CRYPTCAB
   SUBDIRS += vde_cryptcab
+endif
+
+if ENABLE_KERNEL_SWITCH
+  SUBDIRS += kvde_switch
 endif
 
 if ENABLE_PCAP
