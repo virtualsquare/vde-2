@@ -264,6 +264,10 @@ static char *parsevdearg(char *arg,char **sock,int *pport, int fd)
 			while (*arg != 0 && *arg != ',')
 				arg++;
 		}
+		else {
+		  printf("WARNING: unknown parameter in argument %s\n", arg);
+			exit(-1);
+	  }
 	}
 
 	snprintf(newarg,128,"tap,vlan=%d,fd=%d%s%s",vlan,fd,(*arg == 0)?"":",",arg);
