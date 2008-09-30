@@ -24,7 +24,6 @@
 #include <stdarg.h>
 #include <getopt.h>
 #include <dlfcn.h>
-#include <limits.h>
 #include <time.h>
 
 #include <config.h>
