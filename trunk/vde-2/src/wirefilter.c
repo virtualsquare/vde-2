@@ -32,7 +32,6 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <limits.h>
 
 #include <config.h>
 #include <vde.h>
