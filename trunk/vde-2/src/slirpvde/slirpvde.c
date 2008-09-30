@@ -53,7 +53,7 @@
 VDECONN *conn;
 int dhcpmgmt=0;
 static char *pidfile = NULL;
-static char pidfile_path[_POSIX_PATH_MAX];
+static char pidfile_path[PATH_MAX];
 int logok=0;
 char *prog;
 extern FILE *lfd;
@@ -78,9 +78,11 @@ void printlog(int priority, const char *format, ...)
 static void save_pidfile()
 {
 	if(pidfile[0] != '/')
-		strncat(pidfile_path, pidfile, PATH_MAX - strlen(pidfile_path));
-	else
-		strcpy(pidfile_path, pidfile);
+		strncat(pidfile_path, pidfile, sizeof(pidfile_path) - strlen(pidfile_path) -1);
+	else {
+		pidfile_path[0] = 0;
+		strncat(pidfile_path, pidfile, sizeof(pidfile_path)-1);
+	}
 
 	int fd = open(pidfile_path,
 			O_WRONLY | O_CREAT | O_EXCL,
@@ -433,7 +435,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	
-	strcat(pidfile_path, "/");
+	strncat(pidfile_path, "/", sizeof(pidfile_path) - strlen(pidfile_path) -1);
 	if (daemonize && daemon(0, 0)) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
 		exit(1);
