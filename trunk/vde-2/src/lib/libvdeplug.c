@@ -85,7 +85,7 @@ struct request_v3 {
 	enum request_type type;
 	struct sockaddr_un sock;
 	char description[MAXDESCR];
-};
+} __attribute__((packed));
 
 VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		struct vde_open_args *open_args)

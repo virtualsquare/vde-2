@@ -68,7 +68,7 @@ struct request_v1 {
 		} new_control;
 	} u;
 	char description[];
-};
+} __attribute__((packed));
 
 struct request_v3 {
 	uint32_t magic;
@@ -76,7 +76,7 @@ struct request_v3 {
 	enum request_type type;
 	struct sockaddr_un sock;
 	char description[];
-};
+} __attribute__((packed));
 
 union request {
 	struct request_v1 v1;

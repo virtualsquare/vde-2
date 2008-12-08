@@ -155,7 +155,7 @@ static int alloc_port(unsigned int portno)
 				port->flag=0;
 				port->sender=NULL;
 				port->vlanuntag=0;
-				BA_SET(vlant[0].table,i);
+				ba_set(vlant[0].table,i);
 			}
 		}
 		return i;
@@ -170,7 +170,7 @@ static void free_port(unsigned int portno)
 			portv[portno]=NULL;
 			register int i;
 			/* delete completely the port. all vlan defs zapped */
-			BAC_FORALL(validvlan,NUMOFVLAN,BA_CLR(vlant[i].table,portno),i);
+			bac_FORALL(validvlan,NUMOFVLAN,ba_clr(vlant[i].table,portno),i);
 			free(port);
 		}
 	}
@@ -205,19 +205,19 @@ int setup_ep(int portno, int fd_ctl,
 				/* copy all the vlan defs to the active vlan defs */
 				ep->next=port->ep;
 				port->ep=ep;
-				BAC_FORALL(validvlan,NUMOFVLAN,
-						({if (BA_CHECK(vlant[i].table,portno)) {
-						 BA_SET(vlant[i].bctag,portno);
+				bac_FORALL(validvlan,NUMOFVLAN,
+						({if (ba_check(vlant[i].table,portno)) {
+						 ba_set(vlant[i].bctag,portno);
 #ifdef FSTP
 						 fstaddport(i,portno,(i!=port->vlanuntag));
 #endif
 						 }
 						 }),i);
 				if (port->vlanuntag != NOVLAN) {
-					BA_SET(vlant[port->vlanuntag].bcuntag,portno);
-					BA_CLR(vlant[port->vlanuntag].bctag,portno);
+					ba_set(vlant[port->vlanuntag].bcuntag,portno);
+					ba_clr(vlant[port->vlanuntag].bctag,portno);
 				}
-				BA_CLR(vlant[port->vlanuntag].notlearning,portno);
+				ba_clr(vlant[port->vlanuntag].notlearning,portno);
 			} else {
 				ep->next=port->ep;
 				port->ep=ep;
@@ -286,13 +286,13 @@ int close_ep(int portno, int fd_ctl)
 				port->sender=NULL;
 				register int i;
 				/* inactivate port: all active vlan defs cleared */
-				BAC_FORALL(validvlan,NUMOFVLAN,({
-							BA_CLR(vlant[i].bctag,portno);
+				bac_FORALL(validvlan,NUMOFVLAN,({
+							ba_clr(vlant[i].bctag,portno);
 #ifdef FSTP
 							fstdelport(i,portno);
 #endif
 							}),i);
-				if (port->vlanuntag < NOVLAN) BA_CLR(vlant[port->vlanuntag].bcuntag,portno);
+				if (port->vlanuntag < NOVLAN) ba_clr(vlant[port->vlanuntag].bcuntag,portno);
 			}
 			return rv;	
 		} else
@@ -359,39 +359,39 @@ void port_send_packet(int portno, void *packet, int len)
 void portset_send_packet(bitarray portset, void *packet, int len)
 {
 	register int i;
-	BA_FORALL(portset,numports,
+	ba_FORALL(portset,numports,
 			SEND_PACKET_PORT(portv[i],i,packet,len), i);
 }
 
 
 void port_set_status(int portno, int vlan, int status)
 {
-	if (BA_CHECK(vlant[vlan].table,portno)) {
+	if (ba_check(vlant[vlan].table,portno)) {
 		if (status==DISCARDING) {
-			BA_SET(vlant[vlan].notlearning,portno);
-			BA_CLR(vlant[vlan].bctag,portno);
-			BA_CLR(vlant[vlan].bcuntag,portno);
+			ba_set(vlant[vlan].notlearning,portno);
+			ba_clr(vlant[vlan].bctag,portno);
+			ba_clr(vlant[vlan].bcuntag,portno);
 		} else if (status==LEARNING) {
-			BA_CLR(vlant[vlan].notlearning,portno);
-			BA_CLR(vlant[vlan].bctag,portno);
-			BA_CLR(vlant[vlan].bcuntag,portno);
+			ba_clr(vlant[vlan].notlearning,portno);
+			ba_clr(vlant[vlan].bctag,portno);
+			ba_clr(vlant[vlan].bcuntag,portno);
 		} else { /*forwarding*/
-			BA_CLR(vlant[vlan].notlearning,portno);
+			ba_clr(vlant[vlan].notlearning,portno);
 			if (portv[portno]->vlanuntag == vlan) 
-				BA_SET(vlant[vlan].bcuntag,portno);
+				ba_set(vlant[vlan].bcuntag,portno);
 			else 
-				BA_SET(vlant[vlan].bctag,portno);
+				ba_set(vlant[vlan].bctag,portno);
 		}
 	}
 }
 
 int port_get_status(int portno, int vlan)
 {
-	if (BA_CHECK(vlant[vlan].notlearning,portno)) 
+	if (ba_check(vlant[vlan].notlearning,portno)) 
 		return DISCARDING;
 	else {
-		if (BA_CHECK(vlant[vlan].bctag,portno) ||
-				BA_CHECK(vlant[vlan].bcuntag,portno))
+		if (ba_check(vlant[vlan].bctag,portno) ||
+				ba_check(vlant[vlan].bcuntag,portno))
 			return FORWARDING;
 		else
 			return LEARNING;
@@ -466,7 +466,7 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 			if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00) {
 				tagged=1;
 				vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
-				if (! BA_CHECK(vlant[vlan].table,port))
+				if (! ba_check(vlant[vlan].table,port))
 					return; /*discard unwanted packets*/
 			} else {
 				tagged=0;
@@ -482,7 +482,7 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 			}
 #endif
 			/* The port is in blocked status, no packet received */
-			if (BA_CHECK(vlant[vlan].notlearning,port)) return; 
+			if (ba_check(vlant[vlan].notlearning,port)) return; 
 
 			/* We don't like broadcast source addresses */
 			if(! (IS_BROADCAST(packet->header.src))) {
@@ -502,17 +502,17 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 				 * of the same tag-ness, then transform it to the other tag-ness for the others*/
 				if (tagged) {
 					register int i;
-					BA_FORALL(vlant[vlan].bctag,numports,
+					ba_FORALL(vlant[vlan].bctag,numports,
 							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
 					packet=TAG2UNTAG(packet,len);
-					BA_FORALL(vlant[vlan].bcuntag,numports,
+					ba_FORALL(vlant[vlan].bcuntag,numports,
 							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
 				} else { /* untagged */
 					register int i;
-					BA_FORALL(vlant[vlan].bcuntag,numports,
+					ba_FORALL(vlant[vlan].bcuntag,numports,
 							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
 					packet=UNTAG2TAG(packet,vlan,len);
-					BA_FORALL(vlant[vlan].bctag,numports,
+					ba_FORALL(vlant[vlan].bctag,numports,
 							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
 				}
 			}
@@ -566,28 +566,28 @@ static int portsetnumports(int val)
 		}
 		for (i=0;i<NUMOFVLAN;i++) { 
 			if (vlant[i].table) {
-				vlant[i].table=BA_REALLOC(vlant[i].table,numports,val);
+				vlant[i].table=ba_realloc(vlant[i].table,numports,val);
 				if (vlant[i].table == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan table %s",strerror(errno));
 					exit(1);
 				}
 			}
 			if (vlant[i].bctag) {
-				vlant[i].bctag=BA_REALLOC(vlant[i].bctag,numports,val);
+				vlant[i].bctag=ba_realloc(vlant[i].bctag,numports,val);
 				if (vlant[i].bctag == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan bctag %s",strerror(errno));
 					exit(1);
 				}
 			}
 			if (vlant[i].bcuntag) {
-				vlant[i].bcuntag=BA_REALLOC(vlant[i].bcuntag,numports,val);
+				vlant[i].bcuntag=ba_realloc(vlant[i].bcuntag,numports,val);
 				if (vlant[i].bcuntag == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan bctag %s",strerror(errno));
 					exit(1);
 				}
 			}
 			if (vlant[i].notlearning) {
-				vlant[i].notlearning=BA_REALLOC(vlant[i].notlearning,numports,val);
+				vlant[i].notlearning=ba_realloc(vlant[i].notlearning,numports,val);
 				if (vlant[i].notlearning == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan notlearning %s",strerror(errno));
 					exit(1);
@@ -758,7 +758,7 @@ static int portsetvlan(char *arg)
 	/* port NOVLAN is okay here, it means NO untagged traffic */
 	if (vlan <0 || vlan > NUMOFVLAN || port < 0 || port >= numports) 
 		return EINVAL;
-	if ((vlan != NOVLAN && !BAC_CHECK(validvlan,vlan)) || portv[port] == NULL)
+	if ((vlan != NOVLAN && !bac_check(validvlan,vlan)) || portv[port] == NULL)
 		return ENXIO;
 	int oldvlan=portv[port]->vlanuntag;
 	portv[port]->vlanuntag=NOVLAN;
@@ -766,18 +766,18 @@ static int portsetvlan(char *arg)
 	if (portv[port]->ep != NULL) {
 		/*changing active port*/
 		if (oldvlan != NOVLAN) 
-			BA_CLR(vlant[oldvlan].bcuntag,port);
+			ba_clr(vlant[oldvlan].bcuntag,port);
 		if (vlan != NOVLAN) {
-			BA_SET(vlant[vlan].bcuntag,port);
-			BA_CLR(vlant[vlan].bctag,port);
+			ba_set(vlant[vlan].bcuntag,port);
+			ba_clr(vlant[vlan].bctag,port);
 		}
 #ifdef FSTP
 		if (oldvlan != NOVLAN) fstdelport(oldvlan,port);
 		if (vlan != NOVLAN) fstaddport(vlan,port,0);
 #endif
 	}
-	if (oldvlan != NOVLAN) BA_CLR(vlant[oldvlan].table,port);
-	if (vlan != NOVLAN) BA_SET(vlant[vlan].table,port);
+	if (oldvlan != NOVLAN) ba_clr(vlant[oldvlan].table,port);
+	if (vlan != NOVLAN) ba_set(vlant[vlan].table,port);
 	portv[port]->vlanuntag=vlan;
 	return 0;
 }
@@ -785,10 +785,10 @@ static int portsetvlan(char *arg)
 static int vlancreate_nocheck(int vlan)
 {
 	int rv=0;
-	vlant[vlan].table=BA_ALLOC(numports);
-	vlant[vlan].bctag=BA_ALLOC(numports);
-	vlant[vlan].bcuntag=BA_ALLOC(numports);
-	vlant[vlan].notlearning=BA_ALLOC(numports);
+	vlant[vlan].table=ba_alloc(numports);
+	vlant[vlan].bctag=ba_alloc(numports);
+	vlant[vlan].bcuntag=ba_alloc(numports);
+	vlant[vlan].notlearning=ba_alloc(numports);
 	if (vlant[vlan].table == NULL || vlant[vlan].bctag == NULL || 
 			vlant[vlan].bcuntag == NULL) 
 		return ENOMEM;
@@ -797,7 +797,7 @@ static int vlancreate_nocheck(int vlan)
 		rv=fstnewvlan(vlan);
 #endif
 		if (rv == 0) {
-			BAC_SET(validvlan,NUMOFVLAN,vlan);
+			bac_set(validvlan,NUMOFVLAN,vlan);
 		}
 		return rv;
 	}
@@ -806,7 +806,7 @@ static int vlancreate_nocheck(int vlan)
 static int vlancreate(int vlan)
 {
 	if (vlan > 0 && vlan < NUMOFVLAN-1) { /*vlan NOVLAN (0xfff a.k.a. 4095) is reserved */
-		if (BAC_CHECK(validvlan,vlan))
+		if (bac_check(validvlan,vlan))
 			return EEXIST;
 		else 
 			return vlancreate_nocheck(vlan);
@@ -817,13 +817,13 @@ static int vlancreate(int vlan)
 static int vlanremove(int vlan)
 {
 	if (vlan >= 0 && vlan < NUMOFVLAN) {
-		if (BAC_CHECK(validvlan,vlan)) {
+		if (bac_check(validvlan,vlan)) {
 			register int i,used=0;
-			BA_FORALL(vlant[vlan].table,numports,used++,i);
+			ba_FORALL(vlant[vlan].table,numports,used++,i);
 			if (used)
 				return EADDRINUSE;
 			else {
-				BAC_CLR(validvlan,NUMOFVLAN,vlan);
+				bac_clr(validvlan,NUMOFVLAN,vlan);
 				free(vlant[vlan].table);
 				free(vlant[vlan].bctag);
 				free(vlant[vlan].bcuntag);
@@ -850,16 +850,16 @@ static int vlanaddport(char *arg)
 		return EINVAL;
 	if (vlan <0 || vlan >= NUMOFVLAN-1 || port < 0 || port >= numports)
 		return EINVAL;
-	if (!BAC_CHECK(validvlan,vlan) || portv[port] == NULL)
+	if (!bac_check(validvlan,vlan) || portv[port] == NULL)
 		return ENXIO;
 	if (portv[port]->ep != NULL && portv[port]->vlanuntag != vlan) {
 		/* changing active port*/
-		BA_SET(vlant[vlan].bctag,port);
+		ba_set(vlant[vlan].bctag,port);
 #ifdef FSTP
 		fstaddport(vlan,port,1);
 #endif
 	}
-	BA_SET(vlant[vlan].table,port);
+	ba_set(vlant[vlan].table,port);
 	return 0;
 }
 
@@ -870,25 +870,25 @@ static int vlandelport(char *arg)
 		return EINVAL;
 	if (vlan <0 || vlan >= NUMOFVLAN-1 || port < 0 || port >= numports)
 		return EINVAL;
-	if (!BAC_CHECK(validvlan,vlan) || portv[port] == NULL)
+	if (!bac_check(validvlan,vlan) || portv[port] == NULL)
 		return ENXIO;
 	if (portv[port]->vlanuntag == vlan)
 		return EADDRINUSE;
 	if (portv[port]->ep != NULL) {
 		/*changing active port*/
-		BA_CLR(vlant[vlan].bctag,port);
+		ba_clr(vlant[vlan].bctag,port);
 #ifdef FSTP
 		fstdelport(vlan,port);
 #endif
 	}
-	BA_CLR(vlant[vlan].table,port);
+	ba_clr(vlant[vlan].table,port);
 	hash_delete_port(port);
 	return 0;
 }
 
 #define STRSTATUS(PN,V) \
-	((BA_CHECK(vlant[(V)].notlearning,(PN))) ? "Discarding" : \
-	 (BA_CHECK(vlant[(V)].bctag,(PN)) || BA_CHECK(vlant[(V)].bcuntag,(PN))) ? \
+	((ba_check(vlant[(V)].notlearning,(PN))) ? "Discarding" : \
+	 (ba_check(vlant[(V)].bctag,(PN)) || ba_check(vlant[(V)].bcuntag,(PN))) ? \
 	 "Forwarding" : "Learning")
 
 static void vlanprintactive(int vlan,FILE *fd)
@@ -907,21 +907,21 @@ static void vlanprintactive(int vlan,FILE *fd)
 				fsttab[vlan]->rootport, 
 				ntohl(*(u_int32_t *)(&(fsttab[vlan]->rootcost))),
 				qtime()-fsttab[vlan]->roottimestamp);
-		BA_FORALL(vlant[vlan].table,numports,
+		ba_FORALL(vlant[vlan].table,numports,
 				({ int tagged=portv[i]->vlanuntag != vlan;
 				 if (portv[i]->ep)
 				 printoutc(fd," -- Port %04d tagged=%d act=%d learn=%d forw=%d cost=%d role=%s",
 					 i, tagged, 1, !(NOTLEARNING(i,vlan)),
-					 (tagged)?(BA_CHECK(vlant[vlan].bctag,i) != 0):(BA_CHECK(vlant[vlan].bcuntag,i) != 0),
+					 (tagged)?(ba_check(vlant[vlan].bctag,i) != 0):(ba_check(vlant[vlan].bcuntag,i) != 0),
 					 portv[i]->cost,
 					 (fsttab[vlan]->rootport==i?"Root":
-						((BA_CHECK(fsttab[vlan]->backup,i)?"Alternate/Backup":"Designated")))
+						((ba_check(fsttab[vlan]->backup,i)?"Alternate/Backup":"Designated")))
 					 ); 0;
 				 }) ,i);
 #endif
 	} else {
 #endif
-		BA_FORALL(vlant[vlan].table,numports,
+		ba_FORALL(vlant[vlan].table,numports,
 				({ int tagged=portv[i]->vlanuntag != vlan;
 				 if (portv[i]->ep)
 				 printoutc(fd," -- Port %04d tagged=%d active=1 status=%s", i, tagged, 
@@ -938,14 +938,14 @@ static int vlanprint(FILE *fd,char *arg)
 		register int vlan;
 		vlan=atoi(arg);
 		if (vlan >= 0 && vlan < NUMOFVLAN-1) {
-			if (BAC_CHECK(validvlan,vlan))
+			if (bac_check(validvlan,vlan))
 				vlanprintactive(vlan,fd);
 			else
 				return ENXIO;
 		} else
 			return EINVAL;
 	} else 
-		BAC_FORALLFUN(validvlan,NUMOFVLAN,vlanprintactive,fd);
+		bac_FORALLFUN(validvlan,NUMOFVLAN,vlanprintactive,fd);
 	return 0;
 }
 
@@ -953,7 +953,7 @@ static void vlanprintelem(int vlan,FILE *fd)
 {
 	register int i;
 	printoutc(fd,"VLAN %04d",vlan);
-	BA_FORALL(vlant[vlan].table,numports,
+	ba_FORALL(vlant[vlan].table,numports,
 			printoutc(fd," -- Port %04d tagged=%d active=%d status=%s",
 				i, portv[i]->vlanuntag != vlan, portv[i]->ep != NULL, STRSTATUS(i,vlan)),i);
 }
@@ -964,14 +964,14 @@ static int vlanprintall(FILE *fd,char *arg)
 		register int vlan;
 		vlan=atoi(arg);
 		if (vlan > 0 && vlan < NUMOFVLAN-1) {
-			if (BAC_CHECK(validvlan,vlan))
+			if (bac_check(validvlan,vlan))
 				vlanprintelem(vlan,fd);
 			else
 				return ENXIO;
 		} else
 			return EINVAL;
 	} else 
-		BAC_FORALLFUN(validvlan,NUMOFVLAN,vlanprintelem,fd);
+		bac_FORALLFUN(validvlan,NUMOFVLAN,vlanprintelem,fd);
 	return 0;
 }
 
@@ -1031,7 +1031,7 @@ void port_init(int initnumports)
 	}
 	portv=calloc(numports,sizeof(struct port *));
 	/* vlan_init */
-	validvlan=BAC_ALLOC(NUMOFVLAN);
+	validvlan=bac_alloc(NUMOFVLAN);
 	if (portv==NULL || validvlan == NULL) {
 		printlog(LOG_ERR,"ALLOC port data structures");
 		exit(1);

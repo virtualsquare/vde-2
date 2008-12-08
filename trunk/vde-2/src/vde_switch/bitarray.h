@@ -10,21 +10,21 @@
  *
  * e.g. bit number 33 is the second LSB of the second word (in a 32 bit machine)
  *
- * bitarrays must be allocated bu BA_ALLOC
- * BA_REALLOC must know the old and the new size of the bitarray
- * BA_CHECK checks a bit (returns 0 if cleared, some value != 0 it set)
- * BA_SET sets a bit
- * BA_CLR clears a bit
- * BA_FORALL computes an expression for each set bit, 
+ * bitarrays must be allocated bu ba_alloc
+ * ba_realloc must know the old and the new size of the bitarray
+ * ba_check checks a bit (returns 0 if cleared, some value != 0 it set)
+ * ba_set sets a bit
+ * ba_clr clears a bit
+ * ba_FORALL computes an expression for each set bit, 
  *           K is an integer var, must be defined in advance.
  *           it is the number of the set bit when the expression is evaluated
- * BA_FORALLFUN calls a function: first arg the index, second arg is ARG
- * BA_CARD counts how many bits are set
+ * ba_FORALLFUN calls a function: first arg the index, second arg is ARG
+ * ba_card counts how many bits are set
  *
- * BAC_ functions allocate one more trailing word to the bit array to store
+ * bac_ functions allocate one more trailing word to the bit array to store
  * the cardinality of the set (# of set bits).
  * This is useful when dealing with large sparse maybe empy sets.
- * BAC_SET/CLEAR are slightly more expensive but 
+ * bac_set/CLEAR are slightly more expensive but 
  * all the FORALL functions shortcut as soon as no more elements can be found.
  * If the set is empty the BAC FORALL macros exit immediately.
  * *** warning in case of memory leak may loop or segfault if the cardinality is
@@ -32,38 +32,39 @@
  *
  * Macro summary
  *
- * #define BA_ALLOC(N)
- * #define BA_REALLOC(B,N,M)
- * #define BA_CHECK(X,I)
- * #define BA_SET(X,I)
- * #define BA_CLR(X,I)
- * #define BA_ZAP(X,N)
- * #define BA_FORALLFUN(X,N,F,ARG)
- * #define BA_FORALL(X,N,EXPR,K)
- * #define BA_CARD(X,N)
- * #define BA_EMPTY(X,N)
- * #define BA_COPY(DST,SRC,N)     *** MUST HAVE THE SAME SIZE
- * #define BA_ADD(DST,SRC,N)      *** MUST HAVE THE SAME SIZE
- * #define BA_REMOVE(DST,SRC,N)   *** MUST HAVE THE SAME SIZE
- * #define BA_NEGATE(X,N)   *** MUST HAVE THE SAME SIZE
+ * #define ba_alloc(N)
+ * #define ba_realloc(B,N,M)
+ * #define ba_check(X,I)
+ * #define ba_set(X,I)
+ * #define ba_clr(X,I)
+ * #define ba_zap(X,N)
+ * #define ba_FORALLFUN(X,N,F,ARG)
+ * #define ba_FORALL(X,N,EXPR,K)
+ * #define ba_card(X,N)
+ * #define ba_empty(X,N)
+ * #define ba_copy(DST,SRC,N)     *** MUST HAVE THE SAME SIZE
+ * #define ba_add(DST,SRC,N)      *** MUST HAVE THE SAME SIZE
+ * #define ba_remove(DST,SRC,N)   *** MUST HAVE THE SAME SIZE
+ * #define ba_negate(X,N)
  *
- * #define BAC_ALLOC(N)
- * #define BAC_REALLOC(B,N,M)
- * #define BAC_CHECK(X,I)
- * #define BAC_SET(X,N,I)
- * #define BAC_CLR(X,N,I)
- * #define BAC_ZAP(X,N)
- * #define BAC_FORALLFUN(X,N,F,ARG)
- * #define BAC_FORALL(X,N,EXPR,K)
- * #define BAC_CARD(X,N)
- * #define BAC_EMPTY(X,N)
- * #define BAC_COPY(DST,SRC,N)   *** MUST HAVE THE SAME SIZE
+ * #define bac_alloc(N)
+ * #define bac_realloc(B,N,M)
+ * #define bac_check(X,I)
+ * #define bac_set(X,N,I)
+ * #define bac_clr(X,N,I)
+ * #define bac_zap(X,N)
+ * #define bac_FORALLFUN(X,N,F,ARG)
+ * #define bac_FORALL(X,N,EXPR,K)
+ * #define bac_card(X,N)
+ * #define bac_empty(X,N)
+ * #define bac_copy(DST,SRC,N)   *** MUST HAVE THE SAME SIZE
  */
 
 #ifndef _BITARRAY_H
 #define _BITARRAY_H
 #include <stdlib.h>
 #include <limits.h>
+#include <string.h>
 
 
 #if __LONG_MAX__ == 2147483647L                     /* 32 bits */
@@ -86,31 +87,46 @@ typedef bitarrayelem *bitarray;
 
 /* Simple Bit Array */
 
-#define BA_ALLOC(N) (calloc(__WORDSIZEROUND(N),sizeof(unsigned long)))
+static inline bitarray ba_alloc(int n)
+{
+	return calloc(__WORDSIZEROUND(n),sizeof(unsigned long));
+}
 
-#define BA_REALLOC(B,N,M) \
-	({ register int __i;\
-	 bitarray nb=realloc((B),__WORDSIZEROUND(M)*sizeof(unsigned long)); \
-	 if(nb != NULL) \
-	 for(__i=__WORDSIZEROUND(N);__i<__WORDSIZEROUND(M);__i++) \
-	 nb[__i]=0; \
-	 nb[__WORDSIZEROUND(N)-1] &= (-1UL) >>((0U-(N))%__VDEWORDSIZE); \
-	 nb;})
+static inline bitarray ba_realloc(bitarray b,int n,int m)
+{
+	register int __i;
+	bitarray nb=realloc(b,__WORDSIZEROUND(m)*sizeof(unsigned long)); 
+	if(nb != NULL) 
+		for(__i=__WORDSIZEROUND(n);__i<__WORDSIZEROUND(m);__i++) 
+			nb[__i]=0; 
+	nb[__WORDSIZEROUND(n)-1] &= (-1UL) >>((0U-(n))%__VDEWORDSIZE);
+	return nb;
+}
 
-#define BA_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1L << ((I) & __WORDSIZEMASK)))) 
+static inline int ba_check(bitarray x,int i)
+{
+	return (x && (x[i>>__LOG_WORDSIZE] & (1L << (i & __WORDSIZEMASK))));
+}
 
-#define BA_SET(X,I) ((X)[(I)>>__LOG_WORDSIZE] |= (1L << ((I) & __WORDSIZEMASK)))
+static inline void ba_set(bitarray x,int i)
+{
+	x[i>>__LOG_WORDSIZE] |= (1L << (i & __WORDSIZEMASK));
+}
 
-#define BA_CLR(X,I) ((X)[(I)>>__LOG_WORDSIZE] &= ~(1L << ((I) & __WORDSIZEMASK)))
+static inline void ba_clr(bitarray x,int i)
+{
+	x[i>>__LOG_WORDSIZE] &= ~(1L << (i & __WORDSIZEMASK));
+}
 
-#define BA_ZAP(X,N) \
-	({ register unsigned int __i; \
-	 int max=__WORDSIZEROUND(N); \
-	 for (__i=0; __i< max; __i++) \
-	 (X)[__i]=0; \
-	 0 ; })
+static inline void ba_zap(bitarray x,int n)
+{ 
+	register unsigned int __i; 
+	int max=__WORDSIZEROUND(n); 
+	for (__i=0; __i< max; __i++) 
+		x[__i]=0;
+}
 
-#define BA_FORALLFUN(X,N,F,ARG) \
+#define ba_FORALLFUN(X,N,F,ARG) \
 	({ register unsigned int __i,__j; \
 	 register bitarrayelem __v; \
 	 int max=__WORDSIZEROUND(N); \
@@ -119,7 +135,7 @@ typedef bitarrayelem *bitarray;
 	 if (__v & 1) (F)(__i*__VDEWORDSIZE+__j,(ARG)); \
 	 0; })
 
-#define BA_FORALL(X,N,EXPR,K) \
+#define ba_FORALL(X,N,EXPR,K) \
 	({ register unsigned int __i,__j; \
 	 register bitarrayelem __v; \
 	 int max=__WORDSIZEROUND(N); \
@@ -128,90 +144,109 @@ typedef bitarrayelem *bitarray;
 	 if (__v & 1) {(K)=__i*__VDEWORDSIZE+__j;(EXPR);} \
 	 0; })
 
-#define BA_CARD(X,N) \
-	({ register unsigned int __i,__j,__n=0; \
-	 register bitarrayelem __v; \
-	 int max=__WORDSIZEROUND(N); \
-	 for (__i=0; __i< max; __i++) \
-	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
-	 if (__v & 1) __n++; \
-	 __n; })
+static inline int ba_card(bitarray x,int n)
+{
+	register unsigned int __i,__j,__n=0; 
+	register bitarrayelem __v; 
+	int max=__WORDSIZEROUND(n); 
+	for (__i=0; __i< max; __i++) 
+		for (__v=(x)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) 
+			if (__v & 1) __n++; 
+	 return __n; 
+}
 
-#define BA_EMPTY(X,N) \
-	({ register unsigned int __i; \
-	 register bitarrayelem __v=0; \
-	 int max=__WORDSIZEROUND(N); \
-	 for (__i=0; __i< max; __i++) \
-	 __v |= (X)[__i]; \
-	 __v; })
+static inline void ba_empty(bitarray x,int n)
+{ 
+	register unsigned int __i; 
+	register bitarrayelem __v=0; 
+	int max=__WORDSIZEROUND(n); 
+	for (__i=0; __i< max; __i++) 
+		__v |= (x)[__i]; \
+}
 
-#define BA_COPY(DST,SRC,N) memcpy(DST,SRC,sizeof(bitarrayelem) * __WORDSIZEROUND(N))
+static inline void ba_copy(bitarray dst, bitarray src, int n)
+{
+	memcpy(dst,src,sizeof(bitarrayelem) * __WORDSIZEROUND(n));
+}
 
-#define BA_ADD(DST,SRC,N) \
-	({ register unsigned int __i; \
-	 int max=__WORDSIZEROUND(N); \
-	 for (__i=0; __i< max; __i++) \
-	 (DST)[__i] |= (SRC)[__i]; \
-	 0; })
+static inline void ba_add(bitarray dst, bitarray src, int n)
+{
+	register unsigned int __i; 
+	int max=__WORDSIZEROUND(n); 
+	for (__i=0; __i< max; __i++) 
+		dst[__i] |= src[__i]; 
+}
 
-#define BA_REMOVE(DST,SRC,N) \
-	({ register unsigned int __i; \
-	 int max=__WORDSIZEROUND(N); \
-	 for (__i=0; __i< max; __i++) \
-	 (DST)[__i] &= ~((SRC)[__i]); \
-	 nb[max-1] &= (1L<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
-	 0; })
+static inline void ba_remove(bitarray dst, bitarray src, int n)
+{
+	register unsigned int __i; 
+	int max=__WORDSIZEROUND(n); 
+	for (__i=0; __i< max; __i++) 
+		dst[__i] &= ~(src[__i]); 
+}
 
-#define BA_NEGATE(X,N) \
-	({ register unsigned int __i; \
-	 int max=__WORDSIZEROUND(N); \
-	 for (__i=0; __i< max; __i++) \
-	 (X)[__i] = ~((X)[__i]); \
-	 nb[max-1] &= (1L<<(((((N)&__WORDSIZEMASK)-1)&0x1f)+1))-1; \
-	 0; })
+static inline void ba_negate(bitarray x, int n)
+{
+	register unsigned int __i; 
+	int max=__WORDSIZEROUND(n); 
+	for (__i=0; __i< max; __i++) 
+		x[__i] = ~(x[__i]);
+}
 
-/* Bit Array with Cardinality (Count of set bit) */
+/* Bit Array with Cardinality (Count of set bits) */
 /* it is stored after the last element */
 
-#define BAC_ALLOC(N) (calloc(__WORDSIZEROUND(N)+1,sizeof(unsigned long)))
+static inline bitarray bac_alloc(int n)
+{
+	return calloc(__WORDSIZEROUND(n)+1,sizeof(unsigned long));
+}
 
-#define BAC_REALLOC(B,N,M) \
-	({ register int __i;\
-	 register int __size=(B)[__WORDSIZEROUND(N)]; \
-	 bitarray nb=realloc((B),(__WORDSIZEROUND(M)+1)*sizeof(unsigned long)); \
-	 if(nb != NULL) { \
-	 (B)[__WORDSIZEROUND(M)]=__size; \
-	 for(__i=__WORDSIZEROUND(N);__i<__WORDSIZEROUND(M);__i++) \
-	 nb[__i]=0; }\
-	 nb[__WORDSIZEROUND(N)-1] &= (-1UL) >>((0U-(N))%__VDEWORDSIZE); \
-	 nb;})
+static inline bitarray bac_realloc(bitarray b,int n,int m)
+{
+	register int __i;
+	register int __size=b[__WORDSIZEROUND(n)]; 
+	bitarray nb=realloc(b,(__WORDSIZEROUND(m)+1)*sizeof(unsigned long)); 
+	if(nb != NULL) { 
+		b[__WORDSIZEROUND(m)]=__size; 
+		for(__i=__WORDSIZEROUND(n);__i<__WORDSIZEROUND(n);__i++) 
+			nb[__i]=0; 
+	}
+	nb[__WORDSIZEROUND(n)-1] &= (-1UL) >>((0U-n)%__VDEWORDSIZE); 
+	return nb;
+}
 
-/* BA_CHECK and BAC_CHECK are the same */
-#define BAC_CHECK(X,I) ((X) && ((X)[(I)>>__LOG_WORDSIZE] & (1L << ((I) & __WORDSIZEMASK))))
+/* ba_check and bac_check are the same */
+static inline int bac_check(bitarray x,int i)
+{
+	return (x && (x[i>>__LOG_WORDSIZE] & (1L << (i & __WORDSIZEMASK))));
+}
 
-#define BAC_SET(X,N,I) \
-	({ register bitarrayelem __v=(X)[(I)>>__LOG_WORDSIZE]; \
-		register bitarrayelem __w=__v; \
-		__v |= (1L << ((I) & __WORDSIZEMASK)); \
-		if (__v != __w) (X)[(I)>>__LOG_WORDSIZE]=__v,((X)[__WORDSIZEROUND(N)]++); \
-		})
+static inline void bac_set(bitarray x,int n,int i)
+{ 
+	register bitarrayelem __v=x[i>>__LOG_WORDSIZE]; 
+	register bitarrayelem __w=__v; 
+	__v |= (1L << (i & __WORDSIZEMASK)); 
+	if (__v != __w) x[i>>__LOG_WORDSIZE]=__v,(x[__WORDSIZEROUND(n)]++); 
+}
 
-#define BAC_CLR(X,N,I) \
-	({ register bitarrayelem __v=(X)[(I)>>__LOG_WORDSIZE]; \
-	 register bitarrayelem __w=__v; \
-	 __v &= ~(1L << ((I) & __WORDSIZEMASK)); \
-	 if (__v != __w) (X)[(I)>>__LOG_WORDSIZE]=__v,((X)[__WORDSIZEROUND(N)]--); \
-	 })
+static inline void bac_clr(bitarray x,int n,int i)
+{ 
+	register bitarrayelem __v=x[i>>__LOG_WORDSIZE]; 
+	register bitarrayelem __w=__v; 
+	__v &= ~(1L << (i & __WORDSIZEMASK)); 
+	if (__v != __w) x[i>>__LOG_WORDSIZE]=__v,(x[__WORDSIZEROUND(n)]--); 
+}
 
-#define BAC_ZAP(X,N) \
-	({ register unsigned int __i; \
-	 int max=__WORDSIZEROUND(N); \
-	 for (__i=0; __i< max; __i++) \
-	 (X)[__i]=0; \
-	 (X)[__i]=0; \
-	 0 ; })
+static inline void bac_zap(bitarray x,int n)
+{ 
+	register unsigned int __i;
+		int max=__WORDSIZEROUND(n);
+	 for (__i=0; __i< max; __i++)
+		 x[__i]=0;
+	 x[__i]=0;
+}
 
-#define BAC_FORALLFUN(X,N,F,ARG) \
+#define bac_FORALLFUN(X,N,F,ARG) \
 	({ register unsigned int __i,__j; \
 	 register bitarrayelem __v; \
 	 register int __n=(X)[__WORDSIZEROUND(N)]; \
@@ -220,7 +255,7 @@ typedef bitarrayelem *bitarray;
 	 if (__v & 1) (F)(__i*__VDEWORDSIZE+__j,(ARG)),__n--; \
 	 0; })
 
-#define BAC_FORALL(X,N,EXPR,K) \
+#define bac_FORALL(X,N,EXPR,K) \
 	({ register unsigned int __i,__j; \
 	 register bitarrayelem __v; \
 	 register int __n=(X)[__WORDSIZEROUND(N)]; \
@@ -229,12 +264,23 @@ typedef bitarrayelem *bitarray;
 	 if (__v & 1) (K)=__i*__VDEWORDSIZE+__j,(EXPR),__n--; \
 	 0; })
 
-#define BAC_CARD(X,N) ((X)[__WORDSIZEROUND(N)])
-#define BAC_EMPTY(X,N) ((X)[__WORDSIZEROUND(N)]==0)
+static inline int bac_card(bitarray x,int n)
+{
+	return(x[__WORDSIZEROUND(n)]);
+}
 
-#define BAC_COPY(DST,SRC,N) memcpy(DST,SRC,sizeof(bitarrayelem) * (__WORDSIZEROUND(N)+1))
+static inline int bac_empty(bitarray x,int n)
+{
+	return(x[__WORDSIZEROUND(n)]==0);
+}
+
+static inline void bac_copy(bitarray dst, bitarray src, int n)
+{
+	memcpy(dst,src,sizeof(bitarrayelem) * (__WORDSIZEROUND(n)+1));
+}
 
 #if 0
+#include <stdio.h>
 /* usage example */
 int fun(int i,int arg)
 {
@@ -249,49 +295,49 @@ int main (int argc, char *argv[])
 	int val=atoi(argv[1]);
 	if (val < 34) return 0;
 	printf("%d -round-> %d\n",val,__WORDSIZEROUND(val));
-	b=BA_ALLOC(val);
-	BA_SET(b,31);
-	BA_SET(b,33);
-	printf("%d -> %d\n",31,BA_CHECK(b,31));
-	printf("%d -> %d\n",33,BA_CHECK(b,33));
-	printf("CARD %d\n",BA_CARD(b,val));
-	BA_FORALLFUN(b,val,fun,0);
-	BA_FORALL(b,val,(printf("E1 %d\n",k)),k);
+	b=ba_alloc(val);
+	ba_set(b,31);
+	ba_set(b,33);
+	printf("%d -> %d\n",31,ba_check(b,31));
+	printf("%d -> %d\n",33,ba_check(b,33));
+	printf("CARD %d\n",ba_card(b,val));
+	ba_FORALLFUN(b,val,fun,0);
+	ba_FORALL(b,val,(printf("E1 %d\n",k)),k);
 	printf("RE127\n");
-	b=BA_REALLOC(b,val,127);
-	BA_FORALL(b,127,(printf("E2 %d\n",k)),k);
+	b=ba_realloc(b,val,127);
+	ba_FORALL(b,127,(printf("E2 %d\n",k)),k);
 	printf("RE42\n");
-	b=BA_REALLOC(b,127,42);
-	BA_FORALL(b,127,(printf("E3 %d\n",k)),k);
-	BA_CLR(b,31);
-	printf("%d -> %d\n",31,BA_CHECK(b,31));
-	printf("CARD %d\n",BA_CARD(b,42));
-	BA_CLR(b,33);
-	printf("%d -> %d\n",33,BA_CHECK(b,33));
-	printf("CARD %d\n",BA_CARD(b,42));
-	b=BAC_ALLOC(val);
+	b=ba_realloc(b,127,42);
+	ba_FORALL(b,127,(printf("E3 %d\n",k)),k);
+	ba_clr(b,31);
+	printf("%d -> %d\n",31,ba_check(b,31));
+	printf("CARD %d\n",ba_card(b,42));
+	ba_clr(b,33);
+	printf("%d -> %d\n",33,ba_check(b,33));
+	printf("CARD %d\n",ba_card(b,42));
+	b=bac_alloc(val);
 	if (argc != 2) return 0;
 	printf("%d -> %d\n",val,__WORDSIZEROUND(val));
-	BAC_SET(b,val,31);
-	BAC_SET(b,val,33);
-	printf("%d -> %d\n",31,BAC_CHECK(b,31));
-	printf("%d -> %d\n",33,BAC_CHECK(b,33));
-	printf("CARD %d\n",BAC_CARD(b,val));
-	BAC_FORALLFUN(b,val,fun,0);
-	BAC_FORALL(b,val,(printf("E1 %d\n",k)),k);
+	bac_set(b,val,31);
+	bac_set(b,val,33);
+	printf("%d -> %d\n",31,bac_check(b,31));
+	printf("%d -> %d\n",33,bac_check(b,33));
+	printf("CARD %d\n",bac_card(b,val));
+	bac_FORALLFUN(b,val,fun,0);
+	bac_FORALL(b,val,(printf("E1 %d\n",k)),k);
 	printf("RE127\n");
-	printf("CARD %d\n",BAC_CARD(b,val));
-	b=BAC_REALLOC(b,val,127);
-	BAC_FORALL(b,127,(printf("E2 %d\n",k)),k);
+	printf("CARD %d\n",bac_card(b,val));
+	b=bac_realloc(b,val,127);
+	bac_FORALL(b,127,(printf("E2 %d\n",k)),k);
 	printf("RE42\n");
-	b=BAC_REALLOC(b,127,42);
-	BAC_FORALL(b,42,(printf("E3 %d\n",k)),k);
-	BAC_CLR(b,42,31);
-	printf("%d -> %d\n",31,BAC_CHECK(b,31));
-	printf("CARD %d\n",BAC_CARD(b,42));
-	BAC_CLR(b,42,33);
-	printf("%d -> %d\n",33,BAC_CHECK(b,33));
-	printf("CARD %d\n",BAC_CARD(b,val));
+	b=bac_realloc(b,127,42);
+	bac_FORALL(b,42,(printf("E3 %d\n",k)),k);
+	bac_clr(b,42,31);
+	printf("%d -> %d\n",31,bac_check(b,31));
+	printf("CARD %d\n",bac_card(b,42));
+	bac_clr(b,42,33);
+	printf("%d -> %d\n",33,bac_check(b,33));
+	printf("CARD %d\n",bac_card(b,val));
 }
 #endif
 #endif
