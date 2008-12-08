@@ -211,7 +211,7 @@ static void delete_vlansetofports_iterator (struct hash_entry *e, void *arg)
 {
 	struct vlansetofports *vp=(struct vlansetofports *)arg;
 	if (*((u_int16_t *)(e->dst+ETH_ALEN)) == (u_int16_t)(vp->vlan) &&
-			BA_CHECK(vp->setofports,e->port))
+			ba_check(vp->setofports,e->port))
 		delete_hash_entry(e);
 }
 

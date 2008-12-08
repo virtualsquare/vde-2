@@ -64,8 +64,8 @@ static char *fstpdecodestatus[]={
 #endif
 
 #define SWITCHID_LEN (ETH_ALEN+2)
-#define FSTP_ACTIVE(VLAN,PORT) (BA_CHECK(fsttab[(VLAN)]->rcvhist[0],(PORT)) || \
-			BA_CHECK(fsttab[(VLAN)]->rcvhist[1],(PORT)))
+#define FSTP_ACTIVE(VLAN,PORT) (ba_check(fsttab[(VLAN)]->rcvhist[0],(PORT)) || \
+			ba_check(fsttab[(VLAN)]->rcvhist[1],(PORT)))
 
 static int rcvhistindex;
 struct vlst {
@@ -172,8 +172,8 @@ static struct fsttagbpdu outtagpacket = {
 
 #define STP_FLAGS(VLAN,PORT,AGR,TC,TCACK) \
 	(TC | \
-	 (BA_CHECK(fsttab[(VLAN)]->backup,port) != 0) << 1 | \
-	 (BA_CHECK(fsttab[(VLAN)]->backup,port) == 0) << 2 | \
+	 (ba_check(fsttab[(VLAN)]->backup,port) != 0) << 1 | \
+	 (ba_check(fsttab[(VLAN)]->backup,port) == 0) << 2 | \
 	 (fsttab[vlan]->rootport != (PORT)) << 3 |\
 	 port_get_status((PORT),(VLAN)) << 4 | \
 	 (AGR) << 6 | \
@@ -186,12 +186,12 @@ int fstnewvlan(int vlan)
 	int newvlan=(fsttab[vlan] == NULL);
 	if (newvlan  &&
 			((fsttab[vlan]=malloc(sizeof(struct vlst))) == NULL ||
-			 (fsttab[vlan]->untag = BA_ALLOC(numports)) == NULL ||
-			 (fsttab[vlan]->tagged = BA_ALLOC(numports)) == NULL ||
-			 (fsttab[vlan]->edge = BA_ALLOC(numports)) == NULL ||
-			 (fsttab[vlan]->rcvhist[0] = BA_ALLOC(numports)) == NULL ||
-			 (fsttab[vlan]->rcvhist[1] = BA_ALLOC(numports)) == NULL ||
-			 (fsttab[vlan]->backup = BA_ALLOC(numports)) == NULL))
+			 (fsttab[vlan]->untag = ba_alloc(numports)) == NULL ||
+			 (fsttab[vlan]->tagged = ba_alloc(numports)) == NULL ||
+			 (fsttab[vlan]->edge = ba_alloc(numports)) == NULL ||
+			 (fsttab[vlan]->rcvhist[0] = ba_alloc(numports)) == NULL ||
+			 (fsttab[vlan]->rcvhist[1] = ba_alloc(numports)) == NULL ||
+			 (fsttab[vlan]->backup = ba_alloc(numports)) == NULL))
 		return ENOMEM;
 	else {
 		memcpy(fsttab[vlan]->root,myid,SWITCHID_LEN);
@@ -210,8 +210,8 @@ int fstnewvlan(int vlan)
 				fsttab[vlan]->root[4], fsttab[vlan]->root[5], 
 				fsttab[vlan]->root[6], fsttab[vlan]->root[7]);
 		EVENTOUT(DBGFSTPROOT,0,vlan,fsttab[vlan]->root);
-		BA_FORALL(fsttab[vlan]->backup,numports, ({
-				BA_CLR(fsttab[vlan]->backup,port);
+		ba_FORALL(fsttab[vlan]->backup,numports, ({
+				ba_clr(fsttab[vlan]->backup,port);
 				port_set_status(port,vlan,FORWARDING);
 				}), port);
 		return 0;
@@ -243,32 +243,32 @@ void fstsetnumports (int val)
 	/*printf("F numports %d\n",val);*/
 	for (i=0;i<NUMOFVLAN;i++) {
 		if (fsttab[i]) {
-			fsttab[i]->untag=BA_REALLOC(fsttab[i]->untag,numports,val);
+			fsttab[i]->untag=ba_realloc(fsttab[i]->untag,numports,val);
 			if (fsttab[i]->untag == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/untag %s",strerror(errno));
 				exit(1);
 			}
-			fsttab[i]->tagged=BA_REALLOC(fsttab[i]->tagged,numports,val);
+			fsttab[i]->tagged=ba_realloc(fsttab[i]->tagged,numports,val);
 			if (fsttab[i]->tagged == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/tagged %s",strerror(errno));
 				exit(1);
 			}
-			fsttab[i]->backup=BA_REALLOC(fsttab[i]->backup,numports,val);
+			fsttab[i]->backup=ba_realloc(fsttab[i]->backup,numports,val);
 			if (fsttab[i]->backup == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/backup %s",strerror(errno));
 				exit(1);
 			}
-			fsttab[i]->edge=BA_REALLOC(fsttab[i]->edge,numports,val);
+			fsttab[i]->edge=ba_realloc(fsttab[i]->edge,numports,val);
 			if (fsttab[i]->edge == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/edge %s",strerror(errno));
 				exit(1);
 			}
-			fsttab[i]->rcvhist[0]=BA_REALLOC(fsttab[i]->rcvhist[0],numports,val);
+			fsttab[i]->rcvhist[0]=ba_realloc(fsttab[i]->rcvhist[0],numports,val);
 			if (fsttab[i]->rcvhist[0] == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/rcvhist0 %s",strerror(errno));
 				exit(1);
 			}
-			fsttab[i]->rcvhist[1]=BA_REALLOC(fsttab[i]->rcvhist[1],numports,val);
+			fsttab[i]->rcvhist[1]=ba_realloc(fsttab[i]->rcvhist[1],numports,val);
 			if (fsttab[i]->rcvhist[1] == NULL) {
 				printlog(LOG_ERR,"Numport resize failed vlan tables fstab/rcvhist1 %s",strerror(errno));
 				exit(1);
@@ -297,16 +297,16 @@ static void fst_hello_vlan(int vlan,int now)
 	outpacket.stp_age[1] = outtagpacket.stp_age[1]=age>>8;
 	outpacket.stp_fwddelay[0] = outtagpacket.stp_fwddelay[0]=0;
 	outpacket.stp_fwddelay[1] = outtagpacket.stp_fwddelay[1]=0; /* XXX */
-	BA_FORALL(fsttab[vlan]->untag,numports,
-			({ if (!(BA_CHECK(fsttab[vlan]->edge,port))) {
+	ba_FORALL(fsttab[vlan]->untag,numports,
+			({ if (!(ba_check(fsttab[vlan]->edge,port))) {
 			 outpacket.stp_port[0]=0x80| (port>>4);
 			 outpacket.stp_port[1]=port;
 			 outpacket.stp_flags=STP_FLAGS(vlan,port,1,0,0);
 			 port_send_packet(port,&outpacket,sizeof(outpacket));
 			 }
 			 }), port);
-	BA_FORALL(fsttab[vlan]->tagged,numports,
-			({ if (!(BA_CHECK(fsttab[vlan]->edge,port))) {
+	ba_FORALL(fsttab[vlan]->tagged,numports,
+			({ if (!(ba_check(fsttab[vlan]->edge,port))) {
 			 outtagpacket.stp_port[0]=0x80| (port>>4);
 			 outtagpacket.stp_port[1]=port;
 			 outtagpacket.tag_vlan[0]=vlan>>8 & 0xf;
@@ -324,25 +324,25 @@ static void fst_hello_vlan(int vlan,int now)
 static void fst_updatebackup(int vlan,int index)
 {
 	register int port;
-	BA_FORALL(fsttab[vlan]->backup,numports, ({
+	ba_FORALL(fsttab[vlan]->backup,numports, ({
 				if (!FSTP_ACTIVE(vlan,port)) {
-				BA_CLR(fsttab[vlan]->backup,port);
+				ba_clr(fsttab[vlan]->backup,port);
 				port_set_status(port,vlan,FORWARDING);
 				}
 				}), port);
 #ifdef DEBUGOPT
-	BA_FORALL(fsttab[vlan]->untag,numports,({
-				if (BA_CHECK(fsttab[(vlan)]->rcvhist[index],(port)) && !(BA_CHECK(fsttab[(vlan)]->rcvhist[1-index],(port)))) {
+	ba_FORALL(fsttab[vlan]->untag,numports,({
+				if (ba_check(fsttab[(vlan)]->rcvhist[index],(port)) && !(ba_check(fsttab[(vlan)]->rcvhist[1-index],(port)))) {
 				DBGOUT(DBGFSTPMINUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
 				EVENTOUT(DBGFSTPMINUS,port,vlan); }
 				}), port);
-	BA_FORALL(fsttab[vlan]->tagged,numports,({
-				if (BA_CHECK(fsttab[(vlan)]->rcvhist[index],(port)) && !(BA_CHECK(fsttab[(vlan)]->rcvhist[1-index],(port)))) {
+	ba_FORALL(fsttab[vlan]->tagged,numports,({
+				if (ba_check(fsttab[(vlan)]->rcvhist[index],(port)) && !(ba_check(fsttab[(vlan)]->rcvhist[1-index],(port)))) {
 				DBGOUT(DBGFSTPMINUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
 				EVENTOUT(DBGFSTPMINUS,port,vlan); }
 				}), port);
 #endif
-	BA_ZAP(fsttab[vlan]->rcvhist[index],numports);
+	ba_zap(fsttab[vlan]->rcvhist[index],numports);
 }
 
 static void fst_hello(void *arg)
@@ -351,10 +351,10 @@ static void fst_hello(void *arg)
 	static int hellocounter;
 	hellocounter++;
 	//printf("HELLO\n");
-	BAC_FORALLFUN(validvlan,NUMOFVLAN,fst_hello_vlan,now);
+	bac_FORALLFUN(validvlan,NUMOFVLAN,fst_hello_vlan,now);
 	if ((hellocounter & 0x3) == 0) {
 		rcvhistindex=1-rcvhistindex;
-		BAC_FORALLFUN(validvlan,NUMOFVLAN, fst_updatebackup,rcvhistindex);
+		bac_FORALLFUN(validvlan,NUMOFVLAN, fst_updatebackup,rcvhistindex);
 	}
 }
 
@@ -364,7 +364,7 @@ static void fst_sendbpdu(int vlan,int port,int agr,int tc,int tcack)
 	int age,nowvlan;
 	if (!(pflag & FSTP_TAG)) return;
 	nowvlan=(fsttab[vlan]->rootport==0)?0:now; /* This switch is the root */
-	if (BA_CHECK(fsttab[vlan]->untag,port)) {
+	if (ba_check(fsttab[vlan]->untag,port)) {
 		memcpy(outpacket.stp_root,fsttab[vlan]->root,SWITCHID_LEN);
 		memcpy(outpacket.stp_rootcost,fsttab[vlan]->rootcost,4);
 		age=nowvlan-fsttab[vlan]->roottimestamp;
@@ -378,7 +378,7 @@ static void fst_sendbpdu(int vlan,int port,int agr,int tc,int tcack)
 		outpacket.stp_flags=STP_FLAGS(vlan,port,agr,tc,tcack);
 		port_send_packet(port,&outpacket,sizeof(outpacket));
 	} 
-	if (BA_CHECK(fsttab[vlan]->tagged,port)) {
+	if (ba_check(fsttab[vlan]->tagged,port)) {
 		memcpy(outtagpacket.stp_root,fsttab[vlan]->root,SWITCHID_LEN);
 		memcpy(outtagpacket.stp_rootcost,fsttab[vlan]->rootcost,4);
 		age=nowvlan-fsttab[vlan]->roottimestamp;
@@ -409,14 +409,14 @@ static void topology_change(int vlan, int genport)
 	/*printf("TOPOLOGY CHANGE %d\n",vlan);*/
 	fsttab[vlan]->tctime=now;
 	hash_delete_vlan(vlan);
-	BA_FORALL(fsttab[vlan]->untag,numports,
-			({ if(port != genport && !(BA_CHECK(fsttab[vlan]->backup,port)) &&
-						!(BA_CHECK(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
+	ba_FORALL(fsttab[vlan]->untag,numports,
+			({ if(port != genport && !(ba_check(fsttab[vlan]->backup,port)) &&
+						!(ba_check(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
 			 fst_sendbpdu(vlan,port,0,1,0); }
 			 }),port);
-	BA_FORALL(fsttab[vlan]->tagged,numports,
-			({ if(port != genport && !(BA_CHECK(fsttab[vlan]->backup,port)) &&
-						!(BA_CHECK(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
+	ba_FORALL(fsttab[vlan]->tagged,numports,
+			({ if(port != genport && !(ba_check(fsttab[vlan]->backup,port)) &&
+						!(ba_check(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
 			 fst_sendbpdu(vlan,port,0,1,0); }
 			 }),port);
 	//}
@@ -429,21 +429,21 @@ static void topology_change(int vlan, int genport)
 static void fastprotocol(int vlan, int newrootport)
 {
   register int port;
-	BA_FORALL(fsttab[vlan]->untag,numports,
-			({ if(port != newrootport && !(BA_CHECK(fsttab[vlan]->backup,port)) &&
-						!(BA_CHECK(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
+	ba_FORALL(fsttab[vlan]->untag,numports,
+			({ if(port != newrootport && !(ba_check(fsttab[vlan]->backup,port)) &&
+						!(ba_check(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
 			 port_set_status(port,vlan,DISCARDING);
-			 BA_SET(fsttab[vlan]->backup,port);
+			 ba_set(fsttab[vlan]->backup,port);
 			 fst_sendbpdu(vlan,port,0,0,0); }
 			 }),port);
-	BA_FORALL(fsttab[vlan]->tagged,numports,
-			({ if(port != newrootport && !(BA_CHECK(fsttab[vlan]->backup,port)) &&
-						!(BA_CHECK(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
+	ba_FORALL(fsttab[vlan]->tagged,numports,
+			({ if(port != newrootport && !(ba_check(fsttab[vlan]->backup,port)) &&
+						!(ba_check(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
 			 port_set_status(port,vlan,DISCARDING);
-			 BA_SET(fsttab[vlan]->backup,port);
+			 ba_set(fsttab[vlan]->backup,port);
 			 fst_sendbpdu(vlan,port,0,0,0); }
 			 }),port);
-	BA_CLR(fsttab[vlan]->backup,newrootport); /* forward ON */
+	ba_clr(fsttab[vlan]->backup,newrootport); /* forward ON */
 	port_set_status(newrootport,vlan,FORWARDING);
 	fst_sendbpdu(vlan,newrootport,1,0,0);
 }
@@ -455,7 +455,7 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 	/* XXX check the header for fake info? */
 	struct vlst *v=fsttab[vlan];
 	int val,valroot;  
-	if (BA_CHECK(fsttab[vlan]->edge,port))
+	if (ba_check(fsttab[vlan]->edge,port))
 		return;
 #ifdef DEBUGOPT
 	if (!FSTP_ACTIVE(vlan,port)) {
@@ -463,7 +463,7 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 		 EVENTOUT(DBGFSTPPLUS,port,vlan); 
 	}
 #endif
-	BA_SET(fsttab[vlan]->rcvhist[rcvhistindex],port);
+	ba_set(fsttab[vlan]->rcvhist[rcvhistindex],port);
 
 	if (tagged) {
 		p=(struct fstbpdu *)(((unsigned char *)inpacket)+4);
@@ -523,18 +523,18 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 				/* root -> designated */
 				/* non-root -> blocking */
 				if ((p->stp_flags & STP_PORTROLEMASK) == STP_ROOT) {
-					if (BA_CHECK(v->backup,port)) {
+					if (ba_check(v->backup,port)) {
 						/* backup -> designated transition */
 						//printf("backup -> designated port %d\n",port);
-						BA_CLR(v->backup,port); /* forward ON */
+						ba_clr(v->backup,port); /* forward ON */
 						port_set_status(port,vlan,FORWARDING);
 						topology_change(vlan,port);
 					}
 				} else {
-					if (!BA_CHECK(v->backup,port)) {
+					if (!ba_check(v->backup,port)) {
 						/* designated -> backup transition */
 						//printf("designated ->backup port %d\n",port);
-						BA_SET(v->backup,port); /* forward OFF */
+						ba_set(v->backup,port); /* forward OFF */
 						port_set_status(port,vlan,DISCARDING);
 						topology_change(vlan,port);
 					}
@@ -552,16 +552,16 @@ void fstaddport(int vlan,int port,int tagged)
 	/*printf("F addport V %d  - P %d  - T%d\n",vlan,port,tagged);*/
 
 	if (tagged) {
-		BA_SET(fsttab[vlan]->tagged,port);
-	  BA_CLR(fsttab[vlan]->untag,port);
+		ba_set(fsttab[vlan]->tagged,port);
+	  ba_clr(fsttab[vlan]->untag,port);
 	} else {
-	  BA_SET(fsttab[vlan]->untag,port);
-		BA_CLR(fsttab[vlan]->tagged,port);
+	  ba_set(fsttab[vlan]->untag,port);
+		ba_clr(fsttab[vlan]->tagged,port);
 	}
-	BA_CLR(fsttab[vlan]->backup,port);
-	BA_CLR(fsttab[vlan]->edge,port);
-	BA_CLR(fsttab[vlan]->rcvhist[0],port);
-	BA_CLR(fsttab[vlan]->rcvhist[1],port);
+	ba_clr(fsttab[vlan]->backup,port);
+	ba_clr(fsttab[vlan]->edge,port);
+	ba_clr(fsttab[vlan]->rcvhist[0],port);
+	ba_clr(fsttab[vlan]->rcvhist[1],port);
 	fst_sendbpdu(vlan,port,0,0,0);
 	topology_change(vlan,port);
 }
@@ -573,10 +573,10 @@ void fstdelport(int vlan,int port)
 		 DBGOUT(DBGFSTPMINUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
 		 EVENTOUT(DBGFSTPMINUS,port,vlan);
 	}
-	BA_CLR(fsttab[vlan]->untag,port);
-	BA_CLR(fsttab[vlan]->tagged,port);
-	BA_CLR(fsttab[vlan]->backup,port);
-	BA_CLR(fsttab[vlan]->edge,port);
+	ba_clr(fsttab[vlan]->untag,port);
+	ba_clr(fsttab[vlan]->tagged,port);
+	ba_clr(fsttab[vlan]->backup,port);
+	ba_clr(fsttab[vlan]->edge,port);
 	if (port == fsttab[vlan]->rootport) {
 		fstnewvlan(vlan);
 	}
@@ -616,7 +616,7 @@ void fstpshutdown(void)
 	{
 		qtimer_del(fst_timerno);
 		fstflag(P_CLRFLAG,FSTP_TAG);
-		BAC_FORALLFUN(validvlan,NUMOFVLAN,fstnewvlan2,NULL);
+		bac_FORALLFUN(validvlan,NUMOFVLAN,fstnewvlan2,NULL);
 	}
 }
 
@@ -636,7 +636,7 @@ static int fstpsetonoff(FILE *fd, int val)
 		} else { /* STOP FST */
 			qtimer_del(fst_timerno);
 			fstflag(P_CLRFLAG,FSTP_TAG);
-			BAC_FORALLFUN(validvlan,NUMOFVLAN,fstnewvlan2,NULL);
+			bac_FORALLFUN(validvlan,NUMOFVLAN,fstnewvlan2,NULL);
 		}
 	}
 	return 0;
@@ -644,13 +644,13 @@ static int fstpsetonoff(FILE *fd, int val)
 
 static char *decoderole(int vlan, int port)
 {
-	if (!(BA_CHECK(fsttab[vlan]->untag,port) || BA_CHECK(fsttab[vlan]->untag,port)))
+	if (!(ba_check(fsttab[vlan]->untag,port) || ba_check(fsttab[vlan]->untag,port)))
 		return "Unknown";
-	if (BA_CHECK(fsttab[vlan]->edge,port))
+	if (ba_check(fsttab[vlan]->edge,port))
 		return "Edge";
 	if (fsttab[vlan]->rootport == port)
 		return "Root";
-	if (BA_CHECK(fsttab[vlan]->backup,port))
+	if (ba_check(fsttab[vlan]->backup,port))
 		return "Alternate/Backup";
 	return "Designated";
 }
@@ -671,9 +671,9 @@ static void fstprintactive(int vlan,FILE *fd)
 			fsttab[vlan]->rootport, 
 			ntohl(*(u_int32_t *)(&(fsttab[vlan]->rootcost))),
 			qtime()-fsttab[vlan]->roottimestamp,fsttab[vlan]->bonusport,fsttab[vlan]->bonuscost);
-	BA_FORALL(fsttab[vlan]->untag,numports,
+	ba_FORALL(fsttab[vlan]->untag,numports,
 			printoutc(fd," -- Port %04d tagged=%d portcost=%d role=%s",i,0,port_getcost(i),decoderole(vlan,i)),i);
-	BA_FORALL(fsttab[vlan]->tagged,numports,
+	ba_FORALL(fsttab[vlan]->tagged,numports,
 			printoutc(fd," -- Port %04d tagged=%d portcost=%d role=%s",i,1,port_getcost(i),decoderole(vlan,i)),i);
 }	
 
@@ -683,14 +683,14 @@ static int fstprint(FILE *fd,char *arg)
 		register int vlan;
 		vlan=atoi(arg);
 		if (vlan >= 0 && vlan < NUMOFVLAN-1) {
-			if (BAC_CHECK(validvlan,vlan))
+			if (bac_check(validvlan,vlan))
 				fstprintactive(vlan,fd);
 			else
 				return ENXIO;
 		} else
 			return EINVAL;
 	} else
-		BAC_FORALLFUN(validvlan,NUMOFVLAN,fstprintactive,fd);
+		bac_FORALLFUN(validvlan,NUMOFVLAN,fstprintactive,fd);
 	return 0;
 }
 
@@ -701,7 +701,7 @@ static int fstsetbonus(char *arg)
 		return EINVAL;
 	if (vlan <0 || vlan >= NUMOFVLAN || port < 0 || port >= numports)
 		return EINVAL;
-	if (!BAC_CHECK(validvlan,vlan)) 
+	if (!bac_check(validvlan,vlan)) 
 		return ENXIO;
 	fsttab[vlan]->bonusport=port;
 	fsttab[vlan]->bonuscost=cost;
@@ -715,15 +715,15 @@ static int fstsetedge(char *arg)
 		return EINVAL;
 	if (vlan <0 || vlan >= NUMOFVLAN || port < 0 || port >= numports)
 		return EINVAL;
-	if (!BAC_CHECK(validvlan,vlan))
+	if (!bac_check(validvlan,vlan))
 		return ENXIO;
 	if (val) {
-		BA_SET(fsttab[vlan]->edge,port);
-		if (BA_CHECK(fsttab[vlan]->untag,port) || BA_CHECK(fsttab[vlan]->untag,port))
+		ba_set(fsttab[vlan]->edge,port);
+		if (ba_check(fsttab[vlan]->untag,port) || ba_check(fsttab[vlan]->untag,port))
 			port_set_status(port,vlan,FORWARDING);
 	} else {
-		BA_CLR(fsttab[vlan]->edge,port);
-		BA_CLR(fsttab[vlan]->backup,port);
+		ba_clr(fsttab[vlan]->edge,port);
+		ba_clr(fsttab[vlan]->backup,port);
 	}
 	return 0;
 }
