@@ -30,6 +30,16 @@ static int numports;
 #ifdef FSTP
 #include <fstp.h>
 /*********************** sending macro used by FSTP & Core ******************/
+void inline ltonstring(unsigned long l,unsigned char *s) {
+	s[3]=l; l>>=8;
+	s[2]=l; l>>=8;
+	s[1]=l; l>>=8;
+	s[0]=l;
+}
+
+unsigned long inline nstringtol(unsigned char *s) {
+	return (s[0]<<24)+(s[1]<<16)+(s[2]<<8)+s[3];
+}
 
 #define STP_TCA 0x80
 #define STP_AGREEMENT 0x40
@@ -70,9 +80,9 @@ static char *fstpdecodestatus[]={
 static int rcvhistindex;
 struct vlst {
 	unsigned char root[SWITCHID_LEN];
-	char rootcost[4];
+	unsigned char rootcost[4];
 	unsigned char dessw[SWITCHID_LEN];
-	char port[2];
+	unsigned char port[2];
 	int rootport;
 	int bonusport;
 	int bonuscost;
@@ -475,9 +485,9 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 	/* this is a topology change packet */
 	if (p->stp_flags & STP_TC) 
 		topology_change(vlan,port);	
-	*((u_int32_t *)(p->stp_rootcost))=
-		htonl(ntohl(*((u_int32_t *)(p->stp_rootcost)))+
-					(port_getcost(port)-((port==v->bonusport)?v->bonuscost:0)));
+	ltonstring(nstringtol(p->stp_rootcost)+
+			          (port_getcost(port)-((port==v->bonusport)?v->bonuscost:0)),
+								p->stp_rootcost);
 /* compare BPDU */
 /* >0 means new root, == 0 root unchanged, <0 sender must change topology */
 	if ((val=valroot=memcmp(v->root,p->stp_root,SWITCHID_LEN)) == 0)
@@ -669,7 +679,7 @@ static void fstprintactive(int vlan,FILE *fd)
 			fsttab[vlan]->dessw[4], fsttab[vlan]->dessw[5], fsttab[vlan]->dessw[6], fsttab[vlan]->dessw[7]);
 	printoutc(fd, " ++ rootport %04d cost %d age %d bonusport %04d bonuscost %d",
 			fsttab[vlan]->rootport, 
-			ntohl(*(u_int32_t *)(&(fsttab[vlan]->rootcost))),
+			nstringtol(fsttab[vlan]->rootcost),
 			qtime()-fsttab[vlan]->roottimestamp,fsttab[vlan]->bonusport,fsttab[vlan]->bonuscost);
 	ba_FORALL(fsttab[vlan]->untag,numports,
 			printoutc(fd," -- Port %04d tagged=%d portcost=%d role=%s",i,0,port_getcost(i),decoderole(vlan,i)),i);
