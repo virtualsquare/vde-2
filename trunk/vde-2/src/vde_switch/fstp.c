@@ -118,7 +118,7 @@ struct fstbpdu {
 	unsigned char stp_hello[2];
 	unsigned char stp_fwddelay[2];
 	unsigned char stp_v1len;
-};
+} __attribute__((packed));;
 
 /* packet prototype for tagged ports */
 struct fsttagbpdu {
@@ -139,7 +139,7 @@ struct fsttagbpdu {
 	unsigned char stp_hello[2];
 	unsigned char stp_fwddelay[2];
 	unsigned char stp_v1len;
-};
+} __attribute__((packed));;
 
 static struct fstbpdu outpacket = {
 	.header.dest=BPDUADDR,
