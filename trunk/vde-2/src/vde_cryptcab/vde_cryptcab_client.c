@@ -13,22 +13,22 @@
 #include "cryptcab.h"
 #define KEEPALIVE_INTERVAL 30
 
-static unsigned char may_login = 1, keepalives = 0;
+static unsigned char keepalives = 0;
 static char *remoteusr, *remotehost;
 static unsigned short remoteport;
 static char *plugname, *pre_shared;
 static struct timeval last_out_time;
 static enum e_enc_type enc_type = ENC_SSH;
+static char *scp_extra_options = NULL;
 
 static void send_keepalive(struct peer *p){
+	if (!keepalives)
+		return;
+	vc_printlog(4,"Sending keepalive");
 	send_udp(NULL,0,p,CMD_KEEPALIVE);
 	gettimeofday(&last_out_time, NULL);
 }
 
-static void client_maylogin(int signo)
-{
-	may_login=1;
-}
 
 /*
  * Send a login packet. This is the first phase of 4WHS
@@ -41,19 +41,8 @@ blowfish_login(struct peer *p)
 
 static void try_to_login(struct peer *p)
 {
-
-	struct itimerval *old=NULL;
-	struct itimerval nxt={
-		.it_interval={.tv_sec=0, .tv_usec=0},
-		.it_value={.tv_sec=5, .tv_usec=0}
-	};
-	if(!may_login)
-		return;
-
 	vc_printlog(2,"Logging in to %s (udp port %hu)",remotehost,remoteport);
 	blowfish_login(p);
-	may_login=0;
-	setitimer(ITIMER_REAL, &nxt, old);
 }
 
 
@@ -159,9 +148,14 @@ static struct peer *generate_and_xmit(struct peer *ret){
 	if(!pre_shared){		
 		vc_printlog(2,"Sending key over ssh channel:");
 		if(remoteusr)
-			sprintf(command,"scp /tmp/.blowfish.key %s@%s:/tmp/.%s.key 2>&1", remoteusr, remotehost, ret->id);	
+			sprintf(command,"scp %s /tmp/.blowfish.key %s@%s:/tmp/.%s.key 2>&1", 
+				scp_extra_options?scp_extra_options:"",
+				remoteusr, remotehost, ret->id);	
 		else
-			sprintf(command,"scp /tmp/.blowfish.key %s:/tmp/.%s.key 2>&1", remotehost, ret->id);
+			sprintf(command,"scp %s /tmp/.blowfish.key %s:/tmp/.%s.key 2>&1", 
+				scp_extra_options?scp_extra_options:"",
+				remotehost, ret->id);
+
 		//fprintf(stderr,"Contacting host: %s ",remotehost);
 		res=system(command);
 		
@@ -209,7 +203,6 @@ static int recv_datagram(struct datagram *pkt, int nfd, struct peer *p1)
 		gettimeofday(&now,NULL);
 		now.tv_sec -= KEEPALIVE_INTERVAL;
 		if (after(now,last_out_time) && p1->state == ST_AUTH){
-			vc_printlog(4,"Sending keepalive");
 			send_keepalive(p1);
 		}
    	} while (pollret==0);
@@ -247,12 +240,11 @@ static int recv_datagram(struct datagram *pkt, int nfd, struct peer *p1)
 	return 0;
 }
 
-void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _enc_type, char *_pre_shared, char *_remoteusr, char *_remotehost, unsigned short _remoteport, unsigned char _keepalives)
+void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _enc_type, char *_pre_shared, char *_remoteusr, char *_remotehost, unsigned short _remoteport, unsigned char _keepalives, char *_scp_extra_options)
 {
 	int wire, r;
 	struct sockaddr_in myaddr;
 	struct datagram pkt, pkt_dec;
-	struct sigaction sa_timer;
 	struct peer _peer;
 	struct peer *p1 = &_peer;
 	
@@ -263,13 +255,11 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 	pre_shared = _pre_shared;
 	keepalives = _keepalives;
 	enc_type = _enc_type;
+	scp_extra_options = _scp_extra_options;
 
 	memset(&last_out_time,0, sizeof(struct timeval));
 
 
-	sigemptyset(&sa_timer.sa_mask);
-	sa_timer.sa_handler = client_maylogin;
-	sigaction(SIGALRM, &sa_timer, NULL);
 	if(enc_type == ENC_PRESHARED && (!pre_shared || access(pre_shared,R_OK)!=0)){
 		vc_printlog(0,"Error accessing pre-shared key %s: %s\n",pre_shared,strerror(errno));
 		exit(1);
