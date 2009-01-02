@@ -172,6 +172,6 @@ void send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char fl
 void send_vdeplug(const char *data, size_t len, struct peer *p);
 
 void cryptcab_server(char *_plugname, unsigned short udp_port, enum e_enc_type enc_type, char *pre_shared);
-void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _enc_type, char *_pre_shared, char *_remoteusr, char *_remotehost, unsigned short _remoteport, unsigned char _keepalives);
+void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _enc_type, char *_pre_shared, char *_remoteusr, char *_remotehost, unsigned short _remoteport, unsigned char _keepalives, char *scp_extra_options);
 
 #endif

@@ -263,7 +263,7 @@ send_vdeplug(const char *data, size_t len, struct peer *p)
 /*
  * Main.
  */
-int main(int argc, char **argv)
+int main(int argc, char **argv, char **env)
 {
 	int c;
 	char *programname=argv[0];		
@@ -275,6 +275,9 @@ int main(int argc, char **argv)
 	unsigned short udp_port = PORTNO;
 	unsigned short remoteport = PORTNO;
 	unsigned char keepalives=0;
+	char *scp_extra_options;
+
+	scp_extra_options=getenv("SCP_EXTRA_OPTIONS");
 	
 
 	while (1) {
@@ -397,7 +400,7 @@ int main(int argc, char **argv)
 	if(!remotehost){
 		cryptcab_server(plugname, udp_port, enc_type, pre_shared);
 	} else {
-		cryptcab_client(plugname, udp_port, enc_type, pre_shared, remoteusr, remotehost, remoteport, keepalives);
+		cryptcab_client(plugname, udp_port, enc_type, pre_shared, remoteusr, remotehost, remoteport, keepalives, scp_extra_options);
 	}
 	exit(0);
 }

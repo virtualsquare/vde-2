@@ -42,6 +42,10 @@ blowfish key, and uses
 .B scp (1)
 to transfer the key to the remote server.
 
+On the client side, the environment variable SCP_EXTRA_OPTIONS may be set in order 
+to append options to the scp command line (this is useful for example when dropbear or
+another non-standard ssh client is used to transfer the blowfish key).
+
 After a 4-way handshake phase to verify client credentials, server and 
 client will exchange VDE datagrams encapsulating them into cryptograms
 that are sent via udp to each remote host.
