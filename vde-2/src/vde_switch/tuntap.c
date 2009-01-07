@@ -206,7 +206,7 @@ int open_tap(char *dev)
 }
 #endif
 
-static int newport(int fd, int portno)
+static int newport(int fd, int portno, uid_t user)
 {
 	return fd;
 }
@@ -216,7 +216,7 @@ static int newtap(char *dev)
 	int tap_fd;
 	tap_fd = open_tap(dev);
 	if (tap_fd>0) {
-		int portno=setup_ep(0,tap_fd,NULL,&modfun);
+		int portno=setup_ep(0,tap_fd,NULL,-1,&modfun);
 		if (portno >= 0) {
 			setup_description(portno,tap_fd,dev);
 			add_fd(tap_fd,tap_type,portno);
