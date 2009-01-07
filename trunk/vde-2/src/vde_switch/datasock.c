@@ -108,7 +108,7 @@ static void closeport(int fd, int portno)
 		remove_fd(fd);
 }
 
-static int newport(int fd, int portno)
+static int newport(int fd, int portno, uid_t user)
 {
 	int data_fd;
 	struct sockaddr_un sun;
@@ -143,8 +143,11 @@ static int newport(int fd, int portno)
 		close_ep(portno-1,fd);
 		return -1;
 	}
-	chmod(sun.sun_path,mode);
-	if(chown(sun.sun_path,-1,grp_owner) < 0) {
+	if (user != -1)
+		chmod(sun.sun_path,mode & 0700);
+	else
+		chmod(sun.sun_path,mode);
+	if(chown(sun.sun_path,user,grp_owner) < 0) {
 		printlog(LOG_ERR, "chown: %s", strerror(errno));
 		close_ep(portno-1,fd);
 		return -1;
@@ -168,6 +171,7 @@ static void *memdup(void *src,int size)
 		(stat((PATH),&s)?-1:s.st_uid); \
 		})
 
+#if 0
 static int checksockperm(char *path,char *lpath)
 {
 	int rvuid=0;
@@ -185,6 +189,7 @@ static int checksockperm(char *path,char *lpath)
 	}
 	return rvuid;
 }
+#endif
 
 static int new_port_v1_v3(int fd, int type_port,
 		struct sockaddr_un *sun_out)
@@ -192,27 +197,27 @@ static int new_port_v1_v3(int fd, int type_port,
 	int n, port;
 	enum request_type type = type_port & 0xff;
 	int port_request=type_port >> 8;
-	int cluid=-1;
+	uid_t user=-1;
 	struct sockaddr_un sun_in;
 	switch(type){
 		case REQ_NEW_PORT0:
 			port_request= -1;
 			/* no break: falltrough */
 		case REQ_NEW_CONTROL:
-			port = setup_ep(port_request, fd, memdup(sun_out,sizeof(struct sockaddr_un)), &modfun); 
+			if (sun_out->sun_path[0] != 0) { //not for unnamed sockets
+				if (access(sun_out->sun_path,R_OK | W_OK) != 0) { //socket error
+					remove_fd(fd);
+					return -1;
+				}
+				user=GETFILEOWNER(sun_out->sun_path);
+			}
+			port = setup_ep(port_request, fd, memdup(sun_out,sizeof(struct sockaddr_un)), user, &modfun); 
 			if(port<0) {
 				remove_fd(fd); 
 				return -1;
 			}
 			sun_in.sun_family = AF_UNIX;
 			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d",ctl_socket,port);
-			if (sun_out->sun_path[0] != 0) { //not for unnamed sockets
-				if ((cluid=checksockperm(sun_out->sun_path,sun_in.sun_path)) < 0) {
-					printlog(LOG_WARNING,"Data_out socket permission: %s",strerror(errno));
-					close_ep(port,fd);
-					return -1;
-				}
-			}
 			n = write(fd, &sun_in, sizeof(sun_in));
 			if(n != sizeof(sun_in)){
 				printlog(LOG_WARNING,"Sending data socket name %s",strerror(errno));
@@ -221,10 +226,6 @@ static int new_port_v1_v3(int fd, int type_port,
 			}
 			if (type==REQ_NEW_PORT0)
 				setmgmtperm(sun_in.sun_path);
-			else if (cluid > 0) {
-				chown(sun_in.sun_path,cluid,-1);
-				chmod(sun_in.sun_path,mode & 0700);
-			}
 			return port;
 			break;
 		default:

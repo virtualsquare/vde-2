@@ -13,6 +13,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h> /*ntoh conversion*/
+#include <sys/types.h>
+#include <grp.h>
+#include <pwd.h>
+#include <ctype.h>
 
 #include <config.h>
 #include <vde.h>
@@ -87,10 +91,13 @@ struct port {
 	int fd_data;
 	struct endpoint *ep;
 	int flag;
-	/* sender is already inside ep, but it needs one more memaccess */
+	/* sender is already inside ms, but it needs one more memaccess */
 	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
 	struct mod_support *ms;
 	int vlanuntag;
+	uid_t user;
+	gid_t group;
+	uid_t curuser;
 #ifdef FSTP
 	int cost;
 #endif
@@ -143,6 +150,7 @@ static int alloc_port(unsigned int portno)
 				portv[i]=port;
 				port->fd_data=-1;
 				port->ep=NULL;
+				port->user=port->group=port->curuser=-1;
 #ifdef FSTP
 				port->cost=DEFAULT_COST;
 #endif
@@ -176,11 +184,54 @@ static void free_port(unsigned int portno)
 	}
 }
 
+/* 1 if user belongs to the group, 0 otherwise) */
+static int user_belongs_to_group(uid_t uid, gid_t gid)
+{
+	struct passwd *pw=getpwuid(uid);
+	int found=0;
+	if (pw != NULL) {
+		int lsize=0;
+		int gsize;
+		gid_t *grouplist=NULL;
+		do {
+			lsize=gsize=lsize+8;
+			grouplist=realloc(grouplist, lsize*sizeof(gid_t));
+		} while (grouplist != NULL && getgrouplist(pw->pw_name,pw->pw_gid,grouplist,&gsize) < 0);
+		if (grouplist != NULL) {
+			for (lsize=0;lsize<gsize && !found;lsize++)
+				if (grouplist[lsize]==gid)
+					found=1;
+			free(grouplist);
+		}
+	}
+	return found;
+}
+
+/* Access Control check:
+	 returns 0->OK -1->Permission Denied */
+static int checkport_ac(struct port *port, uid_t user)
+{
+	/*unrestricted*/
+	if (port->user == -1 && port->group == -1)
+		return 0;
+	/*root or restricted to a specific user*/
+	else if (user==0 || (port->user != -1 && port->user==user))
+		return 0;
+	/*restricted to a group*/
+	else if (port->group != -1 && user_belongs_to_group(user,port->group))
+		return 0;
+	else {
+		errno=EPERM;
+		return -1;
+	}
+}
+
 /* initialize a port structure with control=fd, given data+data_len and sender
  * function; 
  * and then add it to the g_fdsdata array at index i. */
 int setup_ep(int portno, int fd_ctl,
 		void *data,
+		uid_t user,
 		struct mod_support *modfun)
 {
 	struct port *port;
@@ -188,9 +239,11 @@ int setup_ep(int portno, int fd_ctl,
 
 	if ((portno = alloc_port(portno)) >= 0) {
 		port=portv[portno];	
-		if (port->fd_data < 0)
-			port->fd_data=modfun->newport(fd_ctl,portno);
-		if (port->fd_data >= 0 &&
+		if (port->fd_data < 0 && checkport_ac(port,user)==0) {
+			port->fd_data=modfun->newport(fd_ctl,portno,user);
+			port->curuser=user;
+		}
+		if (port->fd_data >= 0 && port->curuser == user &&
 				(ep=malloc(sizeof(struct endpoint))) != NULL) {
 			DBGOUT(DBGEPNEW,"Port %02d FD %2d", portno,fd_ctl);
 			EVENTOUT(DBGEPNEW,portno,fd_ctl);
@@ -225,11 +278,19 @@ int setup_ep(int portno, int fd_ctl,
 			return portno;
 		}
 		else {
+			if (port->fd_data < 0)
+				errno=EPERM;
+			else if (port->curuser != user)
+				errno=EADDRINUSE;
+			else 
+				errno=ENOMEM;
 			return -1;
 		}
 	}
-	else
+	else {
+		errno=ENOMEM;
 		return -1;
+	}
 }
 
 void setup_description(int portno, int fd_ctl, char *descr)
@@ -284,6 +345,7 @@ int close_ep(int portno, int fd_ctl)
 				port->fd_data=-1;
 				port->ms=NULL;
 				port->sender=NULL;
+				port->curuser=-1;
 				register int i;
 				/* inactivate port: all active vlan defs cleared */
 				bac_FORALL(validvlan,NUMOFVLAN,({
@@ -296,9 +358,9 @@ int close_ep(int portno, int fd_ctl)
 			}
 			return rv;	
 		} else
-		return ENXIO;
+			return ENXIO;
 	} else
-	return EINVAL;
+		return EINVAL;
 }
 
 int portflag(int op,int f)
@@ -325,19 +387,19 @@ int portflag(int op,int f)
 
 #ifdef VDE_PQ
 #define SEND_PACKET_PORT(PORT,PORTNO,PACKET,LEN) \
-	 ({\
+	({\
 	 struct port *Port=(PORT); \
 	 if (PACKETFILTER(PKTFILTOUT,(PORTNO),(PACKET), (LEN))) {\
 	 struct endpoint *ep; \
 	 SEND_COUNTER_UPD(Port,LEN); \
 	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
 	 if (Port->ms->sender(Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port)) \
-	 	packetq_add(Port->ms->sender,Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
+	 packetq_add(Port->ms->sender,Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
 	 } \
-		})
+	 })
 #else
 #define SEND_PACKET_PORT(PORT,PORTNO,PACKET,LEN) \
-	 ({\
+	({\
 	 struct port *Port=(PORT); \
 	 if (PACKETFILTER(PKTFILTOUT,(PORTNO),(PACKET), (LEN))) {\
 	 struct endpoint *ep; \
@@ -345,7 +407,7 @@ int portflag(int op,int f)
 	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
 	 Port->ms->sender(Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
 	 } \
-		})
+	 })
 #endif
 
 #ifdef FSTP
@@ -621,6 +683,56 @@ static int portallocatable(char *arg)
 	return 0;
 }
 
+static int portsetuser(char *arg)
+{
+	int port;
+	char *portuid=arg;
+	struct passwd *pw;
+	while (*portuid != 0 && *portuid == ' ') portuid++;
+	while (*portuid != 0 && *portuid != ' ') portuid++;
+	while (*portuid != 0 && *portuid == ' ') portuid++;
+	if (sscanf(arg,"%i",&port) != 1 || *portuid==0)
+		return EINVAL;
+	if (port < 0 || port >= numports)
+		return EINVAL;
+	if (portv[port] == NULL)
+		return ENXIO;
+	if ((pw=getpwnam(portuid)) != NULL)
+		portv[port]->user=pw->pw_uid;
+	else if (isdigit(*portuid)) 
+		portv[port]->user=atoi(portuid);
+	else if (strcmp(portuid,"NONE")==0 || strcmp(portuid,"ANY")==0) 
+		portv[port]->user= -1;
+	else
+		return EINVAL;
+	return 0;
+}
+
+static int portsetgroup(char *arg)
+{
+	int port;
+	char *portgid=arg;
+	struct group *gr;
+	while (*portgid != 0 && *portgid == ' ') portgid++;
+	while (*portgid != 0 && *portgid != ' ') portgid++;
+	while (*portgid != 0 && *portgid == ' ') portgid++;
+	if (sscanf(arg,"%i",&port) != 1 || *portgid==0)
+		return EINVAL;
+	if (port < 0 || port >= numports)
+		return EINVAL;
+	if (portv[port] == NULL)
+		return ENXIO;
+	if ((gr=getgrnam(portgid)) != NULL)
+		portv[port]->group=gr->gr_gid;
+	else if (isdigit(*portgid)) 
+		portv[port]->group=atoi(portgid);
+	else if (strcmp(portgid,"NONE")==0 || strcmp(portgid,"ANY")==0) 
+		portv[port]->group= -1;
+	else
+		return EINVAL;
+	return 0;
+}
+
 static int portremove(int val)
 {
 	if (val <0 || val>=numports)
@@ -654,6 +766,40 @@ static int epclose(char *arg)
 		return close_ep(port,id);
 }
 
+static char *port_getuser(uid_t uid)
+{
+	static char buf[6];
+	struct passwd *pw;
+	if (uid == -1) 
+		return "NONE";
+	else {
+		pw=getpwuid(uid);
+		if (pw != NULL)
+			return pw->pw_name;
+		else {
+			sprintf(buf,"%d",uid);
+			return buf;
+		}
+	}
+}
+
+static char *port_getgroup(gid_t gid)
+{
+	static char buf[6];
+	struct group *gr;
+	if (gid == -1) 
+		return "NONE";
+	else {
+		gr=getgrgid(gid);
+		if (gr != NULL)
+			return gr->gr_name;
+		else {
+			sprintf(buf,"%d",gid);
+			return buf;
+		}
+	}
+}
+
 static int print_port(FILE *fd,int i,int inclinactive)
 {
 	struct endpoint *ep;
@@ -662,6 +808,10 @@ static int print_port(FILE *fd,int i,int inclinactive)
 				i,portv[i]->vlanuntag,
 				portv[i]->ep?"":"IN",
 				(portv[i]->flag & NOTINPOOL)?"NOT ":"");
+		printoutc(fd," Current User: %s Access Control: (User: %s - Group: %s)", 
+				port_getuser(portv[i]->curuser),
+				port_getuser(portv[i]->user), 
+				port_getgroup(portv[i]->group));
 #ifdef PORTCOUNTERS
 		printoutc(fd," IN:  pkts %10lld          bytes %20lld",portv[i]->pktsin,portv[i]->bytesin);
 		printoutc(fd," OUT: pkts %10lld          bytes %20lld",portv[i]->pktsout,portv[i]->bytesout);
@@ -1008,6 +1158,8 @@ static struct comlist cl[]={
 	{"port/create","N","create the port N (inactive|notallocatable)",portcreate,INTARG},
 	{"port/remove","N","remove the port N",portremove,INTARG},
 	{"port/allocatable","N 0/1","Is the port allocatable as unnamed? 1=Y 0=N",portallocatable,STRARG},
+	{"port/setuser","N user","access control: set user",portsetuser,STRARG},
+	{"port/setgroup","N user","access control: set group",portsetgroup,STRARG},
 	{"port/epclose","N ID","remove the endpoint port N/id ID",epclose,STRARG},
 #ifdef PORTCOUNTERS
 	{"port/resetcounter","[N]","reset the port (N) counters",portresetcounters,STRARG},
