@@ -37,6 +37,11 @@
 
 #include <libvdeplug.h>
 
+/* Per-User standard switch definition */
+/* This will be prefixed by getenv("HOME") */
+/* it can be a symbolic link to the switch dir */
+#define STDSOCK "/.vde2/stdsock"
+
 #ifdef USE_IPN
 #ifndef AF_IPN
 #define AF_IPN    34  /* IPN sockets      */
@@ -108,6 +113,7 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	int sockno=0;
 	int res;
 	mode_t mode=0700;
+	char std_sockname[PATH_MAX];
 	char real_sockname[PATH_MAX];
 	char *sockname = real_sockname;
 
@@ -131,9 +137,16 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	//get the login name
 	callerpwd=getpwuid(getuid());
 	req.type = REQ_NEW_CONTROL;
-	if (given_sockname == NULL || *given_sockname == '\0')
+	if (given_sockname == NULL || *given_sockname == '\0') {
+		char *homedir = getenv("HOME");
 		given_sockname = NULL;
-	else {
+		if (homedir) {
+			struct stat statbuf;
+			snprintf(std_sockname, PATH_MAX, "%s%s", homedir, STDSOCK);
+			if (lstat(std_sockname,&statbuf)==0)
+				given_sockname = std_sockname;
+		}
+	} else {
 		char *split;
 		if(given_sockname[strlen(given_sockname)-1] == ']' && (split=rindex(given_sockname,'[')) != NULL) {
 			*split=0;
