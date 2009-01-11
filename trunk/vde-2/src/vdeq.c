@@ -233,7 +233,7 @@ static char *parsevdearg(char *arg,char **sock,int *pport, int fd)
 {
 	char newarg[128];
 	int vlan=0;
-	*sock=VDESTDSOCK;
+	*sock=NULL;
 	*pport=0;
 	printf("arg %s\n", arg);
 	while(*arg){
@@ -404,7 +404,7 @@ int main(int argc, char **argv)
 	} else
   {
 		if (argsock==NULL)
-			sockname[0]=VDESTDSOCK;
+			sockname[0]=NULL;
 		else
 		{
 			register char *s=argsock;
