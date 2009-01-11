@@ -171,26 +171,6 @@ static void *memdup(void *src,int size)
 		(stat((PATH),&s)?-1:s.st_uid); \
 		})
 
-#if 0
-static int checksockperm(char *path,char *lpath)
-{
-	int rvuid=0;
-	if (access(path,R_OK | W_OK) != 0)
-		return -1;
-	if (geteuid() == 0) { /* switch run by root */
-		int luid;
-		if ((rvuid=GETFILEOWNER(path)) < 0)
-			return -1;
-		luid=GETFILEOWNER(lpath);
-		if (luid > 0 && luid != rvuid) {
-			errno=EADDRINUSE;
-			return -1;
-		}
-	}
-	return rvuid;
-}
-#endif
-
 static int new_port_v1_v3(int fd, int type_port,
 		struct sockaddr_un *sun_out)
 {

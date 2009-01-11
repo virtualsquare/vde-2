@@ -86,15 +86,6 @@ static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t,f
 		if ((sendrv && (sendrv=h->sender(h->fd,h->fd_ctl,h->packet,h->len,h->data,h->port)) == 0)   /*send OK*/
 				|| h->times<=0) { /*or max number of attempts reached*/
 			struct packetqq *next;
-#if 0
-			/* this error code is unreachable! (sendrv==0 here) */
-			if (sendrv != 0) {
-				if (sendrv < 0) 
-					printlog(LOG_WARNING,"packetqueue port %d: %s",h->port,strerror(-sendrv));
-				else
-					printlog(LOG_WARNING,"packetqueue port %d: partial send (%d bytes lost)",h->port,sendrv);
-			}
-#endif
 			next=h->next;
 			countq--;
 			free(h->packet);
