@@ -1,0 +1,104 @@
+.TH VDE_PLUG 1 "December 6, 2006" "Virtual Distributed Ethernet"
+.SH NAME
+vde_plug \- Virtual Distributed Ethernet plug (two plugs creates a vde cable)
+.SH SYNOPSIS
+.B vde_plug 
+[ 
+.B \-p   
+.I portnum  
+] 
+[ 
+.B \-g   
+.I group  
+] 
+[ 
+.B \-m   
+.I octal-mode  
+] 
+[
+.I socketdir
+]
+.br
+.SH DESCRIPTION
+A
+\fBvde_plug\fP 
+is a plug to be connected into a VDE switch.
+All the data that is catched by the plug is written in its stdout and
+everything from stdin is injected in the switch.
+
+This tool has been designed to be used together with 
+.B dpipe (1)
+to interconnect a second vde_plug to another switch, working as a
+virtual ethernet crossed cable between the two switches.
+
+The command
+.RS
+.br
+.B dpipe vde_plug = vde_plug /tmp/vde2.ctl
+.RE
+connects two local switches: the former is using the standard control socket /tmp/vde.ctl
+while the latter is using /tmp/vde2.ctl.
+
+
+The command
+.RS
+.br
+.B dpipe vde_plug = ssh remote.machine.org vde_plug
+.RE
+connects two remote switches.
+If the two vde_switches run as daemon and they are connected to tap interfaces
+a level 2 encrypted tunnel is established.
+
+vde_plug can also be established as a login shell for users.
+The following command works as in the previous example
+.RS
+.br
+.B dpipe vde_plug = ssh vdeuser@remote.machine.org vde_plug
+.RE
+where vdeuser is the user with vde_plug as standard shell.
+All the remote accesses are logged by syslog at the beginning and at the
+end of each session.
+Attempt to login without the command vde_plug at the end or trying to
+execute something else are blocked and the attempt is logged into syslog.
+
+.SH OPTIONS
+.TP
+.B \-p "\fIportnum\fP" 
+It is possible to decide which port of the switch to use.
+When this option is not specified the switch assigns the first
+available unused port (if any).
+It is possible to connect several cables in the same switch port:
+in this way all this cables work concurrently.
+It means that packet can result as duplicate but no ARP table loops are
+generated.
+Is useful when vde is used for mobility. Several physical interfaces can
+be used at a time during handoffs to prevent hichups in connectivity.
+.TP
+.B \-g "\fIgroup\fP" 
+group ownership of the communication socket. For security when more
+want to share a switch it is better to use a unix group to own the comm sockets
+so that the network traffic cannot be sniffed.
+.TP
+.B \-m "\fIoctal-mode\fP" 
+octal chmod like permissions for the comm sockets
+.TP
+.B "\fIsocketdir\fP"
+(This option can be also set as: 
+.B -sock "\fIsocketdir\fP"
+) specify the directory which contains the UNIX socket to be used by local programs for joining the VDE.
+The default value is "/tmp/vde.ctl", which corresponds to the socket
+"/tmp/vde.ctl/ctl".
+.SH NOTICE
+Virtual Distributed Ethernet is not related in any way with
+www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
+i.e. the German "Association for Electrical, Electronic & Information
+Technologies").
+
+.SH SEE ALSO
+\fBvde_switch\fP(1),
+\fBvde_plug2tap\fP(1),
+\fBvdeq\fP(1),
+\fBdpipe\fP(1).
+.br
+.SH AUTHOR
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>

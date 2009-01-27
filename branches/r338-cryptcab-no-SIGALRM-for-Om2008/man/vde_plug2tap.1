@@ -1,0 +1,63 @@
+.TH VDE_PLUG2TAP 1 "December 5, 2006" "Virtual Distributed Ethernet"
+.SH NAME
+vde_plug2tap \- Virtual Distributed Ethernet plug-to-tap
+.SH SYNOPSIS
+.B vde_plug2tap 
+[OPTION]... \fItap_name\fP
+.br
+.SH DESCRIPTION
+.B vde_plug2tap 
+is a plug to be connected into a VDE switch.
+All the data that is catched by the plug is sent to the tap interface 
+.I tap_name 
+and everything from that interface is injected in the switch.
+
+.SH OPTIONS
+.TP
+\fB\-p\fP, \fB\-\-port\fP=\fIportnum\fP
+It is possible to decide which port of the switch to use.
+When this option is not specified the switch assigns the first
+available unused port (if any).
+It is possible to connect several cables in the same switch port:
+in this way all this cables work concurrently.
+It means that packet can result as duplicate but no ARP table loops are
+generated.
+Is useful when vde is used for mobility. Several physical interfaces can
+be used at a time during handoffs to prevent hichups in connectivity.
+.TP
+\fB\-g\fP, \fB\-\-group\fP=\fIgroup\fP
+group ownership of the communication socket. For security when more
+want to share a switch it is better to use a unix group to own the comm sockets
+so that the network traffic cannot be sniffed.
+.TP
+\fB\-m\fP, \fB\-\-mod\fP=\fIoctal-mode\fP
+octal chmod like permissions for the comm sockets
+.TP
+\fB\-s\fP, \fB\-\-sock\fP=\fIsocket\fP
+specify the UNIX socket to be used by local programs for joining the VDE.
+The default value is "/tmp/vde.ctl".
+.TP
+\fB\-d\fP, \fB\-\-daemon\fP
+start vde_plug2tap as a background process
+.TP
+\fB\-P\fP, \fB\-\-pidfile\fP=\fIpidfile\fP
+put the process ID of vde_plug2tap in \fIpidfile\fP. Can be used with
+\fB\-\-daemon\fP to store the PID for future killing.
+.TP
+\fB\-h\fP, \fB\-\-help\fP
+show a brief help
+
+.SH NOTICE
+Virtual Distributed Ethernet is not related in any way with
+www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
+i.e. the German "Association for Electrical, Electronic & Information
+Technologies").
+
+.SH SEE ALSO
+\fBvde_switch\fP(1),
+\fBvde_plug\fP(1),
+\fBvdeq\fP(1),
+\fBdpipe\fP(1).
+.br
+.SH AUTHOR
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
