@@ -43,9 +43,14 @@
 #define STDSOCK "/.vde2/stdsock"
 
 #ifdef USE_IPN
+#if 0
+/* AF_IPN has not been officially assigned yet
+	 we "steal" unused AF_NETBEUI in the meanwhile
+	 this code will be uncommented when AF_IPN is assigned. */
 #ifndef AF_IPN
-#define AF_IPN    34  /* IPN sockets      */
+#define AF_IPN    0  /* IPN sockets:       */
 #define PF_IPN    AF_IPN
+#endif
 #endif
 #ifndef AF_NETBEUI
 #ifdef PF_NETBEUI
@@ -170,10 +175,15 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	}
 
 #ifdef USE_IPN
+#if 0
+/* AF_IPN has not been officially assigned yet
+	 we "steal" unused AF_NETBEUI in the meanwhile
+	 this code will be uncommented when AF_IPN is assigned. */
 	if((conn->fddata = socket(AF_IPN,SOCK_RAW,IPN_ANY)) >= 0) {
 		/* IPN service exists */
 		sockun.sun_family = AF_IPN;
 	}
+#endif
 	if((conn->fddata = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_ANY)) >= 0) {
 		/* IPN_STOLEN service exists */
 		sockun.sun_family = AF_IPN_STOLEN;
