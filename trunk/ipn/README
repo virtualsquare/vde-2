@@ -140,6 +140,13 @@ in include/linux/socket.h
 
 This seems to be quite simple.
 
++-----
+|Note (2009 January): unfortunately it is not.
+|The Address Family #34 has been already assigned to AF_ISDN.
+|So, we'll continue using AF stealing of AF_NETBEI (13) until 
+|we have an AF officially assigned. (we are not superstitious!)
++-----
+
 2- Another "grabbing hook" for the interface (like the ones already
 existing for the kernel bridge and for the macvlan).
 

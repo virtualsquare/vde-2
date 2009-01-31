@@ -6,6 +6,13 @@
 #define AF_IPN AF_NETBEUI
 #define PF_IPN AF_IPN
 #define ipn_handle_frame_hook br_handle_frame_hook
+#else
+#ifndef AF_IPN
+#define AF_IPN 34
+#define PF_IPN AF_IPN
+#endif
+#define AF_IPN_STOLEN AF_NETBEUI
+#define PF_IPN_STOLEN AF_IPN_STOLEN
 #endif
 
 #define IPN_ANY 0
