@@ -104,20 +104,34 @@ struct request_v3 {
 	char description[MAXDESCR];
 } __attribute__((packed));
 
+static void *vde_open_abort(struct vdeconn *conn)
+{
+	int err=errno;
+	if (conn) {
+		if (conn->fdctl >= 0)
+			close(conn->fdctl);
+		if (conn->fddata >= 0)
+			close(conn->fddata);
+		free(conn);
+	}
+	errno=err;
+	return NULL;
+}
+
 VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		struct vde_open_args *open_args)
 {
-	struct vdeconn *conn;
+	struct vdeconn *conn=NULL;
 	struct passwd *callerpwd;
 	struct request_v3 req;
 	int pid = getpid();
-	static struct sockaddr_un sockun;
-	static struct sockaddr_un dataout;
+	struct sockaddr_un sockun;
+	struct sockaddr_un dataout;
 	int port=0;
 	char *group=NULL;
+	mode_t mode=0700;
 	int sockno=0;
 	int res;
-	mode_t mode=0700;
 	char std_sockname[PATH_MAX];
 	char real_sockname[PATH_MAX];
 	char *sockname = real_sockname;
@@ -139,6 +153,7 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		errno=ENOMEM;
 		return NULL;
 	}
+	conn->fdctl=conn->fddata=-1;
 	//get the login name
 	callerpwd=getpwuid(getuid());
 	req.type = REQ_NEW_CONTROL;
@@ -169,10 +184,7 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	 * given_sockname to getcwd() would be enough, but we could end up with a
 	 * name longer than PATH_MAX that couldn't be used as sun_path. */
 	if (given_sockname && vde_realpath(given_sockname, real_sockname) == NULL)
-	{
-		free(conn);
-		return NULL;
-	}
+		return vde_open_abort(conn);
 
 #ifdef USE_IPN
 #if 0
@@ -222,17 +234,10 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		}
 	}
 #endif
-	if((conn->fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
-		free(conn);
-		return NULL;
-	}
-	if((conn->fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0){
-		int err=errno;
-		close(conn->fdctl);
-		free(conn);
-		errno=err;
-		return NULL;
-	}
+	if((conn->fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+		return vde_open_abort(conn);
+	if((conn->fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
+		return vde_open_abort(conn);
 	sockun.sun_family = AF_UNIX;
 
 	/* If we're given a sockname, just try it (remember: sockname is the
@@ -261,14 +266,7 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	}
 
 	if (res != 0)
-	{
-		int err = errno;
-		close(conn->fddata);
-		close(conn->fdctl);
-		free(conn);
-		errno = err;
-		return NULL;
-	}
+		return vde_open_abort(conn);
 
 	req.magic=SWITCH_MAGIC;
 	req.version=3;
@@ -306,14 +304,8 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	}
 
 	/* Nothing worked, so cleanup and return with an error. */
-	if (res < 0){
-		int err = errno;
-		close(conn->fddata);
-		close(conn->fdctl);
-		free(conn);
-		errno = err;
-		return NULL;
-	}
+	if (res < 0)
+		return vde_open_abort(conn);
 
 	memcpy(&(conn->inpath),&req.sock,sizeof(req.sock));
 	if (group) {
@@ -331,32 +323,15 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			descr,(callerpwd != NULL)?callerpwd->pw_name:"??",
 			pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"",req.sock.sun_path);
 
-	if (send(conn->fdctl,&req,sizeof(req)-MAXDESCR+strlen(req.description),0) < 0) {
-		int err=errno;
-		close(conn->fddata);
-		close(conn->fdctl);
-		free(conn);
-		errno=err;
-		return NULL;
-	}
+	if (send(conn->fdctl,&req,sizeof(req)-MAXDESCR+strlen(req.description),0)<0) 
+		return vde_open_abort(conn);
 
-	if (recv(conn->fdctl,&(dataout),sizeof(struct sockaddr_un),0)<0) {
-		int err=errno;
-		close(conn->fddata);
-		close(conn->fdctl);
-		free(conn);
-		errno=err;
-		return NULL;
-	}
+	if (recv(conn->fdctl,&(dataout),sizeof(struct sockaddr_un),0)<0) 
+		return vde_open_abort(conn);
 
-	if (connect(conn->fddata,(struct sockaddr *)&(dataout),sizeof(struct sockaddr_un))<0) {
-		int err=errno;
-		close(conn->fddata);
-		close(conn->fdctl);
-		free(conn);
-		errno=err;
-		return NULL;
-	}
+	if (connect(conn->fddata,(struct sockaddr *)&(dataout),sizeof(struct sockaddr_un))<0) 
+		return vde_open_abort(conn);
+
 	chmod(dataout.sun_path,mode);
 
 	return conn;
