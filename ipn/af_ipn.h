@@ -1,5 +1,6 @@
 #ifndef __LINUX_NET_AFIPN_H
 #define __LINUX_NET_AFIPN_H
+#include <linux/socket.h>
 
 #ifdef IPN_STEALING
 /* AF_NETBEUI seems to be unused */
@@ -8,7 +9,9 @@
 #define ipn_handle_frame_hook br_handle_frame_hook
 #else
 #ifndef AF_IPN
-#define AF_IPN 34
+/* waiting for the official assigment of our AF */
+/* #define AF_IPN ??? */
+#define AF_IPN AF_NETBEUI
 #define PF_IPN AF_IPN
 #endif
 #define AF_IPN_STOLEN AF_NETBEUI
@@ -72,7 +75,6 @@ struct numnode_oob {
 #define kmem_cache_create(A,B,C,D,E) kmem_cache_create((A),(B),(C),(D),(E),(E))
 #endif
 
-#include <linux/socket.h>
 #include <linux/mutex.h>
 #include <linux/un.h>
 #include <net/sock.h>
