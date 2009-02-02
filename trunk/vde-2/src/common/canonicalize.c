@@ -46,13 +46,13 @@
 
 char *vde_realpath(const char *name, char *resolved)
 {
-	char *dest, *extra_buf=NULL;
+	char *dest, *buf=NULL, *extra_buf=NULL;
 	const char *start, *end, *resolved_limit; 
 	char *resolved_root = resolved + 1;
 	char *ret_path = NULL;
 	int num_links = 0;
 	int validstat = 0;
-	struct stat pst;
+	struct stat *pst = NULL;
 
 	if (!name || !resolved)
 	{
@@ -68,7 +68,15 @@ char *vde_realpath(const char *name, char *resolved)
 		goto abort;
 	}
 
+	if ((buf=(char *)calloc(PATH_MAX, sizeof(char)))==NULL) {
+		errno = ENOMEM;
+		goto abort;
+	}
 	if ((extra_buf=(char *)calloc(PATH_MAX, sizeof(char)))==NULL) {
+		errno = ENOMEM;
+		goto abort;
+	}
+	if ((pst=(struct stat *)calloc(1, sizeof(struct stat)))==NULL) {
 		errno = ENOMEM;
 		goto abort;
 	}
@@ -144,15 +152,14 @@ char *vde_realpath(const char *name, char *resolved)
 
 			/*check the dir along the path */
 			validstat = 1;
-			if (lstat(resolved, &pst) < 0)
+			if (lstat(resolved, pst) < 0)
 				goto abort;
 			else
 			{
 				/* this is a symbolic link, thus restart the navigation from
 				 * the symlink location */
-				if (S_ISLNK (pst.st_mode))
+				if (S_ISLNK (pst->st_mode))
 				{
-					char buf[PATH_MAX];
 					size_t len;
 
 					if (++num_links > MAXSYMLINKS)
@@ -187,7 +194,7 @@ char *vde_realpath(const char *name, char *resolved)
 						if (dest > resolved + 1)
 							while ((--dest)[-1] != '/');
 				}
-				else if (*end == '/' && !S_ISDIR(pst.st_mode))
+				else if (*end == '/' && !S_ISDIR(pst->st_mode))
 				{
 					errno = ENOTDIR;
 					goto abort;
@@ -213,6 +220,8 @@ char *vde_realpath(const char *name, char *resolved)
 abort:
 	ret_path = NULL;
 cleanup:
+	if (buf) free(buf);
 	if (extra_buf) free(extra_buf);
+	if (pst) free(pst);
 	return ret_path;
 }
