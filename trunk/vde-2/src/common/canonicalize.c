@@ -46,9 +46,10 @@
 
 char *vde_realpath(const char *name, char *resolved)
 {
-	char *dest, extra_buf[PATH_MAX];
+	char *dest, *extra_buf=NULL;
 	const char *start, *end, *resolved_limit; 
 	char *resolved_root = resolved + 1;
+	char *ret_path = NULL;
 	int num_links = 0;
 	int validstat = 0;
 	struct stat pst;
@@ -56,7 +57,7 @@ char *vde_realpath(const char *name, char *resolved)
 	if (!name || !resolved)
 	{
 		errno = EINVAL;
-		return NULL;
+		goto abort;
 	}
 
 	if (name[0] == '\0')
@@ -64,7 +65,12 @@ char *vde_realpath(const char *name, char *resolved)
 		/* As per Single Unix Specification V2 we must return an error if
 		   the name argument points to an empty string.  */
 		errno = ENOENT;
-		return NULL;
+		goto abort;
+	}
+
+	if ((extra_buf=(char *)calloc(PATH_MAX, sizeof(char)))==NULL) {
+		errno = ENOMEM;
+		goto abort;
 	}
 
 	resolved_limit = resolved + PATH_MAX;
@@ -75,7 +81,7 @@ char *vde_realpath(const char *name, char *resolved)
 		if (!getcwd(resolved, PATH_MAX))
 		{
 			resolved[0] = '\0';
-			return NULL;
+			goto abort;
 		}
 
 		dest = strchr (resolved, '\0');
@@ -90,7 +96,8 @@ char *vde_realpath(const char *name, char *resolved)
 		if (name[1] == 0)
 		{
 			*dest = '\0';
-			return resolved;
+			ret_path = resolved;
+			goto cleanup;
 		}
 	}
 
@@ -128,7 +135,7 @@ char *vde_realpath(const char *name, char *resolved)
 				if (dest > resolved_root)
 					dest--;
 				*dest = '\0';
-				return NULL;
+				goto abort;
 			}
 
 			/* copy the component, don't use mempcpy for better portability */
@@ -138,7 +145,7 @@ char *vde_realpath(const char *name, char *resolved)
 			/*check the dir along the path */
 			validstat = 1;
 			if (lstat(resolved, &pst) < 0)
-				return NULL;
+				goto abort;
 			else
 			{
 				/* this is a symbolic link, thus restart the navigation from
@@ -151,14 +158,14 @@ char *vde_realpath(const char *name, char *resolved)
 					if (++num_links > MAXSYMLINKS)
 					{
 						errno = ELOOP;
-						return NULL;
+						goto abort;
 					}
 
 					/* symlink! */
 					validstat = 0;
 					n = readlink (resolved, buf, PATH_MAX);
 					if (n < 0)
-						return NULL;
+						goto abort;
 
 					buf[n] = '\0';
 
@@ -166,7 +173,7 @@ char *vde_realpath(const char *name, char *resolved)
 					if ((long) (n + len) >= PATH_MAX)
 					{
 						errno = ENAMETOOLONG;
-						return NULL;
+						goto abort;
 					}
 
 					/* Careful here, end may be a pointer into extra_buf... */
@@ -183,14 +190,14 @@ char *vde_realpath(const char *name, char *resolved)
 				else if (*end == '/' && !S_ISDIR(pst.st_mode))
 				{
 					errno = ENOTDIR;
-					return NULL;
+					goto abort;
 				}
 				else if (*end == '/')
 				{
 					if (access(resolved, X_OK) != 0)
 					{
 						errno = EACCES;
-						return NULL;
+						goto abort;
 					}
 				}
 			}
@@ -200,5 +207,12 @@ char *vde_realpath(const char *name, char *resolved)
 		--dest;
 	*dest = '\0';
 
-	return resolved;
+	ret_path = resolved;
+	goto cleanup;
+
+abort:
+	ret_path = NULL;
+cleanup:
+	if (extra_buf) free(extra_buf);
+	return ret_path;
 }
