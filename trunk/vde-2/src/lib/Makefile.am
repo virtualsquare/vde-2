@@ -23,3 +23,7 @@ libvdeplug_la_LDFLAGS = $(AM_LDFLAGS) -version-number 2:1 -export-dynamic
 
 libvdehist_la_LIBADD = $(LIBADD)
 libvdehist_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = vdesnmp.pc vdemgmt.pc vdeplug.pc vdehist.pc
+
