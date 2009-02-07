@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: vdemgmt
+Description: Virtual Distributed Ethernet console management library.
+Version: @VERSION@
+Libs: -L${libdir} -lvdemgmt
+Cflags: -I${includedir}
+
