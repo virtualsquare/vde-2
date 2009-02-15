@@ -161,6 +161,12 @@ http://tuntaposx.sourceforge.net/])
 			;;
 	esac])
 
+# Disable pcap support (pdump)? (depends on libpcap, maybe unwanted)
+AC_ARG_ENABLE([pcap],
+	AS_HELP_STRING([--disable-pcap],
+		[Disable pcap support (pdump plugin)]),
+	[if test $enableval = "no" ; then add_pcap=no ; warn_pcap=no ; fi])
+
 AC_ARG_ENABLE([kernel-switch],
 	AS_HELP_STRING([--enable-kernel-switch],
 		[Compile support for in-kernel switch. ]),
@@ -227,10 +233,10 @@ else
 	echo " + TAP support............. enabled"
 fi
 
-if test x$warn_pcap = "xyes" ; then
-	echo " - pcap support............ disabled"
-else
+if test x$add_pcap = "xyes" ; then
 	echo " + pcap support............ enabled"
+else
+	echo " - pcap support............ disabled"
 fi
 
 if test x$enable_experimental = "xyes" ; then
@@ -261,10 +267,12 @@ found. Please install them if you want CryptCab to be compiled and installed.])
 	fi
 fi
 
-if test x$warn_pcap = "xyes" ; then
-	AC_MSG_WARN([VDE vde_pcapplug and packet dump plugin have been disabled because
+if ! test x$add_pcap = "xyes" ; then
+	if test x$warn_pcap = "xyes" ; then
+		AC_MSG_WARN([VDE vde_pcapplug and packet dump plugin have been disabled because
 libpcap is not installed on your system, or because it's too old.
 Please install it if you want vde_pcapplug and pdump to be compiled and installed.])
+	fi
 fi
 
 echo
