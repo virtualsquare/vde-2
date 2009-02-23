@@ -4,6 +4,8 @@
 #include <vde.h>
 #include <vdecommon.h>
 
+#undef malloc
+
 void *malloc ();
 
 /* Allocate an N-byte block of memory from the heap.
