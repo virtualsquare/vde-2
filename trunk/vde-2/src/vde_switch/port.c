@@ -185,27 +185,57 @@ static void free_port(unsigned int portno)
 }
 
 /* 1 if user belongs to the group, 0 otherwise) */
+#if 0
+/* getgrouplist is a nonstandard call */
 static int user_belongs_to_group(uid_t uid, gid_t gid)
 {
 	struct passwd *pw=getpwuid(uid);
 	int found=0;
 	if (pw != NULL) {
-		int lsize=0;
-		int gsize;
+		int gsize=8;
+		int scan;
 		gid_t *grouplist=NULL;
 		do {
-			lsize=gsize=lsize+8;
-			grouplist=realloc(grouplist, lsize*sizeof(gid_t));
+			grouplist=realloc(grouplist, gsize*sizeof(gid_t));
 		} while (grouplist != NULL && getgrouplist(pw->pw_name,pw->pw_gid,grouplist,&gsize) < 0);
 		if (grouplist != NULL) {
-			for (lsize=0;lsize<gsize && !found;lsize++)
-				if (grouplist[lsize]==gid)
+			for (scan=0;scan<gsize && !found;scan++)
+				if (grouplist[scan]==gid)
 					found=1;
 			free(grouplist);
 		}
 	}
 	return found;
 }
+#endif
+static int user_belongs_to_group(uid_t uid, gid_t gid)
+{
+	struct passwd *pw=getpwuid(uid);
+	if (pw == NULL) 
+		return 0;
+	else {
+		if (gid==pw->pw_gid)
+			return 1;
+		else {
+			struct group *grp;
+			setgrent();
+			while ((grp = getgrent())) {
+				if (grp->gr_gid == gid) {
+					int i;
+					for (i = 0; grp->gr_mem[i]; i++) {
+						if (strcmp(grp->gr_mem[i], pw->pw_name)==0) {
+							endgrent();
+							return 1;
+						}
+					}
+				}
+			}
+			endgrent();
+			return 0;
+		}
+	}
+}
+
 
 /* Access Control check:
 	 returns 0->OK -1->Permission Denied */
