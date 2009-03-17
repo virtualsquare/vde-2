@@ -351,6 +351,8 @@ abort:
 				close(conn->fdctl);
 			if (conn->fddata >= 0)
 				close(conn->fddata);
+			if (*(conn->inpath.sun_path))
+				unlink(conn->inpath.sun_path);
 			free(conn);
 		}
 		conn = NULL;

@@ -149,6 +149,7 @@ static int newport(int fd, int portno, uid_t user)
 		chmod(sun.sun_path,mode);
 	if(chown(sun.sun_path,user,grp_owner) < 0) {
 		printlog(LOG_ERR, "chown: %s", strerror(errno));
+		unlink(sun.sun_path);
 		close_ep(portno-1,fd);
 		return -1;
 	}
