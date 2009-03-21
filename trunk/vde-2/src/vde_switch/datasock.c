@@ -143,6 +143,8 @@ static int newport(int fd, int portno, uid_t user)
 		close_ep(portno-1,fd);
 		return -1;
 	}
+	if (geteuid() != 0)
+		user = -1;
 	if (user != -1)
 		chmod(sun.sun_path,mode & 0700);
 	else
@@ -431,6 +433,11 @@ static void init(void)
 	}
 	if (((mkdir(ctl_socket, 0777) < 0) && (errno != EEXIST))){
 		printlog(LOG_ERR,"Could not create the VDE ctl directory '%s': %s", ctl_socket, strerror(errno));
+		exit(-1);
+	}
+	if(chown(ctl_socket,-1,grp_owner) < 0) {
+		rmdir(ctl_socket);
+		printlog(LOG_ERR, "Could not chown socket '%s': %s", sun.sun_path, strerror(errno));
 		exit(-1);
 	}
 	if (chmod(ctl_socket, dirmode) < 0) {
