@@ -276,6 +276,7 @@ int main(int argc, char **argv, char **env)
 	unsigned short remoteport = PORTNO;
 	unsigned char keepalives=0;
 	char *scp_extra_options;
+	int daemonize = 0;
 
 	scp_extra_options=getenv("SCP_EXTRA_OPTIONS");
 	
@@ -298,9 +299,10 @@ int main(int argc, char **argv, char **env)
 			{"keepalive",0,0,'k'},
 			{"verbose",optional_argument,0,'v'},
 		        {"help",0,0,'h'},
+		        {"daemon",0,0,'d'},
 		        {0, 0, 0, 0}
 		};
-		c = GETOPT_LONG (argc, argv, "s:p:c:P:hv::xk",
+		c = GETOPT_LONG (argc, argv, "s:p:c:P:hv::xkd",
 		      	  long_options, &option_index);
 		if (c == -1)
 		        break;
@@ -364,6 +366,9 @@ int main(int argc, char **argv, char **env)
 			case 'k':
 			keepalives=1;
 			break;
+			case 'd':
+			daemonize=1;
+			break;
 
 		        case 'h':
 		        default:
@@ -395,6 +400,16 @@ int main(int argc, char **argv, char **env)
 		case ENC_SSH:
 			vc_printlog(1,"Using ssh key exchange for authentication");
 			break;
+	}
+
+	if (daemonize) {
+		if (fork() == 0) {
+			setsid();
+			close(STDIN_FILENO);
+			close(STDOUT_FILENO);
+			if (fork() > 0)
+				exit(0); 
+		} else exit(0);
 	}
 	  
 	if(!remotehost){

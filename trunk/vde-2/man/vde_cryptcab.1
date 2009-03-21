@@ -29,6 +29,9 @@ vde_cryptcab \- Virtual Distributed Ethernet encrypted cable manager
 [
 .B \-k
 ]
+[
+.B \-d
+]
 .br
 .SH DESCRIPTION
 A
@@ -109,6 +112,9 @@ Disable symmetric key encryption.
 .TP
 .B \-k 
 Send periodic "keepalive" packets to avoid server timeouts. Useful when you want to keep a low-traffic link available.
+.TP
+.B \-d 
+Run as daemon.
 .TP
 .B \-v
 Verbose. (Use -vv -vvv or -vvvv for more verbosity) 
