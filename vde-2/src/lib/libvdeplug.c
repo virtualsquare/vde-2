@@ -323,6 +323,25 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		else
 			gid=gs->gr_gid;
 		chown(conn->inpath.sun_path,-1,gid);
+	} else {
+		/* when group is not defined, set permission for the reverse channel */
+		struct stat ctlstat;
+		/* if no permission gets "voluntarily" granted to the socket */
+		if ((mode & 077) == 0) {
+			if (stat(sockun->sun_path, &ctlstat) == 0) {
+				/* if the switch is owned by root or by the same user it should
+					 work 0700 */
+				if (ctlstat.st_uid != 0 && ctlstat.st_uid != geteuid()) {
+					/* try to change the group ownership to the same of the switch */
+					/* this call succeeds if the vde user and the owner of the switch
+						 belong to the group */
+					if (chown(conn->inpath.sun_path,-1,ctlstat.st_gid) == 0) 
+						mode |= 070;
+					else
+						mode |= 077;
+				}
+			}
+		}
 	}
 	chmod(conn->inpath.sun_path,mode);
 
