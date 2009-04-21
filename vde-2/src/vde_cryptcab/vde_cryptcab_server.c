@@ -446,7 +446,7 @@ void cryptcab_server(char *_plugname, unsigned short udp_port, enum e_enc_type _
 				case (ST_AUTH + PKT_DATA):
 					vc_printlog(4,"Data pkt received (%d Bytes)",pkt.len); 
 					pkt_dec.len = data_decrypt(pkt.data+1, pkt_dec.data, pkt.len-1, p1);
-					
+					set_expire(p1, CMD_KEEPALIVE);
 					vde_send(p1->plug,pkt_dec.data,pkt_dec.len,0);	
 					break;
 				case (ST_AUTH + CMD_KEEPALIVE):
