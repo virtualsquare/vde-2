@@ -645,7 +645,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			err=-EEXIST;
 			goto put_fail;
 		}
-		err = vfs_permission(&nd, MAY_EXEC);
+		err = inode_permission(nd.path.dentry->d_inode, MAY_EXEC);
 		if (err)
 			goto put_fail;
 		err = -ECONNREFUSED;
@@ -732,14 +732,14 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 		err = path_lookup(sunaddr->sun_path, LOOKUP_FOLLOW, &nd);
 		if (err)
 			goto out;
-		err = vfs_permission(&nd, MAY_READ);
+		err = inode_permission(nd.path.dentry->d_inode, MAY_READ);
 		if (err) {
 			if (err == -EACCES || err == -EROFS)
 				mustshutdown|=RCV_SHUTDOWN;
 			else
 				goto put_fail;
 		}
-		err = vfs_permission(&nd, MAY_WRITE);
+		err = inode_permission(nd.path.dentry->d_inode, MAY_WRITE);
 		if (err) {
 			if (err == -EACCES)
 				mustshutdown|=SEND_SHUTDOWN;
