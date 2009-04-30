@@ -113,7 +113,7 @@ static struct option long_options[] = {
 	{"mod", 1, 0, 'm'},
 	{"group", 1, 0, 'g'},
 	{"tap", 1, 0, 't'},
-	{"grab", 1, 0, 'g'},
+	{"grab", 1, 0, 'G'},
 
 };
 
