@@ -207,6 +207,20 @@ static int parseopt(int c, char *optarg)
 	return outc;
 }
 
+int check_kernel_support(void) {
+
+	int kvdefd = socket(AF_IPN,SOCK_RAW,IPN_VDESWITCH);
+	if (kvdefd < 0) {
+		kvdefd = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_VDESWITCH);
+		if (kvdefd < 0) {
+			printlog(LOG_ERR,"kvde_switch requires ipn and kvde_switch kernel modules loaded");
+			return(-1);
+		}
+	}
+	close(kvdefd);
+	return 0;
+}
+
 static void init(void)
 {
 	int kvdefd;

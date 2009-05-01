@@ -26,6 +26,7 @@
 
 #include "../vde_switch/switch.h"
 #include "consmgmt.h"
+#include "datasock.h"
 #undef VDE_PQ
 #undef OPTPOLL
 #ifdef VDE_PQ
@@ -279,7 +280,7 @@ static void version(void)
 			"GNU General Public License v2.\n"
 			"For more information about these matters, see the files\n"
 			"named COPYING.\n");
-	exit(0);
+	exit(check_kernel_support());
 } 
 
 static struct option *optcpy(struct option *tgt, struct option *src, int n, int tag)
@@ -388,9 +389,10 @@ static void init_mods(void)
 			if (cwfd >= 0)
 				/* Restore cwd so each module will be initialized with the
 				 * original cwd also if the previous one changed it. */
-				fchdir(cwfd);
+				if(fchdir(cwfd) < 0) {
+					printlog(LOG_WARNING,"Error restoring original working dir");
+				}
 		}
-
 	close(cwfd);
 }
 
