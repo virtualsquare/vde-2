@@ -101,9 +101,10 @@ int delay_bufsize[2]; //total size of delayed packets
 char *vdepath[2]; //path of the directly connected switched (via vde_plug)
 VDECONN *vdeplug[2]; //vde_plug connections (if NULL stdin/stdout)
 int daemonize; // daemon mode
+static int logok=0;
+static char *rcfile;
 static char *pidfile = NULL;
 static char pidfile_path[PATH_MAX];
-static int logok=0;
 static int blinksock;
 static struct sockaddr_un blinksun;
 static char *blinkmsg;
@@ -333,7 +334,7 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 
 	struct packpq *new=malloc(sizeof(struct packpq));
 	if (new==NULL) {
-		printlog(LOG_WARNING,"%s: malloc elem %s",progname,strerror(errno));
+		printlog(LOG_WARNING,"malloc elem %s",strerror(errno));
 		exit (1);
 	}
 	gettimeofday(&v,NULL);
@@ -343,7 +344,7 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	new->dir=dir;
 	new->buf=malloc(size);
 	if (new->buf==NULL) {
-		printlog(LOG_WARNING,"%s: malloc elem buf %s",progname,strerror(errno));
+		printlog(LOG_WARNING,"malloc elem buf %s",strerror(errno));
 		exit (1);
 	}
 	memcpy(new->buf,buf,size);
@@ -352,7 +353,7 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	if (pqh==NULL) {
 		pqh=malloc(PQCHUNK*sizeof(struct packpq *));
 		if (pqh==NULL) {
-			printlog(LOG_WARNING,"%s: malloc %s",progname,strerror(errno));
+			printlog(LOG_WARNING,"malloc %s",strerror(errno));
 			exit (1);
 		}
 		pqh[0]=&sentinel; maxpq=PQCHUNK;
@@ -360,7 +361,7 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	if (npq >= maxpq) {
 		pqh=realloc(pqh,(maxpq=maxpq+PQCHUNK) * sizeof(struct packpq *));
 		if (pqh==NULL) {
-			printlog(LOG_WARNING,"%s: malloc %s",progname,strerror(errno));
+			printlog(LOG_WARNING,"malloc %s",strerror(errno));
 			exit (1);
 		}
 	}
@@ -505,7 +506,7 @@ static void splitpacket(const unsigned char *buf,int size,int dir)
 		rnx[dir]=(buf[0]<<8)+buf[1];
 		//fprintf(stderr,"%s: packet %d size %d %x %x dir %d\n",progname,rnx[dir],size-2,buf[0],buf[1],dir);
 		if (rnx[dir]>1521) {
-			printlog(LOG_WARNING,"%s: Packet length error size %d rnx %d",progname,size,rnx[dir]);
+			printlog(LOG_WARNING,"Packet length error size %d rnx %d",size,rnx[dir]);
 			rnx[dir]=0;
 			return;
 		}
@@ -763,7 +764,7 @@ static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 	struct sockaddr addr;
 	new = accept(fd, &addr, &len);
 	if(new < 0){
-		printlog(LOG_WARNING,"%s: mgmt accept %s",progname,strerror(errno));
+		printlog(LOG_WARNING,"mgmt accept %s",strerror(errno));
 		return nfds;
 	}
 	if (nfds < NPFD) {
@@ -774,7 +775,7 @@ static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 		pfd[nfds].events=POLLIN | POLLHUP;
 		return ++nfds;
 	} else {
-		printlog(LOG_WARNING,"%s: too many mgmt connections",progname);
+		printlog(LOG_WARNING,"too many mgmt connections");
 		close (new);
 		return nfds;
 	}
@@ -955,14 +956,17 @@ static int showinfo(int fd,char *s)
 	return 0;
 }
 
-#define WITHFD 0x80
+static int runscript(int fd,char *path);
+
+#define WITHFILE 0x80
 static struct comlist {
 	char *tag;
 	int (*fun)(int fd,char *arg);
 	unsigned char type;
 } commandlist [] = {
-	{"help", help, WITHFD},
-	{"showinfo",showinfo, WITHFD},
+	{"help", help, WITHFILE},
+	{"showinfo",showinfo, WITHFILE},
+	{"load",runscript,WITHFILE},
 	{"delay",setdelay, 0},
 	{"loss",setloss, 0},
 	{"lostburst",setlostburst, 0},
@@ -980,11 +984,23 @@ static struct comlist {
 
 #define NCL sizeof(commandlist)/sizeof(struct comlist)
 
+static inline void delnl(char *buf)
+{
+	int len=strlen(buf)-1;
+	while (len>0 && 
+				(buf[len]=='\n' || buf[len]==' ' || buf[len]=='\t')) {
+		buf[len]=0;
+		len--;
+	}
+}
+
 static int handle_cmd(int fd,char *inbuf)
 {
 	int rv=ENOSYS;
 	int i;
+	char *cmd=inbuf;
 	while (*inbuf == ' ' || *inbuf == '\t' || *inbuf == '\n') inbuf++;
+	delnl(inbuf);
 	if (*inbuf != '\0' && *inbuf != '#') {
 		for (i=0; i<NCL 
 				&& strncmp(commandlist[i].tag,inbuf,strlen(commandlist[i].tag))!=0;
@@ -994,16 +1010,38 @@ static int handle_cmd(int fd,char *inbuf)
 		{
 			inbuf += strlen(commandlist[i].tag);
 			while (*inbuf == ' ' || *inbuf == '\t') inbuf++;
-			if (commandlist[i].type & WITHFD)
+			if (fd>=0 && commandlist[i].type & WITHFILE)
 				printoutc(fd,"0000 DATA END WITH '.'");
 			rv=commandlist[i].fun(fd,inbuf);
-			if (commandlist[i].type & WITHFD)
+			if (fd>=0 && commandlist[i].type & WITHFILE)
 				printoutc(fd,".");
 		}
-		printoutc(fd,"1%03d %s",rv,strerror(rv));
+		if (fd >= 0)
+			printoutc(fd,"1%03d %s",rv,strerror(rv));
+		else if (rv != 0)
+			printlog(LOG_ERR,"rc command error: %s %s",cmd,strerror(rv));
 		return rv;
 	}
 	return rv;
+}
+
+static int runscript(int fd,char *path)
+{
+	FILE *f=fopen(path,"r");
+	char buf[MAXCMD];
+	if (f==NULL)
+		return errno;
+	else {
+		while (fgets(buf,MAXCMD,f) != NULL) {
+			delnl(buf);
+			if (fd >= 0) {
+				printoutc(fd,"%s (%s) %s",prompt,path,buf);
+			}
+			handle_cmd(fd, buf);
+		}
+		fclose(f);
+		return 0;
+	}
 }
 
 static int mgmtcommand(int fd)
@@ -1013,7 +1051,7 @@ static int mgmtcommand(int fd)
 	int outfd=fd;
 	n = read(fd, buf, MAXCMD);
 	if (n<0) {
-		printlog(LOG_WARNING,"%s: read from mgmt %s",progname,strerror(errno));
+		printlog(LOG_WARNING,"read from mgmt %s",strerror(errno));
 		return 0;
 	}
 	else if (n==0) 
@@ -1045,6 +1083,7 @@ void usage(void)
 {
 	fprintf(stderr,"Usage: %s OPTIONS\n"
 			"\t--help|-h\n"
+			"\t--rcfile|-f Configuration file\n"
 			"\t--loss|-l loss_percentage\n"
 			"\t--lostburst|-L lost_packet_burst_len\n"
 			"\t--delay|-d delay_ms\n"
@@ -1075,6 +1114,7 @@ int main(int argc,char *argv[])
 	int consoleindex=-1;
 	static struct option long_options[] = {
 		{"help",0 , 0, 'h'},
+		{"rcfile", 1, 0, 'f'},
 		{"loss", 1, 0, 'l'},
 		{"lostburst", 1, 0, 'L'},
 		{"delay",1 , 0, 'd'},
@@ -1100,13 +1140,16 @@ int main(int argc,char *argv[])
 
 	while(1) {
 		int c;
-		c = GETOPT_LONG (argc, argv, "hnl:d:M:D:m:b:s:c:v:L:",
+		c = GETOPT_LONG (argc, argv, "hnl:d:M:D:m:b:s:c:v:L:f:",
 				long_options, &option_index);
 		if (c<0)
 			break;
 		switch (c) {
 			case 'h':
 				usage();
+				break;
+			case 'f':
+				rcfile=strdup(optarg);
 				break;
 			case 'd':
 				read_wirevalue(optarg,delay);
@@ -1203,6 +1246,9 @@ int main(int argc,char *argv[])
 		usage();
 
 	npfd=ndirs;
+
+	if (rcfile)
+		runscript(-1,rcfile);
 	if (vdeplug[LR]) {
 		pfd[npfd].fd=vde_ctlfd(vdeplug[LR]);
 		pfd[npfd].events=POLLIN | POLLHUP;
@@ -1249,13 +1295,13 @@ int main(int argc,char *argv[])
 	if(pidfile) save_pidfile();
 
 	if (vdepath[LR]) 
-	  printlog(LOG_INFO,"%s: bidirectional vdeplug filter L=%s R=%s starting...",progname,
+	  printlog(LOG_INFO,"bidirectional vdeplug filter L=%s R=%s starting...",
 				(*vdepath[LR])?vdepath[LR]:"DEFAULT_SWITCH",
 				(*vdepath[RL])?vdepath[RL]:"DEFAULT_SWITCH");
 	else if (ndirs==2)
-		printlog(LOG_INFO,"%s: bidirectional filter starting...",progname);
+		printlog(LOG_INFO,"bidirectional filter starting...");
 	else
-		printlog(LOG_INFO,"%s: monodirectional filter starting...",progname);
+		printlog(LOG_INFO,"monodirectional filter starting...");
 
 	initrand();
 	while(1) {
