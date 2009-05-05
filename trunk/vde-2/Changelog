@@ -1,3 +1,44 @@
+VDE 2.2.3, 2009-05-05
+	* [vdeterm] Moved history management in a separate library.
+	* [vde_switch] Console bug fixes.
+	* Added vde_pcapplug (connect a vde_switch to a real interface using pcap)
+	* Added missing includes of limits.h/ctype.h
+	* [vde_switch] Added option --mgmtgroup to consmgmt module to specify the
+	  group of the management socket.
+	* [vde_switch] Added option --dirmode to datasock module to specify the mode
+	  of the socket directory.
+	* [vdetaplib] Added specification of port, mode and group.
+	* [kvde_switch] Bugfixes.
+	* [vde_switch] pdump plugin: add fifo support and buffered/unbuffered choice.
+	* [common] Fix '#include <limits.h>' for PATH_MAX. (Closes: #2023790)
+	* [vdetaplib] Manpage: added an example to override default port, group and
+	  mode. (Closes: #2066885)
+	* [vde_switch] Resize untagged ports bitarray while changing number of ports
+	  (Thanks to Michael Sallaway). Closes: #2115547.
+	* [vde_switch] Fix memory reset in BA_REALLOC and BAC_REALLOC (by rd235).
+	  (Closes: #2123601)
+	* [kvde_switch] By default kvde_switch is now not compiled in.
+	* [vdeq] Fixed loop if an unknow parameter is specified. Thanks to tfero.
+	  (Closes: #2134438)
+	* [slirpvde] Imported patch from <ludwig.nussel@suse.de> to fix static buffer
+	  overflow (Closes: #2138410).
+	* [vde_switch] Fixed compatibility with armel architecture using "attribute
+	  packet" on registration message structures (thanks to Michele Cucchi).
+	* [vde_cryptcap] Some modifications to allow the client to work on the
+	  OpenMoko freerunner.
+	* [vde_switch] Added port access control.
+	* [vde_switch] Changed regular user standard switch to ~/.vde2/stdsock.
+	* [libvdeplug] Downsize vde_open_real() and vde_realpath() stack to fit in
+	  User-Mode Linux.
+	* [common] Add pkg-config files for VDE libraries.
+	* [common] Add '--disable-pcap' configure option, thanks to Wulf C. Krueger
+	  (Closes: #2600817).
+	* [common] Fix bad malloc replacement (Closes: #2631581), thanks to Michele
+	  Cucchi.
+	* [vde_cryptcab] Added support for daemonization.
+	* [vde_cryptcab] Fixed server side disconnections (thanks to Brendan Grieve).
+	* [wirefilter] Added rc file.
+
 VDE 2.2.2, 2008-07-08
 	* Added --enable-profile to configure (for profiling)
 	* Added cleanup() in vdeq on successfull termination (thanks huslu)
