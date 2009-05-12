@@ -1,8 +1,12 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include
 bin_PROGRAMS = vde_cryptcab
 
+# Avoid wrong optimizations due to strict aliasing rules when making casts
+# between socket structs.
+AM_CFLAGS = -fno-strict-aliasing
+
 if ENABLE_PROFILE
-  AM_CFLAGS = -pg --coverage
+  AM_CFLAGS += -pg --coverage
   AM_LDFLAGS = -pg --coverage
 endif
 
