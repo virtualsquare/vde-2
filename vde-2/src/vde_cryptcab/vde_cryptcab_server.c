@@ -179,9 +179,7 @@ static void
 autocleaner(int signo)
 {
 	struct itimerval *old=NULL;
-	vc_printlog(4,"Timer elapsed");
 	list=clean_peerlist(list);
-	vc_printlog(4,"Number of clients = %d", numberofpeers());
 	setitimer(ITIMER_REAL, &TIMER, old);
 }
 
