@@ -2,6 +2,7 @@
  * Licensed under the GPLv2
  * Modified by Ludovico Gardenghi 2005
  * Modified by Renzo Davoli, Luca Bigliardi 2007
+ * Modified by Renzo Davoli, Luca Raggi 2009 (Markov chain support)
  * Gauss normal distribution/blinking support, requested and parlty implemented
  * by Luca Saiu and Jean-Vincent Loddo (Marionnet project)
  * Gilbert model for packet loss requested by Leandro Galvao.
@@ -53,8 +54,9 @@
 static int alternate_stdin;
 static int alternate_stdout;
 #define NPFD NPIPES+NPIPES+MAXCONN+1
-struct pollfd pfd[NPFD];
+struct pollfd pfd[NPFD]={[0 ... NPFD-1 ]={.fd=-1}};
 int outfd[NPIPES];
+char debuglevel[NPFD];
 char *progname;
 char *mgmt;
 int mgmtmode=0700;
@@ -69,27 +71,36 @@ struct wirevalue {
 	char alg;
 };
 
-static inline double max_wirevalue(struct wirevalue *val)
-{
-	return (val->value + val->plus);
-}
+#define LOSS 0
+#define LOSTBURST 1
+#define DELAY 2
+#define DDUP 3
+#define BAND 4
+#define SPEED 5
+#define CAPACITY 6
+#define NOISE 7
+#define MTU 8
+#define NUMVALUES 9
 
-static inline double min_wirevalue(struct wirevalue *val)
-{
-	return (val->value - val->plus);
-}
+/* general Markov chain approach */
+int markov_numnodes=0;
+int markov_current=0;
+struct markov_node {
+	char *name;
+	struct wirevalue val[NUMVALUES][2];
+};
+double *adjmap;
+#define ADJMAPN(M,I,J,N) (M)[(I)*(N)+(J)]
+#define ADJMAP(I,J) ADJMAPN(adjmap,(I),(J),markov_numnodes)
+#define ROT(I,J) (((I)+(J))%markov_numnodes)
+struct markov_node **markov_nodes;
+#define WFVAL(N,T,D) (markov_nodes[N]->val[T][D])
+#define WFADDR(N,T) (markov_nodes[N]->val[T])
+#define WFNAME(N) (markov_nodes[N]->name)
+double markov_time=100.0;
+long long markov_next;
 
-struct wirevalue loss[2];
-struct wirevalue lostburst[2];
-struct wirevalue delay[2];
-struct wirevalue ddup[2];
-struct wirevalue band[2];
-struct wirevalue speed[2];
-struct wirevalue speed[2];
-struct wirevalue capacity[2];
-struct wirevalue noise[2];
-struct wirevalue mtu[2];
-/*for the Gilber model */
+/*for the Gilbert model */
 #define OK_BURST 0
 #define FAULTY_BURST 1
 char loss_status[2]; /* Gilbert model Markov chain status */
@@ -110,6 +121,120 @@ static struct sockaddr_un blinksun;
 static char *blinkmsg;
 static char blinkidlen;
 
+static void printoutc(int fd, const char *format, ...);
+/* markov node mgmt */
+static inline struct markov_node *markov_node_new(void)
+{
+	return calloc(1,sizeof(struct markov_node));
+}
+
+static inline void markov_node_free(struct markov_node *old)
+{
+	free(old);
+}
+
+static void markov_compute(i)
+{
+	int j;
+	ADJMAP(i,i)=100.0;
+	for (j=1;j<markov_numnodes;j++)
+		ADJMAP(i,i)-=ADJMAP(i,ROT(i,j));
+}
+
+static void copyadjmap(int newsize, double *newmap)
+{
+	int i,j;
+	for (i=0;i<newsize;i++) {
+		ADJMAPN(newmap,i,i,newsize)=100.0;
+		for (j=1;j<newsize;j++) {
+			int newj=(i+j)%newsize;
+			if (i<markov_numnodes && newj<markov_numnodes) 
+				ADJMAPN(newmap,i,i,newsize)-=
+					(ADJMAPN(newmap,i,newj,newsize) = ADJMAP(i,newj));
+		}
+	}
+}
+
+static void markov_resize(int numnodes)
+{
+	if (numnodes != markov_numnodes) {
+		int i;
+		double *newadjmap=calloc(numnodes*numnodes,sizeof(double));
+		if (numnodes>markov_numnodes) {
+			markov_nodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			for (i=markov_numnodes;i<numnodes;i++)
+				markov_nodes[i]=markov_node_new();
+		} else {
+			for (i=numnodes;i<markov_numnodes;i++)
+				markov_node_free(markov_nodes[i]);
+			markov_nodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			if (markov_current >= numnodes)
+				markov_current = 0;
+		}
+		copyadjmap(numnodes,newadjmap);
+		if (adjmap)
+			free(adjmap);
+		adjmap=newadjmap;
+		markov_numnodes=numnodes;
+	}
+}
+
+static int markov_step(int i) {
+	double num=drand48() * 100;
+	int j,k=0;
+	markov_next+=markov_time;
+	for (j=0;j<markov_numnodes;j++) {
+		k=ROT(i,j);
+		double val=ADJMAP(i,ROT(i,j));
+		if (num <= val)
+			break;
+		else
+			num -= val;
+	}
+	if (i != k) {
+		for (j=0;j<NPFD;j++) { 
+			if (debuglevel[j] > 0) {
+				int fd=pfd[j].fd;
+				if (fd == 0) fd=1;
+				printoutc(fd,"%04d Node %d \"%s\" -> %d \"%s\"",
+						3800+k,
+						i, WFNAME(i)?WFNAME(i):"",
+						k, WFNAME(k)?WFNAME(k):"");
+			}
+		}
+	}
+	return k;
+}
+
+static int markovms(void) {
+	if (markov_numnodes > 1) {
+		struct timeval v;
+		gettimeofday(&v,NULL);
+		unsigned long long next=markov_next-(v.tv_sec*1000+v.tv_usec/1000);
+		if (next < 0) next=0;
+		return next;
+	} else
+		return -1;
+}
+
+static inline void markov_try(void) {
+	if (markov_numnodes > 1) {
+		struct timeval v;
+		gettimeofday(&v,NULL);
+		if ((markov_next-(v.tv_sec*1000+v.tv_usec/1000)) <= 0)
+			markov_current=markov_step(markov_current);
+	}
+}
+
+static void markov_start(void) {
+	if (markov_numnodes > 1) {
+		struct timeval v;
+		gettimeofday(&v,NULL);
+		markov_next=v.tv_sec*1000+v.tv_usec/1000;
+		markov_current=markov_step(markov_current);
+	}
+}
+
 #define BUFSIZE 2048
 #define MAXCMD 128
 #define MGMTMODEARG 129
@@ -121,6 +246,16 @@ static char blinkidlen;
 #define MEGA (1<<20)
 #define GIGA (1<<30)
 
+static inline double max_wirevalue(int node,int tag, int dir)
+{
+	return (WFVAL(node,tag,dir).value + WFVAL(node,tag,dir).plus);
+}
+
+static inline double min_wirevalue(int node,int tag, int dir)
+{
+	return (WFVAL(node,tag,dir).value - WFVAL(node,tag,dir).plus);
+}
+
 static void initrand()
 {
 	struct timeval v;
@@ -130,8 +265,9 @@ static void initrand()
 
 /*more than 98% inside the bell */
 #define SIGMA (1.0/3.0)
-static double compute_wirevalue(struct wirevalue *wv)
+static double compute_wirevalue(int tag, int dir)
 {
+	struct wirevalue *wv=&WFVAL(markov_current,tag,dir);
 	if (wv->plus == 0)
 		return wv->value;
 	switch (wv->alg) {
@@ -168,8 +304,10 @@ void printlog(int priority, const char *format, ...)
 	va_end (arg);
 }
 
-static void read_wirevalue(char *s,struct wirevalue *wv)
+static int read_wirevalue(char *s, int tag)
 {
+	struct wirevalue *wv;
+	int markov_node=0;
 	double v=0.0;
 	double vplus=0.0;
 	int n;
@@ -177,10 +315,19 @@ static void read_wirevalue(char *s,struct wirevalue *wv)
 	char algo=ALGO_UNIFORM;
 	n=strlen(s)-1;
 	while ((s[n] == ' ' || s[n] == '\n' || s[n] == '\t') && n>0)
+		s[n--]=0;
+	if (s[n]==']')
 	{
-		s[n]=0;
-		n--;
+		char *idstr=&s[n];
+		s[n--] = 0;
+		while(s[n]!='[' && n>1)
+			idstr = &s[n--];
+		s[n--] = 0;
+		sscanf(idstr,"%d",&markov_node);
+		if (markov_node < 0 || markov_node >= markov_numnodes)
+			return EINVAL;
 	}
+	wv=WFADDR(markov_node,tag);
 	switch (s[n]) {
 		case 'u':
 		case 'U':
@@ -223,6 +370,7 @@ static void read_wirevalue(char *s,struct wirevalue *wv)
 		wv[RL].plus=vplus*mult;
 		wv[RL].alg=algo;
 	}
+	return 0;
 }
 
 struct packpq {
@@ -269,8 +417,8 @@ static inline int outpacket(int dir,const unsigned char *buf,int size)
 int writepacket(int dir,const unsigned char *buf,int size)
 {
 	/* NOISE */
-	if (max_wirevalue(noise+dir) > 0) {
-		double noiseval=compute_wirevalue(noise+dir);
+	if (max_wirevalue(markov_current,NOISE,dir) > 0) {
+		double noiseval=compute_wirevalue(NOISE,dir);
 		int nobit=0;
 		while ((drand48()*8*MEGA) < (size-2)*8*noiseval)
 			nobit++;
@@ -325,8 +473,8 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 
 	/* CAPACITY */
 	/* when bandwidth is limited, packets exceeding capacity are discarded */
-	if (max_wirevalue(capacity+dir) > 0) {
-		double capval=compute_wirevalue(capacity+dir);
+	if (max_wirevalue(markov_current,CAPACITY,dir) > 0) {
+		double capval=compute_wirevalue(CAPACITY,dir);
 		if ((delay_bufsize[dir]+size) > capval)
 			return;
 	}
@@ -378,18 +526,18 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 {
 	/* MTU */
 	/* if the packet is incosistent with the MTU of the line just drop it */
-	if (min_wirevalue(mtu+dir) > 0 && size > min_wirevalue(mtu+dir))
+	if (min_wirevalue(markov_current,MTU,dir) > 0 && size > min_wirevalue(markov_current,MTU,dir))
 		return;
 
 	/* LOSS */
 	/* Total packet loss */
-	if (min_wirevalue(loss+dir) >= 100.0)
+	if (min_wirevalue(markov_current,LOSS,dir) >= 100.0)
 		return;
 	/* probabilistic loss */
-	if (max_wirevalue(lostburst+dir) > 0) {
+	if (max_wirevalue(markov_current,LOSTBURST,dir) > 0) {
 		/* Gilbert model */
-		double losval=compute_wirevalue(loss+dir)/100;
-		double burstlen=compute_wirevalue(lostburst+dir);
+		double losval=compute_wirevalue(LOSS,dir)/100;
+		double burstlen=compute_wirevalue(LOSTBURST,dir);
 		double alpha=losval / (burstlen*(1-losval));
 		double beta=1.0 / burstlen;
 		switch (loss_status[dir]) {
@@ -402,18 +550,21 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 		}
 		if (loss_status[dir] != OK_BURST)
 			return;
-	} else if (max_wirevalue(loss+dir) > 0) {
-		/* standard non bursty model */
-		double losval=compute_wirevalue(loss+dir)/100;
-		if (drand48() < losval)
-			return;
+	} else {
+		loss_status[dir] = OK_BURST;
+		if (max_wirevalue(markov_current,LOSS,dir) > 0) {
+			/* standard non bursty model */
+			double losval=compute_wirevalue(LOSS,dir)/100;
+			if (drand48() < losval)
+				return;
+		}
 	}
 
 	/* DUP */
 	/* times is the number of dup packets */
 	int times=1;
-	if (max_wirevalue(ddup+dir) > 0) {
-		double dupval=compute_wirevalue(ddup+dir)/100;
+	if (max_wirevalue(markov_current,DDUP,dir) > 0) {
+		double dupval=compute_wirevalue(DDUP,dir)/100;
 		while (drand48() < dupval)
 			times++;
 	}
@@ -422,8 +573,8 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 
 		/* SPEED */
 		/* speed limit, if packets arrive too fast, delay the sender */
-		if (max_wirevalue(speed+dir) > 0) {
-			double speedval=compute_wirevalue(speed+dir);
+		if (max_wirevalue(markov_current,SPEED,dir) > 0) {
+			double speedval=compute_wirevalue(SPEED,dir);
 			if (speedval<=0) return;
 			if (speedval>0) {
 				unsigned int commtime=((unsigned)size)*1000000/((unsigned int)speedval);
@@ -440,8 +591,8 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 
 		/* BANDWIDTH */
 		/* band, when band overflows, delay just the delivery */
-		if (max_wirevalue(band+dir) > 0) {
-			double bandval=compute_wirevalue(band+dir);
+		if (max_wirevalue(markov_current,BAND,dir) > 0) {
+			double bandval=compute_wirevalue(BAND,dir);
 			if (bandval<=0) return;
 			if (bandval >0) {
 				unsigned int commtime=((unsigned)size)*1000000/((unsigned int)bandval);
@@ -464,8 +615,8 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 		/* DELAY */
 		/* line delay */
 		if (banddelay >= 0) {
-			if (banddelay > 0 || max_wirevalue(delay+dir) > 0) {
-				double delval=compute_wirevalue(delay+dir);
+			if (banddelay > 0 || max_wirevalue(markov_current,DELAY,dir) > 0) {
+				double delval=compute_wirevalue(DELAY,dir);
 				delval=(delval >= 0)?delval+banddelay:banddelay;
 				if (delval > 0) {
 					packet_enqueue(dir,buf,size,(int) delval); 
@@ -773,6 +924,7 @@ static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 		write(new,prompt,strlen(prompt));
 		pfd[nfds].fd=new;
 		pfd[nfds].events=POLLIN | POLLHUP;
+		debuglevel[nfds]=0;
 		return ++nfds;
 	} else {
 		printlog(LOG_WARNING,"too many mgmt connections");
@@ -794,60 +946,47 @@ static void printoutc(int fd, const char *format, ...)
 
 static int setdelay(int fd,char *s)
 {
-	read_wirevalue(s,delay);
-	return 0;
+	return read_wirevalue(s,DELAY);
 }
 
 static int setloss(int fd,char *s)
 {
-	read_wirevalue(s,loss);
-	return 0;
+	return read_wirevalue(s,LOSS);
 }
 
 static int setlostburst(int fd,char *s)
 {
-	read_wirevalue(s,lostburst);
-	if (max_wirevalue(lostburst+LR) == 0)
-		loss_status[LR]=OK_BURST;
-	if (max_wirevalue(lostburst+RL) == 0)
-		loss_status[RL]=OK_BURST;
-	return 0;
+	return read_wirevalue(s,LOSTBURST);
 }
 
 static int setddup(int fd,char *s)
 {
-	read_wirevalue(s,ddup);
-	return 0;
+	return read_wirevalue(s,DDUP);
 }
 
 static int setband(int fd,char *s)
 {
-	read_wirevalue(s,band);
-	return 0;
+	return read_wirevalue(s,BAND);
 }
 
 static int setnoise(int fd,char *s)
 {
-	read_wirevalue(s,noise);
-	return 0;
+	return read_wirevalue(s,NOISE);
 }
 
 static int setmtu(int fd,char *s)
 {
-	read_wirevalue(s,mtu);
-	return 0;
+	return read_wirevalue(s,MTU);
 }
 
 static int setspeed(int fd,char *s)
 {
-	read_wirevalue(s,speed);
-	return 0;
+	return read_wirevalue(s,SPEED);
 }
 
 static int setcapacity(int fd,char *s)
 {
-	read_wirevalue(s,capacity);
-	return 0;
+	return read_wirevalue(s,CAPACITY);
 }
 
 static int setfifo(int fd,char *s)
@@ -858,6 +997,100 @@ static int setfifo(int fd,char *s)
 	else
 		nofifo=0;
 	return 0;
+}
+
+static int setmarkov_resize(int fd,char *s)
+{
+	int n=atoi(s);
+	if (n>0) {
+		markov_resize(n);
+		markov_start();
+		return 0;
+	} else
+		return EINVAL;
+}
+
+static int setedge(int fd,char *s)
+{
+	int x,y;
+	double weight;
+	sscanf(s,"%d,%d,%lg",&x,&y,&weight);
+	if (x>=0 && x<markov_numnodes && y>=0 && y<markov_numnodes) {
+		ADJMAP(x,y)=weight;
+		markov_compute(x);
+		return 0;
+	} else
+		return EINVAL;
+}
+
+static int setmarkov_time(int fd,char *s)
+{
+	double newvalue;
+	sscanf(s,"%lg",&newvalue);
+	if (newvalue > 0) {
+		markov_time=newvalue;
+		markov_start();
+		return 0;
+	} else
+		return EINVAL;
+}
+
+static int setmarkov_node(int fd,char *s)
+{
+	int n=atoi(s);
+	if (n>=0 && n<markov_numnodes) {
+		markov_current=n;
+		return 0;
+	} else
+		return EINVAL;
+}
+
+static int setmarkov_debug(int fd,char *s)
+{
+	int n=atoi(s);
+	if (fd >= 0 && n>=0) {
+		int i;
+		if (fd==1) fd=0;
+		for (i=0;i<NPFD;i++) {
+			if (pfd[i].fd == fd) 
+				break;
+		}
+		if (i<NPFD) {
+				debuglevel[i]=n;
+				return 0;
+		} else
+			return EINVAL;
+	} else
+		return EINVAL;
+}
+
+static int showcurrent(int fd,char *s)
+{
+	printoutc(fd, "Current Markov Node %d \"%s\" (0,..,%d)",markov_current,
+			        WFNAME(markov_current)?WFNAME(markov_current):"",
+							markov_numnodes-1);
+	return 0;
+}
+
+static int setmarkov_name(int fd,char *s)
+{
+	int n;
+	while (strchr(" \t",*s)) s++;
+	n=atoi(s);
+	if (n>=0 && n<markov_numnodes) {
+		while (strchr("0123456789",*s)) s++;
+		while (strchr(" \t",*s)) s++;
+		if (*s == ',') s++;
+		if (s[strlen(s)-1]=='\n')
+			s[strlen(s)-1]=0;
+		if (WFNAME(n)) free(WFNAME(n));
+		if (*s) 
+			WFNAME(n)=strdup(s);
+		else
+			WFNAME(n)=0;
+		return 0;
+	} else
+		return EINVAL;
 }
 
 static int logout(int fd,char *s)
@@ -876,6 +1109,7 @@ static int help(int fd,char *s)
 	printoutc(fd, "COMMAND      HELP");
 	printoutc(fd, "------------ ------------");
 	printoutc(fd, "help         print a summary of mgmt commands");
+	printoutc(fd, "load         load a configuration file");
 	printoutc(fd, "showinfo     show status and parameter values");
 	printoutc(fd, "loss         set loss percentage");
 	printoutc(fd, "lostburst    mean length of lost packet bursts");
@@ -889,61 +1123,82 @@ static int help(int fd,char *s)
 	printoutc(fd, "fifo         set channel fifoness");
 	printoutc(fd, "shutdown     shut the channel down");
 	printoutc(fd, "logout       log out from this mgmt session");
+	printoutc(fd, "markov-numnodes n  markov mode: set number of states");
+	printoutc(fd, "markov-setnode n   markov mode: set current state");
+	printoutc(fd, "markov-name n,name markov mode: set state's name");
+	printoutc(fd, "markov-time ms     markov mode: transition period");
+	printoutc(fd, "setedge n1,n2,w    markov mode: set edge weight");
+	printoutc(fd, "showinfo n         markov mode: show parameter values");
+	printoutc(fd, "showedges n        markov mode: show edge weights");
+	printoutc(fd, "showcurrent        markov mode: show current state");
+	printoutc(fd, "markov-debug n     markov mode: set debug level");
 	return 0;
 }
 
 #define CHARALGO(X) (charalgo[(int)(X)])
-#define WIREVALUE_FIELDS(X) (X)->value,(X)->plus,(charalgo[(int)((X)->alg)])
+#define WIREVALUE_X_FIELDS(X) (X)->value,(X)->plus,(charalgo[(int)((X)->alg)])
+#define WIREVALUE_FIELDS(N,T,D) WIREVALUE_X_FIELDS(WFADDR(N,T)+D)
 static int showinfo(int fd,char *s)
 {
+	int node=0;
+	if (*s != 0)
+		node=atoi(s);
+	else
+		node=markov_current;
+	if (node >= markov_numnodes || node < 0)
+		return EINVAL;
 	printoutc(fd, "WireFilter: %sdirectional",(ndirs==2)?"bi":"mono");
+	if (markov_numnodes > 1) {
+		printoutc(fd, "Node %d \"%s\" (0,..,%d) Markov-time %lg",node,
+				WFNAME(node)?WFNAME(node):"",markov_numnodes-1,markov_time);
+	}
 	if (ndirs==2) {
 		printoutc(fd, "Loss   L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(loss+LR),
-				WIREVALUE_FIELDS(loss+RL));
+				WIREVALUE_FIELDS(node,LOSS,LR),
+				WIREVALUE_FIELDS(node,LOSS,RL));
 		printoutc(fd, "Lburst L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(lostburst+LR),
-				WIREVALUE_FIELDS(lostburst+RL));
+				WIREVALUE_FIELDS(node,LOSTBURST,LR),
+				WIREVALUE_FIELDS(node,LOSTBURST,RL));
 		printoutc(fd, "Delay  L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(delay+LR),
-				WIREVALUE_FIELDS(delay+RL));
+				WIREVALUE_FIELDS(node,DELAY,LR),
+				WIREVALUE_FIELDS(node,DELAY,RL));
 		printoutc(fd, "Dup    L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(ddup+LR),
-				WIREVALUE_FIELDS(ddup+RL));
+				WIREVALUE_FIELDS(node,DDUP,LR),
+				WIREVALUE_FIELDS(node,DDUP,RL));
 		printoutc(fd, "Bandw  L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(band+LR),
-				WIREVALUE_FIELDS(band+RL));
+				WIREVALUE_FIELDS(node,BAND,LR),
+				WIREVALUE_FIELDS(node,BAND,RL));
 		printoutc(fd, "Speed  L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(speed+LR),
-				WIREVALUE_FIELDS(speed+RL));
+				WIREVALUE_FIELDS(node,SPEED,LR),
+				WIREVALUE_FIELDS(node,SPEED,RL));
 		printoutc(fd, "Noise  L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(noise+LR),
-				WIREVALUE_FIELDS(noise+RL));
+				WIREVALUE_FIELDS(node,NOISE,LR),
+				WIREVALUE_FIELDS(node,NOISE,RL));
 		printoutc(fd, "MTU    L->R %g     R->L %g   ",
-				min_wirevalue(mtu+LR),
-				min_wirevalue(mtu+RL));
+				min_wirevalue(node,MTU,LR),
+				min_wirevalue(node,MTU,RL));
 		printoutc(fd, "Cap.   L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(capacity+LR),
-				WIREVALUE_FIELDS(capacity+RL));
+				WIREVALUE_FIELDS(node,CAPACITY,LR),
+				WIREVALUE_FIELDS(node,CAPACITY,RL));
 		printoutc(fd, "Current Delay Queue size:   L->R %d      R->L %d   ",delay_bufsize[LR],delay_bufsize[RL]);
 	} else {
 		printoutc(fd, "Loss   %g+%g%c",
-			WIREVALUE_FIELDS(loss));
+			WIREVALUE_FIELDS(node,LOSS,0));
 		printoutc(fd, "Lburst %g+%g%c",
-			WIREVALUE_FIELDS(lostburst));
+			WIREVALUE_FIELDS(node,LOSTBURST,0));
 		printoutc(fd, "Delay  %g+%g%c",
-			WIREVALUE_FIELDS(delay));
+			WIREVALUE_FIELDS(node,DELAY,0));
 		printoutc(fd, "Dup    %g+%g%c",
-			WIREVALUE_FIELDS(ddup));
+			WIREVALUE_FIELDS(node,DDUP,0));
 		printoutc(fd, "Bandw  %g+%g%c",
-			WIREVALUE_FIELDS(band));
+			WIREVALUE_FIELDS(node,BAND,0));
 		printoutc(fd, "Speed  %g+%g%c",
-			WIREVALUE_FIELDS(speed));
+			WIREVALUE_FIELDS(node,SPEED,0));
 		printoutc(fd, "Noise  %g+%g%c",
-			WIREVALUE_FIELDS(noise));
-		printoutc(fd, "MTU    %g", min_wirevalue(mtu));
+			WIREVALUE_FIELDS(node,NOISE,0));
+		printoutc(fd, "MTU    %g", min_wirevalue(node,MTU,0));
 		printoutc(fd, "Cap.   %g+%g%c",
-			WIREVALUE_FIELDS(capacity));
+			WIREVALUE_FIELDS(node,CAPACITY,0));
 		printoutc(fd, "Current Delay Queue size:   %d",delay_bufsize[0]);
 	}
 	printoutc(fd,"Fifoness %s",(nofifo == 0)?"TRUE":"FALSE");
@@ -953,6 +1208,25 @@ static int showinfo(int fd,char *s)
 		printoutc(fd,"Blink socket: %s",blinksun.sun_path);
 		printoutc(fd,"Blink id:     %s",blinkmsg);
 	}
+	return 0;
+}
+
+static int showedges(int fd,char *s)
+{
+	int node=0;
+	int j;
+	if (*s != 0)
+		node=atoi(s);
+	else
+		node=markov_current;
+	if (node >= markov_numnodes || node < 0)
+		return EINVAL;
+	for (j=0;j<markov_numnodes;j++) 
+		if (ADJMAP(node,j) != 0)
+			printoutc(fd, "Edge %-2d->%-2d \"%s\"->\"%s\" weigth %lg",node,j,
+					WFNAME(node)?WFNAME(node):"",
+					WFNAME(j)?WFNAME(j):"",
+					ADJMAP(node,j));
 	return 0;
 }
 
@@ -978,6 +1252,14 @@ static struct comlist {
 	{"noise",setnoise, 0},
 	{"mtu",setmtu, 0},
 	{"fifo",setfifo, 0},
+	{"markov-numnodes",setmarkov_resize, 0},
+	{"markov-setnode",setmarkov_node, 0},
+	{"markov-name",setmarkov_name, 0},
+	{"markov-time",setmarkov_time, 0},
+	{"setedge",setedge, 0},
+	{"showedges",showedges, WITHFILE},
+	{"showcurrent",showcurrent, WITHFILE},
+	{"markov-debug",setmarkov_debug, 0},
 	{"logout",logout, 0},
 	{"shutdown",doshutdown, 0}
 };
@@ -1074,6 +1356,9 @@ static int delmgmtconn(int i,struct pollfd *pfd,int nfds)
 		if (pfd[i].fd == 0) /* close stdin implies exit */
 			exit(0);
 		memmove(pfd+i,pfd+i+1,sizeof (struct pollfd) * (nfds-i-1));
+		memmove(debuglevel+i,debuglevel+i+1,sizeof(char) * (nfds-i-1));
+		pfd[nfds].fd = -1;
+		debuglevel[nfds] = 0;
 		nfds--;
 	}
 	return nfds;
@@ -1134,6 +1419,7 @@ int main(int argc,char *argv[])
 		{"blinkid",1,0,LOGIDARG}
 	};
 	progname=basename(argv[0]);
+	markov_resize(1);
 
 	setsighandlers();
 	atexit(cleanup);
@@ -1152,31 +1438,31 @@ int main(int argc,char *argv[])
 				rcfile=strdup(optarg);
 				break;
 			case 'd':
-				read_wirevalue(optarg,delay);
+				read_wirevalue(optarg,DELAY);
 				break;
 			case 'l':
-				read_wirevalue(optarg,loss);
+				read_wirevalue(optarg,LOSS);
 				break;
 			case 'L':
-				read_wirevalue(optarg,lostburst);
+				read_wirevalue(optarg,LOSTBURST);
 				break;
 			case 'D':
-				read_wirevalue(optarg,ddup);
+				read_wirevalue(optarg,DDUP);
 				break;
 			case 'b':
-				read_wirevalue(optarg,band);
+				read_wirevalue(optarg,BAND);
 				break;
 			case 'm':
-				read_wirevalue(optarg,mtu);
+				read_wirevalue(optarg,MTU);
 				break;
 			case 'n':
-				read_wirevalue(optarg,noise);
+				read_wirevalue(optarg,NOISE);
 				break;
 			case 's':
-				read_wirevalue(optarg,speed);
+				read_wirevalue(optarg,SPEED);
 				break;
 			case 'c':
-				read_wirevalue(optarg,capacity);
+				read_wirevalue(optarg,CAPACITY);
 				break;
 			case 'M':
 				mgmt=strdup(optarg);
@@ -1306,8 +1592,10 @@ int main(int argc,char *argv[])
 	initrand();
 	while(1) {
 		int delay=nextms();
+		int markovdelay=markovms();
+		if (markovdelay < delay || delay < 0) delay=markovdelay;
 		pfd[0].events |= POLLIN;
-		if (speed[LR].value > 0) {
+		if (WFVAL(markov_current,SPEED,LR).value > 0) {
 			struct timeval tv;
 			int speeddelay;
 			gettimeofday(&tv,NULL);
@@ -1322,7 +1610,7 @@ int main(int argc,char *argv[])
 		}
 		if (ndirs > 1) {
 			pfd[1].events |= POLLIN;
-			if (speed[RL].value > 0) {
+			if (WFVAL(markov_current,SPEED,RL).value > 0) {
 				struct timeval tv;
 				int speeddelay;
 				if (timercmp(&tv, &nextspeed[RL], <)) {
@@ -1369,6 +1657,7 @@ int main(int argc,char *argv[])
 /*			if (n>0) // if there are already pending events, it means that a ctlfd has hunged up
 				exit(0);*/
 		}
+		markov_try();
 		packet_dequeue();
 	}
 }
