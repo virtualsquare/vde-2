@@ -52,6 +52,7 @@
 #include <fcntl.h>
 #include "vdetelweb.h"
 #include <lwipv6.h>
+#include <limits.h>
 
 int daemonize;
 int telnet;
