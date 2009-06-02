@@ -1593,7 +1593,8 @@ int main(int argc,char *argv[])
 	while(1) {
 		int delay=nextms();
 		int markovdelay=markovms();
-		if (markovdelay < delay || delay < 0) delay=markovdelay;
+		if (markovdelay >= 0 &&
+				(markovdelay < delay || delay < 0)) delay=markovdelay;
 		pfd[0].events |= POLLIN;
 		if (WFVAL(markov_current,SPEED,LR).value > 0) {
 			struct timeval tv;

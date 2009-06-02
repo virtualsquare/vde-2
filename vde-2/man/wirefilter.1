@@ -174,8 +174,8 @@ emulation is deleted, node 0 becomes the current node.
 (The emulation always starts from node 0).
 .TP
 .B markov-time "\fIms\fP"
-time period (ms) for the markov chain computation. Each $ms$ microseconds
-a random number generator decides which is the next state.
+time period (ms) for the markov chain computation. Each \fIms\fR microseconds
+a random number generator decides which is the next state (default value=100ms).
 .TP
 .B markov-name "\fIn,name\fP"
 assign a name to a node of the markov chain. 
@@ -184,7 +184,7 @@ assign a name to a node of the markov chain.
 manually set the current node to the node \fIn\fP.
 .TP
 .B setedge "\fIn1,n2,w\fP"
-define an edge between $n1$ and $n2$. $w$ is the weight (probability percentage)
+define an edge between \fIn1\fR and \fIn2\fR; \fIw\fR is the weight (probability percentage)
 of the edge.
 The loopback edge (from a node to itself) is always computed as 100% minus
 the sum of the weights of outgoing edges.
