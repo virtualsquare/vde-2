@@ -482,7 +482,7 @@ struct pre_bind_parms {
 
 /* STD_PARMS:  BITS_PER_LONG nodes, no flags, BITS_PER_BYTE pending msgs, 
  * Ethernet + VLAN MTU*/
-#define STD_BIND_PARMS {BITS_PER_LONG, 0, BITS_PER_BYTE, 1514, 0x777};
+#define STD_BIND_PARMS {BITS_PER_LONG, 0, BITS_PER_BYTE, 1514, 0777};
 
 static int ipn_mkname(struct sockaddr_un * sunaddr, int len)
 {
