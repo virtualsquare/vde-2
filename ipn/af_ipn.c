@@ -556,7 +556,11 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			mode = ipn_node->pbp->mode;
 		else
 			mode = SOCK_INODE(sock)->i_mode;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 		mode = S_IFSOCK | (mode & ~current->fs->umask);
+#else
+		mode = S_IFSOCK | (mode & ~current_umask());
+#endif
 #ifndef IPN_PRE2625
 #ifdef APPARMOR
 		err = vfs_mknod(nd.path.dentry->d_inode, dentry, nd.path.mnt, mode, 0);
