@@ -71,7 +71,7 @@ static int ipn_net_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct msgpool_item *newmsg;
 	if (!ipn_node || !ipn_node->ipn || skb->len > ipn_node->ipn->mtu)
 		goto drop;
-	newmsg=ipn_msgpool_alloc(ipn_node->ipn,1);
+	newmsg=ipn_msgpool_alloc(ipn_node->ipn,1,skb->len);
 	if (!newmsg)
 		goto drop;
 	newmsg->len=skb->len;
@@ -99,7 +99,7 @@ struct sk_buff *ipn_handle_hook(struct ipn_node *ipn_node, struct sk_buff *skb)
 			((ipn_node->flags & IPN_NODEFLAG_DEVMASK) == IPN_NODEFLAG_GRAB) &&
 			ipn_node->ipn && len<=ipn_node->ipn->mtu) {
 		struct msgpool_item *newmsg;
-		newmsg=ipn_msgpool_alloc(ipn_node->ipn,1);
+		newmsg=ipn_msgpool_alloc(ipn_node->ipn,1,len);
 		if (newmsg) {
 			newmsg->len=len;
 			memcpy(newmsg->data,data,len);

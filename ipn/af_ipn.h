@@ -42,6 +42,7 @@
 
 #define IPN_FLAG_LOSSLESS 1
 #define IPN_FLAG_EXCL 2
+#define IPN_FLAG_FLEXMTU 4
 #define IPN_FLAG_TERMINATED 0x1000
 
 /* Ioctl defines */
@@ -51,8 +52,22 @@
 #define IPN_CONN_NETDEV          _IOW('I', 202, int) 
 #define IPN_JOIN_NETDEV          _IOW('I', 203, int) 
 #define IPN_SETPERSIST           _IOW('I', 204, int) 
+#define IPN_REGISTER_CHRDEV      _IOW('I', 301, int) 
+#define IPN_UNREGISTER_CHRDEV    _IOW('I', 302, int) 
 
 #define IPN_OOB_NUMNODE_TAG	0
+
+/* ioctl request for IPN_REGISTER_CHRDEV
+ * @dev: first device (if major==0 alloc a dynamic major)
+ * @count: num of minors
+ * @name: device name
+ * */
+struct chrdevreq {
+	unsigned int major;
+	unsigned int minor;
+	int count;
+	char name[64];
+};
 
 /* OOB message for change of numnodes
  * Common fields for oob IPN signaling:
@@ -77,6 +92,8 @@ struct numnode_oob {
 
 #include <linux/mutex.h>
 #include <linux/un.h>
+#include <linux/poll.h>
+#include <linux/device.h>
 #include <net/sock.h>
 #include <linux/netdevice.h>
 
@@ -148,6 +165,9 @@ struct ipn_sock {
 	struct ipn_node *node;
 };
 
+/* ipn_chrdev cdev to ipn_dev mapping, defined in ipn_chrdev.c */
+struct ipn_chrdev;
+
 /* 
  * ipn_network network descriptor
  *
@@ -168,6 +188,7 @@ struct ipn_sock {
  * @msgpool_cache=slab for msgpool (unused yet)
  * @proto_private=handle for protocol private data
  * @connports=array of connected sockets
+ * @chrdev=chr device(s) connected to this ipn_network
  */
 struct ipn_network {
 	struct hlist_node hnode;
@@ -191,6 +212,7 @@ struct ipn_network {
 	struct kmem_cache *msgpool_cache;
 	void *proto_private;
 	struct ipn_node **connport;
+	struct ipn_chrdev *chrdev;
 };
 
 /* struct msgpool_item 
@@ -205,7 +227,7 @@ struct msgpool_item {
 	unsigned char data[0];
 };
 
-struct msgpool_item *ipn_msgpool_alloc(struct ipn_network *ipnn,int leaky);
+struct msgpool_item *ipn_msgpool_alloc(struct ipn_network *ipnn,int leaky,int len);
 void ipn_msgpool_put(struct msgpool_item *old, struct ipn_network *ipnn);
 
 /* 
@@ -249,6 +271,16 @@ int ipn_proto_deregister(int protocol);
 int ipn_proto_injectmsg(struct ipn_node *from, struct msgpool_item *msg);
 void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg);
 void ipn_proto_oobsendmsg(struct ipn_node *to, struct msgpool_item *msg);
+
+struct ipn_node *ipn_node_create(struct net *net);
+int ipn_node_connect(struct ipn_node *ipn_node);
+int ipn_node_create_connect(struct ipn_node **ipn_node_out,
+		struct ipn_network *(* ipnn_map)(void *),void *ipnn_map_arg);
+int ipn_node_release(struct ipn_node *ipn_node);
+unsigned int ipn_node_poll(struct ipn_node *ipn_node, struct file *file, poll_table *wait);
+int ipn_node_ioctl(struct ipn_node *ipn_node, unsigned int cmd, unsigned long arg);
+int ipn_node_write(struct ipn_node *ipn_node, struct iovec *msg_iov, int len);
+int ipn_node_read(struct ipn_node *ipn_node, struct iovec *msg_iov, size_t len, int *msg_flags, int flags);
 
 #ifndef IPN_STEALING
 extern struct sk_buff *(*ipn_handle_frame_hook)(struct ipn_node *p,
