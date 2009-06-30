@@ -164,11 +164,11 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 	switch (ipn_node->flags & IPN_NODEFLAG_DEVMASK) {
 		case IPN_NODEFLAG_TAP:
 			{
-				struct ipntap *ipntap=netdev_priv(ipn_node->dev);
+				struct ipntap *ipntap=netdev_priv(ipn_node->netdev);
 				ipntap->ipn_node=ipn_node;
 				rtnl_lock(); 
-				if ((rv=register_netdevice(ipn_node->dev)) == 0)
-					rcu_assign_pointer(ipn_node->dev->ipn_port, 
+				if ((rv=register_netdevice(ipn_node->netdev)) == 0)
+					rcu_assign_pointer(ipn_node->netdev->ipn_port, 
 #ifdef IPN_STEALING 
 							(void *)
 #endif
@@ -176,18 +176,18 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 				rtnl_unlock();
 				if (rv) {/* error! */
 					ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
-					free_netdev(ipn_node->dev);
+					free_netdev(ipn_node->netdev);
 				}
 			}
 			break;
 		case IPN_NODEFLAG_GRAB:
 			rtnl_lock(); 
-			rcu_assign_pointer(ipn_node->dev->ipn_port, 
+			rcu_assign_pointer(ipn_node->netdev->ipn_port, 
 #ifdef IPN_STEALING 
 					(void *)
 #endif
 					ipn_node);
-			dev_set_promiscuity(ipn_node->dev,1);
+			dev_set_promiscuity(ipn_node->netdev,1);
 			rtnl_unlock();
 			rv=0;
 			break;
@@ -201,16 +201,16 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 		case IPN_NODEFLAG_TAP:
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
 			rtnl_lock(); 
-			rcu_assign_pointer(ipn_node->dev->ipn_port, NULL);
-			unregister_netdevice(ipn_node->dev);
+			rcu_assign_pointer(ipn_node->netdev->ipn_port, NULL);
+			unregister_netdevice(ipn_node->netdev);
 			rtnl_unlock();
-			free_netdev(ipn_node->dev);
+			free_netdev(ipn_node->netdev);
 			break;
 		case IPN_NODEFLAG_GRAB:
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
 			rtnl_lock(); 
-			rcu_assign_pointer(ipn_node->dev->ipn_port, NULL);
-			dev_set_promiscuity(ipn_node->dev,-1);
+			rcu_assign_pointer(ipn_node->netdev->ipn_port, NULL);
+			dev_set_promiscuity(ipn_node->netdev,-1);
 			rtnl_unlock();
 			break;
 	}
@@ -219,7 +219,7 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 void ipn_netdev_sendmsg(struct ipn_node *to,struct msgpool_item *msg)
 {
 	struct sk_buff *skb;
-	struct net_device *dev=to->dev;
+	struct net_device *dev=to->netdev;
 	struct ipntap *ipntap=netdev_priv(dev);
 	
 	if (msg->len > dev->mtu)

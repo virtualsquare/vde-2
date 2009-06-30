@@ -251,7 +251,8 @@ struct ipn_node *ipn_node_create(struct net *net)
 		ipn_node->descr[0]=0;
 		ipn_node->portno=IPN_PORTNO_ANY;
 		ipn_node->net=net;
-		ipn_node->dev=NULL;
+		ipn_node->netdev=NULL;
+		ipn_node->chrdev=0;
 		ipn_node->proto_private=NULL;
 		ipn_node->totmsgcount=0;
 		ipn_node->oobmsgcount=0;
@@ -397,7 +398,7 @@ static int ipn_terminate_node(struct ipn_node *ipn_node)
 				(ipn_node->shutdown & SEND_SHUTDOWN)?0:-1);
 		ipn_node->shutdown = SHUTDOWN_XMASK;
 		up(&ipnn->ipnn_mutex);
-		if (ipn_node->dev)
+		if (ipn_node->netdev)
 			ipn_netdev_close(ipn_node);
 		/* No more network elements */
 		ipnn->refcnt--;
@@ -484,7 +485,7 @@ static int _ipn_setpersist(struct ipn_node *ipn_node, int persist)
 static int ipn_setpersist(struct ipn_node *ipn_node, int persist)
 {
 	int rv=0;
-	if (ipn_node->dev == NULL)
+	if (ipn_node->netdev == NULL)
 		return -ENODEV;
 	if (down_interruptible(&ipn_glob_mutex))
 		return -ERESTARTSYS;
@@ -1013,8 +1014,8 @@ static int ipn_connect_netdev(struct socket *sock,struct ifreq *ifr)
 		up(&ipn_glob_mutex);
 		return -ERESTARTSYS;
 	}
-	ipn_node->dev=ipn_netdev_alloc(ipn_node->net,ifr->ifr_flags,ifr->ifr_name,&err);
-	if (ipn_node->dev) {
+	ipn_node->netdev=ipn_netdev_alloc(ipn_node->net,ifr->ifr_flags,ifr->ifr_name,&err);
+	if (ipn_node->netdev) {
 		int portno;
 		portno = ipn_protocol_table[ipnn->protocol]->ipn_p_newport(ipn_node);
 		if (portno >= 0 && portno<ipnn->maxports) {
@@ -1026,7 +1027,7 @@ static int ipn_connect_netdev(struct socket *sock,struct ifreq *ifr)
 			if (err) {
 				sock->state = SS_UNCONNECTED;
 				ipn_protocol_table[ipnn->protocol]->ipn_p_delport(ipn_node);
-				ipn_node->dev=NULL;
+				ipn_node->netdev=NULL;
 				ipn_node->portno= -1;
 				ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
 				ipnn->connport[portno]=NULL;
@@ -1038,7 +1039,7 @@ static int ipn_connect_netdev(struct socket *sock,struct ifreq *ifr)
 		} else {
 			ipn_netdev_close(ipn_node); 
 			err=-EADDRNOTAVAIL;
-			ipn_node->dev=NULL;
+			ipn_node->netdev=NULL;
 		}
 	} else 
 		err=-EINVAL;
@@ -1180,8 +1181,8 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 		case SIOCSIFHWADDR:
 			if (capable(CAP_NET_ADMIN))
 				return -EPERM;
-			if (ipn_node->dev && (ipn_node->flags &IPN_NODEFLAG_TAP))
-				return dev_set_mac_address(ipn_node->dev, &ifr.ifr_hwaddr);
+			if (ipn_node->netdev && (ipn_node->flags &IPN_NODEFLAG_TAP))
+				return dev_set_mac_address(ipn_node->netdev, &ifr.ifr_hwaddr);
 			else
 				return -EADDRNOTAVAIL;
 	}
@@ -1312,7 +1313,7 @@ static int ipn_sendmsg(struct kiocb *kiocb, struct socket *sock,
 void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg)
 {
 	if (to) {
-		if (to->dev) {
+		if (to->netdev) {
 			ipn_netdev_sendmsg(to,msg);
 		} else {
 			/* socket send */
@@ -1343,7 +1344,7 @@ void ipn_proto_sendmsg(struct ipn_node *to, struct msgpool_item *msg)
 void ipn_proto_oobsendmsg(struct ipn_node *to, struct msgpool_item *msg)
 {
 	if (to) {
-		if (!to->dev) { /* no oob to netdev */
+		if (!to->netdev) { /* no oob to netdev */
 			struct msgitem *msgitem;
 			struct ipn_network *ipnn=to->ipn;
 			spin_lock(&to->msglock);
