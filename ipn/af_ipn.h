@@ -139,7 +139,8 @@ struct ipn_node {
 	struct list_head oobmsgqueue;
 	wait_queue_head_t read_wait;
 	struct net *net;
-	struct net_device *dev;
+	struct net_device *netdev;
+	dev_t chrdev;
 	struct ipn_network *ipn;
 	struct pre_bind_parms *pbp;
 	void *proto_private;

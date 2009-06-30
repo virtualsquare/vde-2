@@ -69,30 +69,12 @@ static int ipn_chrdev_open(struct inode *inode, struct file *filp)
 	if ((mustshutdown & RCV_SHUTDOWN) && (mustshutdown & SEND_SHUTDOWN))
 		return -EACCES;
 
-#if 0
-	ipnn=ipn_chrdev_to_ipnn(inode->i_cdev);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	ipn_node=ipn_node_create(NULL);
-#else
-	ipn_node=ipn_node_create(&init_net);
-#endif
-	if (ipn_node) {
-		ipn_node->ipn = ipnn;
-		ipn_node->protocol=ipnn->protocol;
-		ipn_node->shutdown=mustshutdown;
-		filp->private_data = ipn_node;
-
-		if ((err=ipn_node_connect(ipn_node)) != 0) 
-			ipn_node_release(ipn_node);
-		return err;
-	} else
-		return -ENOMEM;
-#endif
-	err=ipn_node_create_connect(&ipn_node, 
-			ipn_chrdev_to_ipnn, inode->i_cdev);
-	if (ipn_node)
-		ipn_node->shutdown=mustshutdown;
+	err=ipn_node_create_connect(&ipn_node, ipn_chrdev_to_ipnn, inode->i_cdev);
 	filp->private_data=ipn_node;
+	if (ipn_node) {
+		ipn_node->shutdown=mustshutdown;
+		ipn_node->chrdev=inode->i_rdev;
+	}
 	return err;
 }
 
