@@ -6,39 +6,7 @@
 #include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
-
-#define AF_IPN AF_NETBEUI
-#define PF_IPN AF_IPN
-#define IPN_ANY 0
-#define IPN_BROADCAST 1
-#define IPN_HUB 1
-#define IPN_VDESWITCH 2
-#define IPN_VDESWITCH_L3 3
-
-#define IPN_SO_PREBIND 0x80
-#define IPN_SO_PORT 0
-#define IPN_SO_DESCR 1
-#define IPN_SO_MTU (IPN_SO_PREBIND | 0)
-#define IPN_SO_NUMNODES (IPN_SO_PREBIND | 1)
-#define IPN_SO_MSGPOOLSIZE (IPN_SO_PREBIND | 2)
-#define IPN_SO_FLAGS (IPN_SO_PREBIND | 3)
-#define IPN_SO_MODE (IPN_SO_PREBIND | 4)
-
-/* Ioctl defines */
-#define IPN_SETPERSIST_NETDEV    _IOW('I', 200, int) 
-#define IPN_CLRPERSIST_NETDEV    _IOW('I', 201, int) 
-#define IPN_CONN_NETDEV          _IOW('I', 202, int) 
-#define IPN_JOIN_NETDEV          _IOW('I', 203, int) 
-#define IPN_SETPERSIST           _IOW('I', 204, int) 
-
-#define IPN_NODEFLAG_TAP   0x10    /* This is a tap interface */
-#define IPN_NODEFLAG_GRAB  0x20    /* This is a grab of a real interface */
-
-#define IPN_PORTNO_ANY -1
-
-#define IPN_DESCRLEN 32
-
-#define IPN_FLAG_LOSSLESS 1
+#include <af_ipn.h>
 
 /*#define IPNTYPE IPN_BROADCAST*/
 #define IPNTYPE IPN_VDESWITCH

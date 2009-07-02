@@ -3,28 +3,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-
-#define AF_IPN AF_NETBEUI
-#define PF_IPN AF_IPN
-#define IPN_ANY 0
-#define IPN_BROADCAST 1
-#define IPN_HUB 1
-#define IPN_VDESWITCH 2
-#define IPN_VDESWITCH_L3 3
-
-#define IPN_SO_PREBIND 0x80
-#define IPN_SO_PORT 0
-#define IPN_SO_DESCR 1
-#define IPN_SO_MTU (IPN_SO_PREBIND | 0)
-#define IPN_SO_NUMNODES (IPN_SO_PREBIND | 1)
-#define IPN_SO_MSGPOOLSIZE (IPN_SO_PREBIND | 2)
-#define IPN_SO_FLAGS (IPN_SO_PREBIND | 3)
-
-#define IPN_PORTNO_ANY -1
-
-#define IPN_DESCRLEN 32
-
-#define IPN_FLAG_LOSSLESS 1
+#include <af_ipn.h>
 
 #define LIMIT 10000
 char buf[256];

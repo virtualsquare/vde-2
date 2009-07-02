@@ -32,6 +32,7 @@
 #include "ipn_chrdev.h"
 #include "ipn_msgbuf.h"
 
+#define IPN_CHRDEV_PERSISTENT 1
 /* struct ipn_chrdev: 
  * this is the type of the ipnn->chrdev field, when ipnn->chrdev is non-null,
  * a character device (or a range of character devices) gives access to the ipn-network.
@@ -165,6 +166,23 @@ static struct class *sysfs_register(struct chrdevreq *devr)
 	return devclass;
 }
 
+static int chrdev_match(struct ipn_network *ipnn,void *arg)
+{
+	struct chrdevreq *devr=arg;
+	if (ipnn->chrdev != NULL && 
+			MAJOR(ipnn->chrdev->dev) == devr->major &&
+			devr->minor >= MINOR(ipnn->chrdev->dev) &&
+			devr->minor < MINOR(ipnn->chrdev->dev) + ipnn->chrdev->dev_count)
+		return 1;
+	else
+		return 0;
+}
+
+struct ipn_network *ipn_find_chrdev(struct chrdevreq *devr)
+{
+	return ipn_find_network_byfun(chrdev_match,devr);
+}
+
 /* register/allocate a chrdev range for this ipn network.
  * ipnn is locked during this op */
 int ipn_register_chrdev(struct ipn_network *ipnn, struct chrdevreq *devr) {
@@ -219,5 +237,21 @@ int ipn_deregister_chrdev(struct ipn_network *ipnn) {
 	kfree(ipnn->chrdev);
 	ipnn->chrdev=NULL;
 	return 0;
+}
+
+int ipn_chrdev_persistence(struct ipn_network *ipnn, int persistent) {
+	if (ipnn==NULL || ipnn->chrdev==NULL)
+		return EINVAL;
+	if (persistent) 
+		ipnn->chrdev->flags |= IPN_CHRDEV_PERSISTENT;
+	else
+		ipnn->chrdev->flags &= ~IPN_CHRDEV_PERSISTENT;
+	return 0;
+}
+
+int ipn_is_persistent_chrdev(struct ipn_network *ipnn) {
+	if (ipnn==NULL || ipnn->chrdev==NULL)
+		return 0;
+	return (ipnn->chrdev->flags & IPN_CHRDEV_PERSISTENT)?1:0;
 }
 
