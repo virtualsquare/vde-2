@@ -36,55 +36,7 @@
 #include "sockutils.h"
 #include "consmgmt.h"
 
-/* will be inserted in a af_ipn.h include */
-#ifndef AF_IPN
-#define AF_IPN    34  /* IPN sockets      */
-#define PF_IPN    AF_IPN
-#endif
-#ifndef AF_NETBEUI
-#ifdef PF_NETBEUI
-#define AF_NETBEUI PF_NETBEUI
-#else
-#define AF_NETBEUI 13
-#endif
-#endif
-#define AF_IPN_STOLEN    AF_NETBEUI  /* IPN temporary sockets      */
-#define PF_IPN_STOLEN    AF_IPN_STOLEN
-
-#define IPN_ANY 0
-#define IPN_BROADCAST 1
-#define IPN_HUB 1
-#define IPN_VDESWITCH 2
-#define IPN_VDESWITCH_L3 3
-
-#define IPN_SO_PREBIND 0x80
-#define IPN_SO_PORT 0
-#define IPN_SO_DESCR 1
-#define IPN_SO_CHANGE_NUMNODES 2
-#define IPN_SO_HANDLE_OOB 3
-#define IPN_SO_WANT_OOB_NUMNODES 4
-#define IPN_SO_MTU (IPN_SO_PREBIND | 0)
-#define IPN_SO_NUMNODES (IPN_SO_PREBIND | 1)
-#define IPN_SO_MSGPOOLSIZE (IPN_SO_PREBIND | 2)
-#define IPN_SO_FLAGS (IPN_SO_PREBIND | 3)
-#define IPN_SO_MODE (IPN_SO_PREBIND | 4)
-
-#define IPN_PORTNO_ANY -1
-
-#define IPN_DESCRLEN 128
-
-#define IPN_FLAG_LOSSLESS 1
-#define IPN_FLAG_TERMINATED 0x1000
-
-#define IPN_NODEFLAG_TAP   0x10    /* This is a tap interface */
-#define IPN_NODEFLAG_GRAB  0x20    /* This is a grab of a real interface */
-
-/* Ioctl defines */
-#define IPN_SETPERSIST_NETDEV   _IOW('I', 200, int) 
-#define IPN_CLRPERSIST_NETDEV   _IOW('I', 201, int) 
-#define IPN_CONN_NETDEV          _IOW('I', 202, int) 
-#define IPN_JOIN_NETDEV          _IOW('I', 203, int) 
-#define IPN_SETPERSIST           _IOW('I', 204, int) 
+#include <af_ipn.h>
 
 static struct swmodule swmi;
 static unsigned int ctl_type;
