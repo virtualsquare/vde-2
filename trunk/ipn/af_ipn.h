@@ -45,18 +45,6 @@
 #define IPN_FLAG_FLEXMTU 4
 #define IPN_FLAG_TERMINATED 0x1000
 
-/* Ioctl defines */
-#define IPN_CHECK               _IOW('I', 199, int) 
-#define IPN_SETPERSIST_NETDEV  	_IOW('I', 200, int) 
-#define IPN_CLRPERSIST_NETDEV  	_IOW('I', 201, int) 
-#define IPN_CONN_NETDEV          _IOW('I', 202, int) 
-#define IPN_JOIN_NETDEV          _IOW('I', 203, int) 
-#define IPN_SETPERSIST           _IOW('I', 204, int) 
-#define IPN_REGISTER_CHRDEV      _IOW('I', 301, int) 
-#define IPN_UNREGISTER_CHRDEV    _IOW('I', 302, int) 
-
-#define IPN_OOB_NUMNODE_TAG	0
-
 /* ioctl request for IPN_REGISTER_CHRDEV
  * @dev: first device (if major==0 alloc a dynamic major)
  * @count: num of minors
@@ -68,6 +56,21 @@ struct chrdevreq {
 	int count;
 	char name[64];
 };
+
+/* Ioctl defines */
+
+#define IPN_CHECK               _IO('I', 199) 
+#define IPN_SETPERSIST_NETDEV   _IOR('I', 200, struct ifreq) 
+#define IPN_CLRPERSIST_NETDEV   _IOR('I', 201, struct ifreq) 
+#define IPN_CONN_NETDEV         _IOR('I', 202, struct ifreq) 
+#define IPN_JOIN_NETDEV         _IOR('I', 203, struct ifreq) 
+#define IPN_SETPERSIST          _IOR('I', 204, struct ifreq) 
+#define IPN_REGISTER_CHRDEV     _IOWR('I', 301, struct chrdevreq) 
+#define IPN_UNREGISTER_CHRDEV   _IOR('I', 302, struct chrdevreq) 
+#define IPN_JOIN_CHRDEV         _IOR('I', 303, struct chrdevreq) 
+#define IPN_CHRDEV_PERSIST    	_IOR('I', 304, int) 
+
+#define IPN_OOB_NUMNODE_TAG	0
 
 /* OOB message for change of numnodes
  * Common fields for oob IPN signaling:
@@ -83,6 +86,10 @@ struct numnode_oob {
 	int numreaders;
 	int numwriters;
 };
+
+/* these flags are used in IPN_CONN_NETDEV*/
+#define IPN_NODEFLAG_TAP   0x10    /* This is a tap interface */
+#define IPN_NODEFLAG_GRAB  0x20    /* This is a grab of a real interface */
 
 #ifdef __KERNEL__
 #include <linux/version.h>
@@ -148,8 +155,11 @@ struct ipn_node {
 #define IPN_NODEFLAG_BOUND 0x1     /* bind succeeded */
 #define IPN_NODEFLAG_INUSE 0x2     /* is currently "used" (0 for persistent, unbound interfaces) */
 #define IPN_NODEFLAG_PERSIST 0x4   /* if persist does not disappear on close (net interfaces) */
+#if 0 
+/* these flags are used in IPN_CONN_NETDEV*/
 #define IPN_NODEFLAG_TAP   0x10    /* This is a tap interface */
 #define IPN_NODEFLAG_GRAB  0x20    /* This is a grab of a real interface */
+#endif
 #define IPN_NODEFLAG_DEVMASK 0x30  /* True if this is a device */
 #define IPN_NODEFLAG_OOB_NUMNODES 0x40  /* Node wants OOB for NNODES */
 
@@ -282,6 +292,8 @@ unsigned int ipn_node_poll(struct ipn_node *ipn_node, struct file *file, poll_ta
 int ipn_node_ioctl(struct ipn_node *ipn_node, unsigned int cmd, unsigned long arg);
 int ipn_node_write(struct ipn_node *ipn_node, struct iovec *msg_iov, int len);
 int ipn_node_read(struct ipn_node *ipn_node, struct iovec *msg_iov, size_t len, int *msg_flags, int flags);
+struct ipn_network *ipn_find_network_byfun(
+		    int (*fun)(struct ipn_network *,void *),void *funarg);
 
 #ifndef IPN_STEALING
 extern struct sk_buff *(*ipn_handle_frame_hook)(struct ipn_node *p,

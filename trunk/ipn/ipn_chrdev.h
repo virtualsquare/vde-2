@@ -21,7 +21,15 @@
  */
 #include "af_ipn.h"
 
+/* register a chr device range for this ipn network */
 int ipn_register_chrdev(struct ipn_network *ipnn, struct chrdevreq *devr);
+/* unregister the chr device of this ipn network */
 int ipn_deregister_chrdev(struct ipn_network *ipnn);
+/* set/unset persistence */
+int ipn_chrdev_persistence(struct ipn_network *ipnn, int persistent);
+/* test persistence */
+int ipn_is_persistent_chrdev(struct ipn_network *ipnn);
+/* search which ipn network registered a chr device */
+struct ipn_network *ipn_find_chrdev(struct chrdevreq *devr);
 
 #endif

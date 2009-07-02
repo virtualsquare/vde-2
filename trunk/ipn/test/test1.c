@@ -3,14 +3,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-
-#define AF_IPN AF_NETBEUI
-#define PF_IPN AF_IPN
-#define IPN_ANY 0
-#define IPN_BROADCAST 1
-#define IPN_HUB 1
-#define IPN_VDESWITCH 2
-#define IPN_VDESWITCH_L3 3
+#include <af_ipn.h>
 
 char buf[256];
 struct sockaddr_un sun={.sun_family=AF_IPN,.sun_path="/tmp/sockipn"};

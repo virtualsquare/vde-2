@@ -117,12 +117,26 @@ static struct ipn_network *ipn_find_network_byinode(struct inode *i)
 			&ipn_network_table[i->i_ino & (IPN_HASH_SIZE - 1)], hnode) {
 		struct dentry *dentry = ipnn->dentry;
 
-		if(ipnn->refcnt > 0 && dentry && dentry->d_inode == i)
-			goto found;
+		if(dentry && dentry->d_inode == i)
+			return ipnn;
 	}
-	ipnn = NULL;
-found:
-	return ipnn;
+	return NULL;
+}
+
+struct ipn_network *ipn_find_network_byfun(
+		int (*fun)(struct ipn_network *,void *),void *funarg)
+{
+	struct ipn_network *ipnn;
+	struct hlist_node *node;
+	int ipn_table_scan;
+
+	for (ipn_table_scan=0;ipn_table_scan<IPN_HASH_SIZE;ipn_table_scan++) {
+		hlist_for_each_entry(ipnn, node, &ipn_network_table[ipn_table_scan], hnode) {
+			if(fun(ipnn,funarg))
+				return ipnn;
+		}
+	}
+	return NULL;
 }
 
 /* msgpool management 
@@ -402,7 +416,7 @@ static int ipn_terminate_node(struct ipn_node *ipn_node)
 			ipn_netdev_close(ipn_node);
 		/* No more network elements */
 		ipnn->refcnt--;
-		if (ipnn->refcnt == 0)
+		if (ipnn->refcnt == 0 && !ipn_is_persistent_chrdev(ipnn))
 		{
 			if (ipnn->chrdev)
 				ipn_deregister_chrdev(ipnn);
@@ -527,6 +541,19 @@ static int ipn_mkname(struct sockaddr_un * sunaddr, int len)
 	return len;
 }
 
+static int ipn_node_bind(struct ipn_node *ipn_node, struct ipn_network *ipnn)
+{
+	if (ipnn == NULL)
+		return -ENOENT;
+	if (ipn_node->ipn != NULL)
+		return -EISCONN;
+	ipnn->refcnt++;
+	list_add_tail(&ipn_node->nodelist,&ipnn->unconnectqueue);
+	ipn_node->ipn=ipnn;
+	ipn_node->flags |= IPN_NODEFLAG_BOUND;
+	return 0;
+}
+
 /* IPN BIND */
 static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
@@ -644,7 +671,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		}
 		INIT_LIST_HEAD(&ipnn->unconnectqueue);
 		INIT_LIST_HEAD(&ipnn->connectqueue);
-		ipnn->refcnt=1;
+		ipnn->refcnt=0;
 #ifndef IPN_PRE2625
 		ipnn->dentry=nd.path.dentry;
 		ipnn->mnt=nd.path.mnt;
@@ -695,15 +722,12 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED) ||
 				(ipnn->flags & IPN_FLAG_EXCL))
 			goto put_fail;
-		list_add_tail(&ipn_node->nodelist,&ipnn->unconnectqueue);
-		ipnn->refcnt++;
 	}
 	if (ipn_node->pbp) {
 		kfree(ipn_node->pbp);
 		ipn_node->pbp=NULL;
 	} 
-	ipn_node->ipn=ipnn;
-	ipn_node->flags |= IPN_NODEFLAG_BOUND;
+	ipn_node_bind(ipn_node,ipnn);
 	up(&ipn_glob_mutex);
 	return 0;
 
@@ -831,10 +855,10 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 		sock->state = SS_CONNECTED;
 		ipn_node->portno=portno;
 		ipnn->connport[portno]=ipn_node;
-		if (!(ipn_node->flags & IPN_NODEFLAG_BOUND)) {
+		if (!(ipn_node->flags & IPN_NODEFLAG_BOUND)) 
 			ipnn->refcnt++;
+		else
 			list_del(&ipn_node->nodelist);
-		}
 		list_add_tail(&ipn_node->nodelist,&ipnn->connectqueue);
 		ipn_net_update_counters(ipnn,
 				(ipn_node->shutdown & RCV_SHUTDOWN)?0:1,
@@ -1165,6 +1189,7 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 			ifr.ifr_name[IFNAMSIZ-1] = '\0';
 			break;
 		case IPN_REGISTER_CHRDEV:
+		case IPN_JOIN_CHRDEV:
 			if (copy_from_user(&devr, argp, sizeof(devr)))
 				return -EFAULT;
 			/*printk("IPN_REGISTER_CHRDEV %p %d %d %d\n",
@@ -1178,6 +1203,19 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 			return ipn_setpersist_netdev(&ifr,1);
 		case IPN_CLRPERSIST_NETDEV:
 			return ipn_setpersist_netdev(&ifr,0);
+		case IPN_JOIN_CHRDEV:
+			{
+				int rv;
+				if (!capable(CAP_MKNOD))
+					return -EPERM;
+				if (ipn_node->ipn != NULL)
+					return -EISCONN;
+				if (down_interruptible(&ipn_glob_mutex))
+					return -ERESTARTSYS;
+				rv=ipn_node_bind(ipn_node, ipn_find_chrdev(&devr));
+				up(&ipn_glob_mutex);
+				return rv;
+			}
 		case SIOCSIFHWADDR:
 			if (capable(CAP_NET_ADMIN))
 				return -EPERM;
@@ -1196,6 +1234,8 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 			return ipn_join_netdev(sock,&ifr);
 		case IPN_SETPERSIST:
 			return ipn_setpersist(ipn_node,arg);
+		case IPN_CHRDEV_PERSIST:
+			return ipn_chrdev_persistence(ipnn,arg);
 		case IPN_REGISTER_CHRDEV:
 			{
 				int rv;
