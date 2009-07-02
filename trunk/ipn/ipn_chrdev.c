@@ -27,6 +27,7 @@
 #include <linux/mount.h>
 #include <linux/device.h>
 #include <linux/cdev.h>
+#include <linux/string.h>
 #include "af_ipn.h"
 #include "ipn_chrdev.h"
 #include "ipn_msgbuf.h"
@@ -42,6 +43,8 @@ struct ipn_chrdev {
 	unsigned int dev_count;
 	struct ipn_network *ipnn;
 	struct cdev cdev;
+	struct class *devclass;
+	unsigned int flags;
 };
 
 /* cdev to ipnn mapping */
@@ -134,6 +137,34 @@ static int ipn_init_cdev(struct ipn_chrdev *ipn_dev, dev_t first, int count)
 	return cdev_add(&ipn_dev->cdev, first, count);
 }
 
+static void sysfs_unregister(struct class *devclass, unsigned int major, unsigned int minor, unsigned int count) {
+	unsigned int minor_count;
+	for (minor_count=0; minor_count<count; minor_count++)
+		device_destroy(devclass,MKDEV(major,minor+minor_count));
+	class_destroy(devclass);
+}
+
+static struct class *sysfs_register(struct chrdevreq *devr)
+{
+	unsigned int minor_count;
+	struct class *devclass;
+	struct device *fdevice;
+	/* create a sysfs class for this device*/
+	if(IS_ERR(devclass=class_create(THIS_MODULE,devr->name)) )
+		return devclass;
+	for (minor_count=0; minor_count<devr->count; minor_count++){
+		unsigned int this_minor=devr->minor+minor_count;
+		if(IS_ERR(fdevice=device_create(devclass,NULL,MKDEV(devr->major,this_minor),
+						NULL,"%s%d",devr->name,this_minor)))
+			break;
+	}
+	if (IS_ERR(fdevice)) {
+		sysfs_unregister(devclass,devr->major,devr->minor,minor_count);
+		return ERR_PTR(PTR_ERR(fdevice));
+	}
+	return devclass;
+}
+
 /* register/allocate a chrdev range for this ipn network.
  * ipnn is locked during this op */
 int ipn_register_chrdev(struct ipn_network *ipnn, struct chrdevreq *devr) {
@@ -153,17 +184,24 @@ int ipn_register_chrdev(struct ipn_network *ipnn, struct chrdevreq *devr) {
 	if (ret)
 		return ret;
 	if ((ipnn->chrdev=kmalloc(sizeof(struct ipn_chrdev), GFP_KERNEL)) == NULL) {
-		ret=ENOMEM;
+		ret=-ENOMEM;
 		goto unregister_chrdev;
 	}
 	ipnn->chrdev->dev=dev;
 	ipnn->chrdev->dev_count=devr->count;
 	ipnn->chrdev->ipnn=ipnn;
+	ipnn->chrdev->flags=0;
 	ret=ipn_init_cdev(ipnn->chrdev, dev, devr->count);
 	if (ret)
-		goto unregister_chrdev;
+		goto unregister_chrdev_free;
+	if (IS_ERR(ipnn->chrdev->devclass=sysfs_register(devr))) {
+		ret=PTR_ERR(ipnn->chrdev->devclass);
+		goto unregister_chrdev_free;
+	}
 	return 0;
 
+unregister_chrdev_free:
+	kfree(ipnn->chrdev);
 unregister_chrdev:
 	unregister_chrdev_region(dev, devr->count);
 	return ret;
@@ -173,6 +211,8 @@ unregister_chrdev:
 int ipn_deregister_chrdev(struct ipn_network *ipnn) {
 	if (ipnn->chrdev == 0)
 		return EINVAL;
+
+	sysfs_unregister(ipnn->chrdev->devclass,MAJOR(ipnn->chrdev->dev),MINOR(ipnn->chrdev->dev),ipnn->chrdev->dev_count);
 	cdev_del(&ipnn->chrdev->cdev);
 	/*printk("deregister_chrdev %d %d\n",MAJOR(ipnn->chrdev->dev),ipnn->chrdev->dev_count);*/
   unregister_chrdev_region(ipnn->chrdev->dev, ipnn->chrdev->dev_count);
