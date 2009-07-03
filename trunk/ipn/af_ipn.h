@@ -66,7 +66,7 @@ struct chrdevreq {
 #define IPN_JOIN_NETDEV         _IOR('I', 203, struct ifreq) 
 #define IPN_SETPERSIST          _IOR('I', 204, struct ifreq) 
 #define IPN_REGISTER_CHRDEV     _IOWR('I', 301, struct chrdevreq) 
-#define IPN_UNREGISTER_CHRDEV   _IOR('I', 302, struct chrdevreq) 
+#define IPN_UNREGISTER_CHRDEV   _IO('I', 302) 
 #define IPN_JOIN_CHRDEV         _IOR('I', 303, struct chrdevreq) 
 #define IPN_CHRDEV_PERSIST    	_IOR('I', 304, int) 
 
