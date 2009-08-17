@@ -1239,11 +1239,12 @@ static int ipn_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
 		case IPN_REGISTER_CHRDEV:
 			{
 				int rv;
+				unsigned int reqmajor=devr.major;
 				if (down_interruptible(&ipnn->ipnn_mutex))
 					return -ERESTARTSYS;
 				rv=ipn_register_chrdev(ipnn,&devr);
-				if (devr.major==0 && rv==0) {
-					if (copy_to_user(&devr, argp, sizeof devr))
+				if (reqmajor==0 && rv==0) {
+					if (copy_to_user(argp, &devr, sizeof devr))
 						rv=EFAULT;
 				}
 				up(&ipnn->ipnn_mutex);
