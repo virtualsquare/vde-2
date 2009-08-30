@@ -278,6 +278,7 @@ Please install it if you want vde_pcapplug and pdump to be compiled and installe
 fi
 
 echo
-echo "Type 'make' to compile $PACKAGE $VERSION"
+echo "Type 'make' to compile $PACKAGE $VERSION,"
+echo "or type 'make V=1' for verbose compiling"
 echo "and then type 'make install' to install it into $prefix"
 echo
