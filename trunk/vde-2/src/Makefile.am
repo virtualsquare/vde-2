@@ -17,6 +17,8 @@ bin_PROGRAMS = \
 	wirefilter \
 	vdeterm
 
+DIST_SUBDIRS = $(SUBDIRS) vdetaplib vde_cryptcab kvde_switch
+
 if CAN_MAKE_VDETUNCTL
   sbin_PROGRAMS = vde_tunctl
 endif

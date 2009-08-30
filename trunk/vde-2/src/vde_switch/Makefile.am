@@ -38,6 +38,7 @@ else
  EXP_CFLAGS = -rdynamic
 endif
 
+DIST_SUBDIRS = plugins
 if ENABLE_EXPERIMENTAL
   SUBDIRS = plugins
   AM_CFLAGS += $(EXP_CFLAGS)
