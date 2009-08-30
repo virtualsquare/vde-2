@@ -805,7 +805,7 @@ int parse_icmp(struct vde_buff *vdb)
 
 // Returns if the ip is unicast
 static uint32_t inline unicast_ip(uint32_t ip){
-	if(ip&0xE0000000)
+	if ((ip & 0xF0000000) == 0xE0000000)
 		return 0;
 	else
 		return ip;
