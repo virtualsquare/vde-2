@@ -290,8 +290,13 @@ int main(int argc, char **argv)
 	int newsyntax=0;
 	int ver;
   mode_t mode = 0700;
-
   vdeqname=basename(argv[0]);
+
+	fprintf(stderr,
+	        "NOTE: %s is now DEPRECATED -- both QEMU and KVM have native support for\n"
+	        "      VDE. This binary will be removed soon from the distribution, consider\n"
+	        "      stopping using it.\n\n", vdeqname);
+
 	//callerpwd=getpwuid(getuid());
 	/* OLD SYNTAX MGMT */
 	if (strncmp(vdeqname,"vdeo",4) == 0) {
