@@ -8,7 +8,7 @@ man_MANS = $(static_mans) $(generated_mans)
 
 
 CLEANFILES = $(generated_mans)
-EXTRA_DIST = $(static_mans) vdetaplib.1.in
+EXTRA_DIST = $(static_mans) vdetaplib.1.in vde_pcapplug.1
 
 vdetaplib.1: vdetaplib.1.in
 	sed 's/%PKGLIBDIR%/$(subst /,\/,$(pkglibdir))/g' vdetaplib.1.in > vdetaplib.1
