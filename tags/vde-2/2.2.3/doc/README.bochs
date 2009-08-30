@@ -1,0 +1,12 @@
+The eth_vde interface is already in the cvs of the mainstream bochs distribution.
+See bochs.sf.net.
+
+eth.cc.diff is a patch file for eth.cc.
+eth_vde.cc is the driver.
+
+The makefile of the iodev directory must be changed as well.
+
+In the bochrc file the configuration lines for vde should sound like this:
+ne2k: ioaddr=0x280, irq=9, mac=fe:fd:00:00:00:01, ethmod=vde, ethdev=/tmp/vde.ctl
+
+
