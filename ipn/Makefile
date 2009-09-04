@@ -3,7 +3,7 @@
 #
 #
 
-EXTRA_CFLAGS += -DIPN_STEALING 
+EXTRA_CFLAGS += -DIPN_STEALING
 
 ifneq ($(KERNELRELEASE),)
 
@@ -13,10 +13,13 @@ ifneq ($(KERNELRELEASE),)
 
 else
 	KERNELDIR ?= /lib/modules/$(shell uname -r)/build
-PWD := $(shell pwd)
+	PWD := $(shell pwd)
 
 modules:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+
+modules_install:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
 endif
 
 clean:
