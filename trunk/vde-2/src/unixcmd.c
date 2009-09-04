@@ -31,14 +31,11 @@
 #include <vde.h>
 #include <vdecommon.h>
 
-#define STD_SOCK_DIR INSTALLPATH"/var/run"
-#define STD_RC_DIR INSTALLPATH"/etc/vde2"
-
 void usage(char *progname){
 	/* TODO: write it better */
 	printf("Usage: %s OPTIONS command\n", progname);
-	printf("\t-s sockname  management socket path (default is %s/%s)\n", STD_SOCK_DIR, basename(progname));
-	printf("\t-f rcfile    configuration path (default is %s/%s)\n", STD_RC_DIR, basename(progname));
+	printf("\t-s sockname  management socket path (default is %s/%s)\n", VDE_SOCK_DIR, basename(progname));
+	printf("\t-f rcfile    configuration path (default is %s/%s)\n", VDE_RC_DIR, basename(progname));
 	printf("\t-v           run parse machine in debug mode\n");
 }
 
@@ -73,10 +70,10 @@ int main(int argc,char *argv[])
 
 	if(argc-optind == 0){ usage(argv[0]); return -1; }
 
-	if (!rcfile) asprintf(&rcfile,"%s/%s",STD_RC_DIR,basename(argv[0]));
+	if (!rcfile) asprintf(&rcfile,"%s/%s",VDE_RC_DIR,basename(argv[0]));
 	if( (utm=utm_alloc(rcfile)) == NULL ) { perror("alloc parse machine"); usage(argv[0]); return -1;}
 
-	if (!sockname) asprintf(&sockname,"%s/%s",STD_SOCK_DIR,basename(argv[0]));
+	if (!sockname) asprintf(&sockname,"%s/%s",VDE_SOCK_DIR,basename(argv[0]));
 	sun.sun_family=PF_UNIX;
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",sockname);
 	fd=socket(PF_UNIX,SOCK_STREAM,0);
