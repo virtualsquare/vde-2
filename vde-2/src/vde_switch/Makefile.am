@@ -24,8 +24,7 @@ vde_switch_SOURCES = \
 
 vde_switch_LDADD = $(top_srcdir)/src/common/libvdecommon.la
 
-AM_CPPFLAGS = -I$(top_srcdir)/include \
-              -DSYSCONFDIR="\"$(sysconfdir)\"" -DLOCALSTATEDIR="\"$(localstatedir)\""
+AM_CPPFLAGS = -I$(top_srcdir)/include
 AM_CFLAGS = -Wall
 
 if ENABLE_PROFILE
