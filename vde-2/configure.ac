@@ -186,11 +186,6 @@ AM_CONDITIONAL(ENABLE_PROFILE, test "$enable_profile" = yes)
 AM_CONDITIONAL(DARWIN_GCC, test "$darwin_gcc" = yes)
 AM_CONDITIONAL(ENABLE_KERNEL_SWITCH, test "$enable_kernel_switch" = yes)
 
-if test "x${prefix}" = "xNONE"; then
-	AC_DEFINE_UNQUOTED(INSTALLPATH, "${ac_default_prefix}",[PREFIX])
-else
-	AC_DEFINE_UNQUOTED(INSTALLPATH, "${prefix}",[PREFIX])
-fi
 
 CFLAGS="-Wall -O2 $CFLAGS"
 AC_SUBST(CFLAGS)

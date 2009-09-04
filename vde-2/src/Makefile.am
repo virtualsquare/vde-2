@@ -39,7 +39,8 @@ if ENABLE_PCAP
   bin_PROGRAMS += vde_pcapplug
 endif
 
-AM_CPPFLAGS = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include \
+               -DSYSCONFDIR="\"$(sysconfdir)\"" -DLOCALSTATEDIR="\"$(localstatedir)\""
 LDADD = common/libvdecommon.la -lm
 
 if ENABLE_PROFILE
