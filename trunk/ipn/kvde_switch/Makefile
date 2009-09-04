@@ -5,17 +5,20 @@
 #KERNELDIR = "/extra/renzo/linux-2.6.24-rc5-ipn-curr"
 
 ifneq ($(KERNELRELEASE),)
-	kvde_switch-objs := kvde_switch_main.o 
-	obj-m += kvde_switch.o 
-	obj-m += ipn_hash.o 
+	kvde_switch-objs := kvde_switch_main.o
+	obj-m += kvde_switch.o
+	obj-m += ipn_hash.o
 # Otherwise we were called directly from the command
 # line; invoke the kernel build system.
 else
 	KERNELDIR ?= /lib/modules/$(shell uname -r)/build
-PWD := $(shell pwd)
+	PWD := $(shell pwd)
 
-modules:
+default:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+
+modules_install:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
 endif
 
 clean:
