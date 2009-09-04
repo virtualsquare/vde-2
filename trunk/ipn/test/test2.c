@@ -12,8 +12,8 @@ char buf[256];
 struct sockaddr_un sun={.sun_family=AF_IPN,.sun_path="/tmp/sockipn"};
 main()
 {
-	//int s=socket(AF_IPN,SOCK_RAW,IPN_BROADCAST);
-	int s=socket(AF_IPN,SOCK_RAW,IPN_VDESWITCH);
+	int s=socket(AF_IPN,SOCK_RAW,IPN_BROADCAST);
+	//int s=socket(AF_IPN,SOCK_RAW,IPN_VDESWITCH);
 	int err;
 	int len;
 	int flags=IPN_FLAG_LOSSLESS;

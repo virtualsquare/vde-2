@@ -1,9 +1,9 @@
 /*
  * Inter process networking (virtual distributed ethernet) module
  * Net devices: tap and grab
- *  (part of the View-OS project: wiki.virtualsquare.org) 
+ *  (part of the View-OS project: wiki.virtualsquare.org)
  *
- * Copyright (C) 2007   Renzo Davoli (renzo@cs.unibo.it)
+ * Copyright (C) 2007,2009   Renzo Davoli (renzo@cs.unibo.it)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -34,7 +34,11 @@
 #include "ipn_netdev.h"
 
 #define DRV_NAME  "ipn"
-#define DRV_VERSION "0.3"
+#define DRV_VERSION "0.3.1"
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+#define IPN_PRE2630
+#endif
 
 static const struct ethtool_ops ipn_ethtool_ops;
 
@@ -95,7 +99,7 @@ struct sk_buff *ipn_handle_hook(struct ipn_node *ipn_node, struct sk_buff *skb)
 	char *data=(skb->data)-(skb->mac_len);
 	int len=skb->len+skb->mac_len;
 
-	if (ipn_node && 
+	if (ipn_node &&
 			((ipn_node->flags & IPN_NODEFLAG_DEVMASK) == IPN_NODEFLAG_GRAB) &&
 			ipn_node->ipn && len<=ipn_node->ipn->mtu) {
 		struct msgpool_item *newmsg;
@@ -113,31 +117,48 @@ struct sk_buff *ipn_handle_hook(struct ipn_node *ipn_node, struct sk_buff *skb)
 
 static void ipntap_setup(struct net_device *dev)
 {
+#ifdef IPN_PRE2630
 	dev->open = ipntap_net_open;
 	dev->hard_start_xmit = ipn_net_xmit;
 	dev->stop = ipntap_net_close;
 	dev->get_stats = ipntap_net_stats;
+#endif
 	dev->ethtool_ops = &ipn_ethtool_ops;
 }
 
+#ifndef IPN_PRE2630
+static struct net_device_ops ipntap_netdev_ops = {
+	.ndo_open = ipntap_net_open,
+	.ndo_start_xmit = ipn_net_xmit,
+	.ndo_stop = ipntap_net_close,
+	.ndo_get_stats = ipntap_net_stats
+};
+#endif
 
 struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *err)
 {
 	struct net_device *dev=NULL;
 	*err=0;
-	if (!name || *name==0) 
+	if (!name || *name==0)
 		name="ipn%d";
 	switch (type) {
 		case IPN_NODEFLAG_TAP:
 			dev=alloc_netdev(sizeof(struct ipntap), name, ipntap_setup);
 			if (!dev)
 				*err= -ENOMEM;
+#ifndef IPN_PRE2630
+			dev_net_set(dev, net);
+			dev->netdev_ops = &ipntap_netdev_ops;
+#endif
 			ether_setup(dev);
-			/* this commented code is similar to tuntap MAC assignment.
-			 * why tuntap does not use the random_ether_addr? 
-			*(u16 *)dev->dev_addr = htons(0x00FF);
-			get_random_bytes(dev->dev_addr + sizeof(u16), 4);*/
-			random_ether_addr((u8 *)&dev->dev_addr);
+			if (strchr(dev->name, '%')) {
+				*err = dev_alloc_name(dev, dev->name);
+				if (*err < 0) {
+					free_netdev(dev);
+					return NULL;
+				}
+			}
+			random_ether_addr(dev->dev_addr);
 			break;
 		case IPN_NODEFLAG_GRAB:
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
@@ -166,10 +187,10 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 			{
 				struct ipntap *ipntap=netdev_priv(ipn_node->netdev);
 				ipntap->ipn_node=ipn_node;
-				rtnl_lock(); 
+				rtnl_lock();
 				if ((rv=register_netdevice(ipn_node->netdev)) == 0)
-					rcu_assign_pointer(ipn_node->netdev->ipn_port, 
-#ifdef IPN_STEALING 
+					rcu_assign_pointer(ipn_node->netdev->ipn_port,
+#ifdef IPN_STEALING
 							(void *)
 #endif
 							ipn_node);
@@ -181,9 +202,9 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 			}
 			break;
 		case IPN_NODEFLAG_GRAB:
-			rtnl_lock(); 
-			rcu_assign_pointer(ipn_node->netdev->ipn_port, 
-#ifdef IPN_STEALING 
+			rtnl_lock();
+			rcu_assign_pointer(ipn_node->netdev->ipn_port,
+#ifdef IPN_STEALING
 					(void *)
 #endif
 					ipn_node);
@@ -200,7 +221,7 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 	switch (ipn_node->flags & IPN_NODEFLAG_DEVMASK) {
 		case IPN_NODEFLAG_TAP:
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
-			rtnl_lock(); 
+			rtnl_lock();
 			rcu_assign_pointer(ipn_node->netdev->ipn_port, NULL);
 			unregister_netdevice(ipn_node->netdev);
 			rtnl_unlock();
@@ -208,7 +229,7 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 			break;
 		case IPN_NODEFLAG_GRAB:
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
-			rtnl_lock(); 
+			rtnl_lock();
 			rcu_assign_pointer(ipn_node->netdev->ipn_port, NULL);
 			dev_set_promiscuity(ipn_node->netdev,-1);
 			rtnl_unlock();
