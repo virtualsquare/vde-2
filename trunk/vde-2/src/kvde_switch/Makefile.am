@@ -1,5 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/include \
-              -DSYSCONFDIR="\"$(sysconfdir)\"" -DLOCALSTATEDIR="\"$(localstatedir)\""
+AM_CPPFLAGS = -I$(top_srcdir)/include
 
 if ENABLE_PROFILE
   AM_CFLAGS = -pg --coverage

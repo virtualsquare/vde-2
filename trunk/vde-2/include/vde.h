@@ -11,7 +11,7 @@
 #define VDE_RC_DIR SYSCONFDIR"/vde2"
 
 #ifndef VDESTDSOCK
-#define VDESTDSOCK	VDE_SOCK_DIR"/vde.ctl"
+#define VDESTDSOCK	"/var/run/vde.ctl"
 #define VDETMPSOCK	"/tmp/vde.ctl"
 #endif
 
