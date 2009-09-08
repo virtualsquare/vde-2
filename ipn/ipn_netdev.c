@@ -243,7 +243,7 @@ void ipn_netdev_sendmsg(struct ipn_node *to,struct msgpool_item *msg)
 	struct net_device *dev=to->netdev;
 	struct ipntap *ipntap=netdev_priv(dev);
 	
-	if (msg->len > dev->mtu) {
+	if (msg->len > dev->mtu + dev->hard_header_len) {
 		printk("ipn_netdev_sendmsg: dropping packet, msg->len > MTU\n");
 		ipntap->stats.rx_dropped++;
 		return;
