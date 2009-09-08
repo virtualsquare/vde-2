@@ -243,10 +243,14 @@ void ipn_netdev_sendmsg(struct ipn_node *to,struct msgpool_item *msg)
 	struct net_device *dev=to->netdev;
 	struct ipntap *ipntap=netdev_priv(dev);
 	
-	if (msg->len > dev->mtu)
+	if (msg->len > dev->mtu) {
+		printk("ipn_netdev_sendmsg: dropping packet, msg->len > MTU\n");
+		ipntap->stats.rx_dropped++;
 		return;
+	}
 	skb=alloc_skb(msg->len+NET_IP_ALIGN,GFP_KERNEL);
 	if (!skb) {
+		printk("ipn_netdev_sendmsg: dropping packet, cannot alloc skb\n");
 		ipntap->stats.rx_dropped++;
 		return;
 	}
