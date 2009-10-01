@@ -614,15 +614,19 @@ void handle_in_packet(int port,  struct packet *packet, int len)
 				if (tarport==port)
 					return; /*do not loop!*/
 				if (tagged) {
-					if (portv[tarport]->vlanuntag==vlan) /* TAG->UNTAG */
-						SEND_PACKET_PORT(portv[tarport],tarport,TAG2UNTAG(packet,len),len);
-					else                               /* TAG->TAG */
+					if (portv[tarport]->vlanuntag==vlan) { /* TAG->UNTAG */
+						packet = TAG2UNTAG(packet,len);
 						SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
+					} else {                               /* TAG->TAG */
+						SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
+					}
 				} else {
-					if (portv[tarport]->vlanuntag==vlan) /* UNTAG->UNTAG */
+					if (portv[tarport]->vlanuntag==vlan) { /* UNTAG->UNTAG */
 						SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
-					else                               /* UNTAG->TAG */
-						SEND_PACKET_PORT(portv[tarport],tarport,UNTAG2TAG(packet,vlan,len),len);
+					} else {                              /* UNTAG->TAG */
+						packet = UNTAG2TAG(packet,vlan,len);
+						SEND_PACKET_PORT(portv[tarport],tarport,packet,len);
+					}
 				}
 			} /* if(BROADCAST) */
 		} /* if(HUB) */
