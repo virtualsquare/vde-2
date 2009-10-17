@@ -11,7 +11,8 @@ CLEANFILES = $(generated_mans)
 EXTRA_DIST = $(static_mans) vdetaplib.1.in vde_pcapplug.1
 
 vdetaplib.1: vdetaplib.1.in
-	sed 's/%PKGLIBDIR%/$(subst /,\/,$(pkglibdir))/g' vdetaplib.1.in > vdetaplib.1
+	sed 's/%PKGLIBDIR%/$(subst /,\/,$(pkglibdir))/g' \
+		$(srcdir)/vdetaplib.1.in > $(builddir)/vdetaplib.1
 
 install-data-hook:
 	rm -f $(DESTDIR)$(mandir)/man1/vdeqemu.1

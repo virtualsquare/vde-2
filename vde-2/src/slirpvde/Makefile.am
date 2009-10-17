@@ -50,4 +50,4 @@ slirpvde_SOURCES = \
 		   tcp2unix.h \
 		   slirpvde.c
 
-slirpvde_LDADD = $(top_srcdir)/src/common/libvdecommon.la $(top_srcdir)/src/lib/libvdeplug.la
+slirpvde_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug.la

@@ -19,4 +19,4 @@ vde_over_ns_SOURCES = \
 	fun.h \
 	pstack.h
 
-vde_over_ns_LDADD = $(top_srcdir)/src/common/libvdecommon.la $(top_srcdir)/src/lib/libvdeplug.la
+vde_over_ns_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug.la

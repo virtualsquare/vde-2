@@ -11,4 +11,4 @@ if ENABLE_PROFILE
 endif
 
 vde_cryptcab_SOURCES = crc32.c crc32.h cryptcab.h cryptcab.c vde_cryptcab_server.c vde_cryptcab_client.c
-vde_cryptcab_LDADD = $(top_srcdir)/src/common/libvdecommon.la -lcrypto $(top_srcdir)/src/lib/libvdeplug.la
+vde_cryptcab_LDADD = $(top_builddir)/src/common/libvdecommon.la -lcrypto $(top_builddir)/src/lib/libvdeplug.la
