@@ -37,6 +37,15 @@
 #ifndef _IP_H_
 #define _IP_H_
 
+#ifndef __BYTE_ORDER
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+#include <machine/endian.h>
+#define __BYTE_ORDER _BYTE_ORDER
+#define __BIG_ENDIAN __BIG_ENDIAN
+#define __LITTLE_ENDIAN _LITTLE_ENDIAN
+#endif
+#endif
+
 #if __BYTE_ORDER == __BIG_ENDIAN
 # ifndef NTOHL
 #  define NTOHL(d)
