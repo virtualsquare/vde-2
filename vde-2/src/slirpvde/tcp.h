@@ -37,6 +37,15 @@
 #ifndef _TCP_H_
 #define _TCP_H_
 
+#ifndef __BYTE_ORDER
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+#include <machine/endian.h>
+#define __BYTE_ORDER _BYTE_ORDER
+#define __BIG_ENDIAN __BIG_ENDIAN
+#define __LITTLE_ENDIAN _LITTLE_ENDIAN
+#endif
+#endif
+
 typedef	u_int32_t	tcp_seq;
 
 #define      PR_SLOWHZ       2               /* 2 slow timeouts per second (approx) */
