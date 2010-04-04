@@ -1,0 +1,17 @@
+This directory contains a preliminary patch to add a native support for VDE
+in VirtualBox.
+
+How to compile VirtualBox+VDE support.
+
+Download VirtualBox source code from here:
+http://download.virtualbox.org/virtualbox/
+
+Expand the source tar.bz2.
+
+Apply the patch (in the root dir of the source hierarchy):
+$ patch -p 1 <VirtualBox-3.1.6_OSE_VDE.patch
+
+Follow the instructions to build the binaries:
+http://www.virtualbox.org/wiki/Linux%20build%20instructions
+
+(Renzo Davoli: Apr. 04 2010)
