@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <pwd.h>
 #include <grp.h>
+#include <stdarg.h>
 
 #include <config.h>
 #include <vde.h>
@@ -39,10 +40,11 @@
 #define MIN(X,Y) (((X)<(Y))?(X):(Y))
 #endif
 
-#define BUFSIZE 2048
+#define BUFSIZE 4096
 #define ETH_ALEN 6
 
 VDECONN *conn;
+VDESTREAM *vdestream;
 
 struct utsname me;
 #define myname me.nodename
@@ -184,69 +186,32 @@ static void vde_ip_check(const unsigned char *buf,int rnx)
 }
 #endif
 
-unsigned char bufin[BUFSIZE];
-
-void splitpacket(const unsigned char *buf,int size,VDECONN *conn)
+void vdeplug_err(void *opaque, int type, char *format,...)
 {
-	static char fragment[BUFSIZE];
-	static char *fragp;
-	static unsigned int rnx,remaining;
+	va_list args;
 
-	//fprintf(stderr,"%s: splitpacket rnx=%d remaining=%d size=%d\n",myname,rnx,remaining,size);
-	if (size==0) return;
-	if (rnx>0) {
-		register int amount=MIN(remaining,size);
-		//fprintf(stderr,"%s: fragment amount %d\n",myname,amount);
-		memcpy(fragp,buf,amount);
-		remaining-=amount;
-		fragp+=amount;
-		buf+=amount;
-		size-=amount;
-		if (remaining==0) {
-			//fprintf(stderr,"%s: delivered defrag %d\n",myname,rnx);
-			//send(fd,fragment,rnx,0);
-#ifdef VDE_IP_LOG
-			if (vde_ip_log)
-				vde_ip_check(buf,rnx);
-#endif
-			vde_send(conn,fragment,rnx,0);
-			rnx=0;
-		}
+	if (isatty(STDERR_FILENO)) {
+		fprintf(stderr, "%s: Packet length error",myname);
+		va_start(args, format);
+		vfprintf(stderr, format, args);
+		va_end(args);
+		fprintf(stderr,"\n");
 	}
-	while (size > 0) {
-		rnx=(buf[0]<<8)+buf[1];
-		size-=2;
-		//fprintf(stderr,"%s %d: packet %d size %d %x %x\n",myname,getpid(),rnx,size,buf[0],buf[1]);
-		buf+=2;
-		if (rnx>1521) {
-			fprintf(stderr,"%s: Packet length error size %d rnx %d\n",myname,size,rnx);
-			rnx=0;
-			return;
-		}
-		if (rnx > size) {
-			//fprintf(stderr,"%s: begin defrag %d\n",myname,rnx);
-			fragp=fragment;
-			memcpy(fragp,buf,size);
-			remaining=rnx-size;
-			fragp+=size;
-			size=0;
-		} else {
-			//fprintf(stderr,"%s: deliver %d\n",myname,rnx);
-			//send(fd,buf,rnx,0);
+}
+
+ssize_t vdeplug_recv(void *opaque, void *buf, size_t count)
+{
+	VDECONN *conn=opaque;
 #ifdef VDE_IP_LOG
-			if (vde_ip_log)
-				vde_ip_check(buf,rnx);
+	if (vde_ip_log)
+		vde_ip_check(buf,count);
 #endif
-			vde_send(conn,(char *)buf,rnx,0);
-			buf+=rnx;
-			size-=rnx;
-			rnx=0;
-		}
-	}
+	return vde_send(conn,(char *)buf,count,0);
 }
 
 static void cleanup(void)
 {
+	vdestream_close(vdestream);
   vde_close(conn);
 }
 
@@ -312,6 +277,8 @@ static void usage(char *progname) {
 	fprintf (stderr,"Usage: %s [-p portnum] [-g group] [-m mod] socketname\n\n",progname);
 	exit(-1);
 }
+
+unsigned char bufin[BUFSIZE];
 
 int main(int argc, char **argv)
 {
@@ -407,6 +374,8 @@ int main(int argc, char **argv)
 	if (conn == NULL)
 		exit(1);
 
+	vdestream=vdestream_open(conn,STDOUT_FILENO,vdeplug_recv,vdeplug_err);
+
 	pollv[1].fd=vde_datafd(conn);
 	pollv[2].fd=vde_ctlfd(conn);
 
@@ -422,17 +391,15 @@ int main(int argc, char **argv)
 			/*fprintf(stderr,"%s: RECV %d %x %x \n",myname,nx,bufin[0],bufin[1]);*/
 			if (nx==0)
 				break;
-			splitpacket(bufin,nx,conn);
+			vdestream_recv(vdestream, bufin, nx);
 		}
 		if (pollv[1].revents & POLLIN) {
-			nx=vde_recv(conn,(char *)(bufin+2),BUFSIZE-2,0);
+			nx=vde_recv(conn,bufin,BUFSIZE-2,0);
 			if (nx<0)
 				perror("vde_plug: recvfrom ");
 			else
 			{
-				bufin[0]=nx >> 8;
-				bufin[1]=nx & 0xff;
-				write(STDOUT_FILENO,bufin,nx+2);
+				vdestream_send(vdestream, bufin, nx);
 				/*fprintf(stderr,"%s: SENT %d %x %x \n",myname,nx,bufin[0],bufin[1]);*/
 			}
 		}

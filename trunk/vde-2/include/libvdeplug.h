@@ -62,4 +62,24 @@ int vde_ctlfd(VDECONN *conn);
 
 int vde_close(VDECONN *conn);
 
+/* vdestream */
+
+struct vdestream;
+
+typedef struct vdestream VDESTREAM;
+
+#define PACKET_LENGTH_ERROR 1
+
+VDESTREAM *vdestream_open(void *opaque, 
+		int fdout,
+		ssize_t (*frecv)(void *opaque, void *buf, size_t count),
+		void (*ferr)(void *opaque, int type, char *format, ...)
+		);
+
+ssize_t vdestream_send(VDESTREAM *vdestream, const void *buf, size_t len);
+
+void vdestream_recv(VDESTREAM *vdestream, unsigned char *buf, size_t len);
+
+void vdestream_close(VDESTREAM *vdestream);
+
 #endif
