@@ -348,25 +348,6 @@ void usage(char *name) {
 	exit(-1);
 }
 
-struct option slirpvdeopts[] = {
-	{"socket",required_argument,NULL,'s'},
-	{"sock",required_argument,NULL,'s'},
-	{"vdesock",required_argument,NULL,'s'},
-	{"unix",required_argument,NULL,'s'},
-	{"pidfile", required_argument, NULL, 'p'},
-	{"dhcp",optional_argument,NULL,'D'},
-	{"daemon",no_argument,NULL,'d'},
-	{"network",required_argument,NULL,'n'},
-	{"nameserver",required_argument,NULL,'N'},
-	{"dns",required_argument,NULL,'N'},
-	{"host",required_argument,NULL,'h'},
-	{"mod",required_argument,NULL,'m'},
-	{"group",required_argument,NULL,'g'},
-	{"port",required_argument,NULL,'P'},
-	{"tftp",required_argument,NULL,'t'},
-	{"quiet",no_argument,NULL,'q'},
-	{NULL,no_argument,NULL,0}};
-
 int main(int argc, char **argv)
 {
   char *sockname=NULL;
@@ -384,11 +365,31 @@ int main(int argc, char **argv)
 	int datafd=0,ctlfd=0;
 	int quiet=0;
 	
+	static struct option slirpvdeopts[] = {
+		{"socket",required_argument,NULL,'s'},
+		{"sock",required_argument,NULL,'s'},
+		{"vdesock",required_argument,NULL,'s'},
+		{"unix",required_argument,NULL,'s'},
+		{"pidfile", required_argument, NULL, 'p'},
+		{"dhcp",optional_argument,NULL,'D'},
+		{"daemon",no_argument,NULL,'d'},
+		{"network",required_argument,NULL,'n'},
+		{"nameserver",required_argument,NULL,'N'},
+		{"dns",required_argument,NULL,'N'},
+		{"host",required_argument,NULL,'H'},
+		{"mod",required_argument,NULL,'m'},
+		{"group",required_argument,NULL,'g'},
+		{"port",required_argument,NULL,'P'},
+		{"tftp",required_argument,NULL,'t'},
+		{"quiet",no_argument,NULL,'q'},
+		{"help",no_argument,NULL,'h'},
+		{NULL,no_argument,NULL,0}};
+
 	inet_aton(DEFAULT_IP_ADDR,&vhost);
 
   prog=basename(argv[0]);
 
-  while ((opt=GETOPT_LONG(argc,argv,"D::s:n:p:g:m:L:U:X:x:t:N:dq",slirpvdeopts,&longindx)) > 0) {
+  while ((opt=GETOPT_LONG(argc,argv,"Ds:n:H:p:g:m:L:U:X:x:t:N:dqh",slirpvdeopts,&longindx)) > 0) {
 		switch (opt) {
 			case 's' : sockname=optarg;
 								 break;
@@ -398,7 +399,7 @@ int main(int argc, char **argv)
 								 break;
 			case 'd' : daemonize = 1;
 								 break;
-			case 'h' :
+			case 'H' :
 			case 'n' : {
 									 char *slash=strchr(optarg,'/');
 									 if (slash) {
