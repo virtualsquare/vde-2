@@ -147,7 +147,7 @@ static char *getvdeopt(struct ifreq *ifr,char *suffix)
 	snprintf(buf,16,"%s_%s",ifr->ifr_name,suffix);
 	if ((rv=getenv(buf)) != NULL)
 		return rv;
-	snprintf(buf,16,"VDEALLTAP_%s",ifr->ifr_name,suffix);
+	snprintf(buf,16,"VDEALLTAP_%s",suffix);
 	if ((rv=getenv(buf)) != NULL)
 		return rv;
 	else
