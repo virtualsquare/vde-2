@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/include -DVDE
+AM_CPPFLAGS = -I$(top_srcdir)/include -DVDE -DCONFIG_SLIRP -DCONFIG_NEED_OFFSETOF
 AM_CFLAGS = -g -O2
 
 if ENABLE_PROFILE
@@ -12,8 +12,6 @@ slirpvde_SOURCES = \
 		   misc.c \
 		   misc.h \
 		   cksum.c \
-		   debug.c \
-		   debug.h \
 		   icmp_var.h \
 		   if.c \
 		   if.h \
@@ -48,6 +46,8 @@ slirpvde_SOURCES = \
 		   bootp.h \
 		   tcp2unix.c \
 		   tcp2unix.h \
+		   tftp.c \
+		   tftp.h \
 		   slirpvde.c
 
 slirpvde_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug.la

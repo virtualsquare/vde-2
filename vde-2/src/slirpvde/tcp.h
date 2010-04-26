@@ -10,11 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *	This product includes software developed by the University of
- *	California, Berkeley and its contributors.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -37,23 +33,10 @@
 #ifndef _TCP_H_
 #define _TCP_H_
 
-#ifndef __BYTE_ORDER
-#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
-#include <machine/endian.h>
-#define __BYTE_ORDER _BYTE_ORDER
-#define __BIG_ENDIAN __BIG_ENDIAN
-#define __LITTLE_ENDIAN _LITTLE_ENDIAN
-#endif
-#endif
-
 typedef	u_int32_t	tcp_seq;
 
 #define      PR_SLOWHZ       2               /* 2 slow timeouts per second (approx) */
 #define      PR_FASTHZ       5               /* 5 fast timeouts per second (not important) */
-
-extern int tcp_rcvspace;
-extern int tcp_sndspace;
-extern struct socket *tcp_last_so;
 
 #define TCP_SNDSPACE 8192
 #define TCP_RCVSPACE 8192
@@ -67,7 +50,7 @@ struct tcphdr {
 	u_int16_t	th_dport;		/* destination port */
 	tcp_seq	th_seq;			/* sequence number */
 	tcp_seq	th_ack;			/* acknowledgement number */
-#if      __BYTE_ORDER == __BIG_ENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
 	u_int	th_off:4,		/* data offset */
 		th_x2:4;		/* (unused) */
 #else
@@ -86,7 +69,7 @@ struct tcphdr {
 	u_int16_t	th_urp;			/* urgent pointer */
 };
 
-#include <tcp_var.h>
+#include "tcp_var.h"
 
 #define	TCPOPT_EOL		0
 #define	TCPOPT_NOP		1
@@ -109,8 +92,10 @@ struct tcphdr {
  * With an IP MSS of 576, this is 536,
  * but 512 is probably more convenient.
  * This should be defined as MIN(512, IP_MSS - sizeof (struct tcpiphdr)).
+ *
+ * We make this 1460 because we only care about Ethernet in the qemu context.
  */
-#define	TCP_MSS	512
+#define	TCP_MSS	1460
 
 #define	TCP_MAXWIN	65535	/* largest value for (unscaled) window */
 
@@ -118,9 +103,14 @@ struct tcphdr {
 
 /*
  * User-settable options (used with setsockopt).
+ *
+ * We don't use the system headers on unix because we have conflicting
+ * local structures. We can't avoid the system definitions on Windows,
+ * so we undefine them.
  */
-/* #define	TCP_NODELAY	0x01 */	/* don't delay send to coalesce packets */
-/* #define	TCP_MAXSEG	0x02 */	/* set maximum segment size */
+#undef TCP_NODELAY
+#define	TCP_NODELAY	0x01	/* don't delay send to coalesce packets */
+#undef TCP_MAXSEG
 
 /*
  * TCP FSM state definitions.
@@ -170,9 +160,5 @@ struct tcphdr {
     (tp)->snd_una = (tp)->snd_nxt = (tp)->snd_max = (tp)->snd_up = (tp)->iss
 
 #define TCP_ISSINCR     (125*1024)      /* increment for tcp_iss each second */
-
-extern tcp_seq tcp_iss;                /* tcp initial send seq # */
-
-extern char *tcpstates[];
 
 #endif

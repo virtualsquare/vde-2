@@ -27,13 +27,13 @@
 #include <netinet/in.h>
 #include <limits.h>
 
-
 #include <config.h>
 #include <vde.h>
 #include <vdecommon.h>
 
+#include <slirp.h>
 #include <libvdeplug.h>
-#include "misc.h"
+//#include "misc.h"
 #include "tcp2unix.h"
 
 #if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
@@ -46,17 +46,26 @@
 #	endif
 #endif
 
+#define DEFAULT_IP_ADDR "10.0.2.2"
+
 #define SWITCH_MAGIC 0xfeedface
-#define BUFSIZE 2048
+#define BUFSIZE 4096
 #define ETH_ALEN 6
 
+struct Slirp *slirp;
+struct in_addr vnetwork;
+struct in_addr vnetmask;
+struct in_addr vhost;
+struct in_addr vdhcp_start;
+struct in_addr vnameserver;
+
 VDECONN *conn;
+VDESTREAM *vdestream;
 int dhcpmgmt=0;
 static char *pidfile = NULL;
 static char pidfile_path[PATH_MAX];
 int logok=0;
 char *prog;
-extern FILE *lfd;
 
 void printlog(int priority, const char *format, ...)
 {
@@ -112,67 +121,18 @@ static void cleanup(void)
 	if((pidfile != NULL) && unlink(pidfile_path) < 0) {
 		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
 	}
-	vde_close(conn);
+	if (vdestream != NULL)
+		vdestream_close(vdestream);
+	if (conn != NULL)
+		vde_close(conn);
 }
-
-/* XXX Apparently unused... check if ok to be removed */
-
-/*static void sig_handler(int sig)
-{
-	  cleanup();
-		  signal(sig, SIG_DFL);
-			  kill(getpid(), sig);
-}*/
-
-
-
-/*static void setsighandlers()
-{
-	|+ setting signal handlers.
-	 * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
-	 * ignores all the others signals which could cause termination. +|
-	struct { int sig; const char *name; int ignore; } signals[] = {
-		{ SIGHUP, "SIGHUP", 0 },
-		{ SIGINT, "SIGINT", 0 },
-		{ SIGPIPE, "SIGPIPE", 1 },
-		{ SIGALRM, "SIGALRM", 1 },
-		{ SIGTERM, "SIGTERM", 0 },
-		{ SIGUSR1, "SIGUSR1", 1 },
-		{ SIGUSR2, "SIGUSR2", 1 },
-		{ SIGPROF, "SIGPROF", 1 },
-		{ SIGVTALRM, "SIGVTALRM", 1 },
-#ifdef VDE_LINUX
-		{ SIGPOLL, "SIGPOLL", 1 },
-#ifdef SIGSTKFLT
-		{ SIGSTKFLT, "SIGSTKFLT", 1 },
-#endif
-		{ SIGIO, "SIGIO", 1 },
-		{ SIGPWR, "SIGPWR", 1 },
-#ifdef SIGUNUSED
-		{ SIGUNUSED, "SIGUNUSED", 1 },
-#endif
-#endif
-#ifdef VDE_DARWIN
-		{ SIGXCPU, "SIGXCPU", 1 },
-		{ SIGXFSZ, "SIGXFSZ", 1 },
-#endif
-		{ 0, NULL, 0 }
-	};
-
-	int i;
-	for(i = 0; signals[i].sig != 0; i++)
-		if(signal(signals[i].sig,
-					signals[i].ignore ? SIG_IGN : sig_handler) < 0)
-			perror("Setting handler");
-}*/
 
 unsigned char bufin[BUFSIZE];
 
-int slirp_can_output(void)
+int slirp_can_output(void *opaque)
 {
 	return 1;
 }
-
 
 #if 0
 #define convery2ascii(x) ((x)>=' ' && (x) <= '~')?(x):'.'
@@ -199,52 +159,57 @@ void dumppkt(const uint8_t *pkt, int pkt_len)
 }
 #endif
 
-void slirp_output(const uint8_t *pkt, int pkt_len)
+void slirp_output(void *opaque, const uint8_t *pkt, int pkt_len)
 {
 	/* slirp -> vde */
 	//fprintf(stderr,"RX from slirp %d\n",pkt_len);
 	//dumppkt(pkt,pkt_len);
-	vde_send(conn,pkt,pkt_len,0);
+	if (vdestream == NULL)
+		vde_send(conn,pkt,pkt_len,0);
+	else
+		vdestream_send(vdestream, pkt, pkt_len);
 }
 
+#define IS_TCP 0
+#define IS_UDP 1
+static char *tcpudp[]={"TCP","UDP"};
+
+struct redir_tcp_udp {
+	struct in_addr inaddr;
+	int is_udp;
+	int port;
+	int lport;
+	struct redir_tcp_udp *next;
+};
+
 struct redirx {
-	u_int32_t inaddr;
+	struct in_addr inaddr;
 	int start_port;
 	int display;
 	int screen;
 	struct redirx *next;
 };
 
-struct redirtcp {
-	u_int32_t inaddr;
-	int port;
-	int lport;
-	struct redirtcp *next;
-};
-
-static struct redirtcp *parse_redir_tcp(struct redirtcp *head, char *buff)
+static struct redir_tcp_udp *parse_redir_tcp(struct redir_tcp_udp *head, char *buff,int is_udp)
 {
 	u_int32_t inaddr=0;
 	int port=0;
 	int lport=0;
 	char *ipaddrstr=NULL;
 	char *portstr=NULL;
-	struct redirtcp *new;
+	struct redir_tcp_udp *new;
 			
-	if ((ipaddrstr = strchr(buff, ':'))) {
-		*ipaddrstr++ = 0;
-		if (*ipaddrstr == 0) {
-			fprintf(stderr,"redir TCP syntax error\n");
+	if ((ipaddrstr = strchr(buff, ':'))==NULL || *(ipaddrstr+1)==0) {
+			fprintf(stderr,"redir %s syntax error\n",tcpudp[is_udp]);
 			return head;
-		}
 	}
-	if ((portstr = strchr(ipaddrstr, ':'))) {
-		*portstr++ = 0;
-		if (*portstr == 0) {
-			fprintf(stderr,"redir TCP syntax error\n");
-			return head;
-		}
+	*ipaddrstr++ = 0;
+
+	if ((portstr = strchr(ipaddrstr, ':'))==NULL || *(portstr+1)==0) {
+		fprintf(stderr,"redir %s syntax error\n",tcpudp[is_udp]);
+		return head;
 	}
+	*portstr++ = 0;
 
 	sscanf(buff,"%d",&lport);
 	sscanf(portstr,"%d",&port);
@@ -252,14 +217,15 @@ static struct redirtcp *parse_redir_tcp(struct redirtcp *head, char *buff)
 		inaddr = inet_addr(ipaddrstr);
 
 	if (!inaddr) {
-		fprintf(stderr,"TCP redirection error: an IP address must be specified\r\n");
+		fprintf(stderr,"%s redirection error: an IP address must be specified\n",tcpudp[is_udp]);
 		return head;
 	}
 
-	if ((new=malloc(sizeof(struct redirtcp)))==NULL)
+	if ((new=malloc(sizeof(struct redir_tcp_udp)))==NULL)
 		return head;
 	else {
-		new->inaddr=inaddr;
+		inet_aton(ipaddrstr,&new->inaddr);
+		new->is_udp=is_udp;
 		new->port=port;
 		new->lport=lport;
 		new->next=head;
@@ -307,7 +273,7 @@ static struct redirx *parse_redir_x(struct redirx *head, char *buff)
 	if ((new=malloc(sizeof(struct redirx)))==NULL)
 		return head;
 	else {
-		new->inaddr=inaddr;
+		inet_aton(buff,&new->inaddr);
 		new->display=display;
 		new->screen=screen;
 		new->start_port=start_port;
@@ -327,22 +293,46 @@ static void parse_redir_locx(char *buff)
 		fprintf(stderr,"Error: tcp2unix redirection sytax error -x port:path e.g. -x 6000:/tmp/.X11-unix/X0\r\n");
 }
 
-static void do_redir_tcp(struct redirtcp *head)
+static void do_redir_tcp(struct redir_tcp_udp *head, int quiet)
 {
+	struct in_addr host_addr={.s_addr=htonl(INADDR_ANY)};
 	if (head) {
-		do_redir_tcp(head->next);
-		redir_tcp(head->inaddr,head->port,head->lport);
+		do_redir_tcp(head->next,quiet);
+		if (slirp_add_hostfwd(slirp, head->is_udp, host_addr, head->lport, head->inaddr,head->port) >= 0) {
+			if (!quiet)
+				lprint("                   redir %s   =%d:%s:%d\n", 
+						tcpudp[head->is_udp],head->lport,inet_ntoa(head->inaddr),head->port);
+		}
 		free(head);
 	}
 }
 
-static void do_redir_x(struct redirx *head)
+static void do_redir_x(struct redirx *head, int quiet)
 {
+	struct in_addr host_addr={.s_addr=htonl(INADDR_ANY)};
 	if (head) {
-		do_redir_x(head->next);
-		redir_x(head->inaddr,head->start_port,head->display,head->screen);
+		do_redir_x(head->next,quiet);
+		int i;
+
+		//redir_x(head->inaddr,head->start_port,head->display,head->screen);
+		for (i = 6000 + head->start_port; i <= 6100; i++) {
+			if (slirp_add_hostfwd(slirp, IS_TCP, host_addr, htons(i), 
+						head->inaddr, htons(6000 + head->display)) == 0) {
+				if (!quiet)
+					lprint("                   redir X     =%s:%d.%d\n", 
+							inet_ntoa(head->inaddr),head->display,head->screen);
+				break;
+			}
+		}
 		free(head);
 	}
+}
+
+static ssize_t vdeslirp_plug_recv(void *opaque, void *buf, size_t count)
+{
+	struct Slirp *slirp=opaque;
+	slirp_input(slirp,(uint8_t *)buf,count);
+	return count;
 }
 
 void usage(char *name) {
@@ -359,18 +349,23 @@ void usage(char *name) {
 }
 
 struct option slirpvdeopts[] = {
-	{"socket",1,NULL,'s'},
-	{"sock",1,NULL,'s'},
-	{"vdesock",1,NULL,'s'},
-	{"unix",1,NULL,'s'},
-	{"pidfile", 1, 0, 'p'},
-	{"dhcp",0,NULL,'D'},
-	{"daemon",0,NULL,'d'},
-	{"network",1,NULL,'n'},
-	{"mod",1,0,'m'},
-	{"group",1,0,'g'},
-	{"port",1,0,'P'},
-	{NULL,0,0,0}};
+	{"socket",required_argument,NULL,'s'},
+	{"sock",required_argument,NULL,'s'},
+	{"vdesock",required_argument,NULL,'s'},
+	{"unix",required_argument,NULL,'s'},
+	{"pidfile", required_argument, NULL, 'p'},
+	{"dhcp",optional_argument,NULL,'D'},
+	{"daemon",no_argument,NULL,'d'},
+	{"network",required_argument,NULL,'n'},
+	{"nameserver",required_argument,NULL,'N'},
+	{"dns",required_argument,NULL,'N'},
+	{"host",required_argument,NULL,'h'},
+	{"mod",required_argument,NULL,'m'},
+	{"group",required_argument,NULL,'g'},
+	{"port",required_argument,NULL,'P'},
+	{"tftp",required_argument,NULL,'t'},
+	{"quiet",no_argument,NULL,'q'},
+	{NULL,no_argument,NULL,0}};
 
 int main(int argc, char **argv)
 {
@@ -380,23 +375,40 @@ int main(int argc, char **argv)
   /*register int i;*/
   fd_set rs,ws,xs;
   int opt,longindx;
-  char *netw=NULL;
 	int daemonize=0;
-	struct redirtcp *rtcp=NULL;
+	struct redir_tcp_udp *rtcp=NULL;
 	struct redirx *rx=NULL;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
+	char *tftp_path=NULL;
+	int maskbits=24;
+	int datafd=0,ctlfd=0;
+	int quiet=0;
+	
+	inet_aton(DEFAULT_IP_ADDR,&vhost);
 
   prog=basename(argv[0]);
 
-  while ((opt=GETOPT_LONG(argc,argv,"s:n:p:g:m:L:X:x:dD",slirpvdeopts,&longindx)) > 0) {
+  while ((opt=GETOPT_LONG(argc,argv,"D::s:n:p:g:m:L:U:X:x:t:N:dq",slirpvdeopts,&longindx)) > 0) {
 		switch (opt) {
 			case 's' : sockname=optarg;
 								 break;
 			case 'D' : dhcpmgmt = 1;
+								 if (optarg != NULL)
+									 inet_aton(optarg,&vdhcp_start);
 								 break;
 			case 'd' : daemonize = 1;
 								 break;
-			case 'n' : netw=optarg;
+			case 'h' :
+			case 'n' : {
+									 char *slash=strchr(optarg,'/');
+									 if (slash) {
+										 maskbits=atoi(slash+1);
+										 *slash=0;
+									 }
+									 inet_aton(optarg,&vhost);
+								 }
+								 break;
+			case 'N' : inet_aton(optarg,&vnameserver);
 								 break;
 			case 'm' : sscanf(optarg,"%o",&(open_args.mode));
 								 break;
@@ -406,16 +418,29 @@ int main(int argc, char **argv)
 								 break;
 			case 'P' : open_args.port=atoi(optarg);
 								 break;
-			case 'L': rtcp=parse_redir_tcp(rtcp,optarg);
+			case 'L': rtcp=parse_redir_tcp(rtcp,optarg,IS_TCP);
+								 break;
+			case 'U': rtcp=parse_redir_tcp(rtcp,optarg,IS_UDP);
 								 break;
 			case 'X': rx=parse_redir_x(rx,optarg);
 								 break;
 			case 'x': parse_redir_locx(optarg);
 								 break;
+			case 't': tftp_path=strdup(optarg);
+								break;
+			case 'q': quiet=1;
+								break;
 			default  : usage(prog);
 								 break;
 		}
   }
+
+	if (optind < argc && sockname==NULL)
+		sockname=argv[optind++];
+
+	if (optind < argc)
+			usage(prog);
+
 	atexit(cleanup);
 	if (daemonize) {
 		openlog(basename(prog), LOG_PID, 0);
@@ -427,38 +452,17 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	
-	conn=vde_open(sockname,"slirpvde:",&open_args);
-	if (!conn)
-	{
-		printlog(LOG_ERR, "Could not connect to the VDE switch at '%s': %s",
-				sockname, strerror(errno));
-		exit(1);
-	}
-	
-	strncat(pidfile_path, "/", sizeof(pidfile_path) - strlen(pidfile_path) -1);
-	if (daemonize && daemon(0, 0)) {
-		printlog(LOG_ERR,"daemon: %s",strerror(errno));
-		exit(1);
-	}
-
-	if(pidfile) save_pidfile();
-
-	lfd=stderr;
-	slirp_init(netw);
-
-	do_redir_tcp(rtcp);
-	do_redir_x(rx);
-
-	for(;;) {
-		int datafd,ctlfd;
-		FD_ZERO(&rs);
-		FD_ZERO(&ws);
-		FD_ZERO(&xs);
-		nfds= -1;
-		slirp_select_fill(&nfds,&rs,&ws,&xs);
+	if (sockname==NULL || strcmp(sockname,"-") != 0) {
+		conn=vde_open(sockname,"slirpvde:",&open_args);
+		if (!conn)
+		{
+			printlog(LOG_ERR, "Could not connect to the VDE switch at '%s': %s",
+					sockname, strerror(errno));
+			exit(1);
+		}
 		datafd = vde_datafd(conn);
 		ctlfd = vde_ctlfd(conn);
-		
+
 		if (datafd < 0 || ctlfd < 0)
 		{
 			printlog(LOG_ERR, "Wrong file descriptor(s) for the VDE plug: (%d, %d)",
@@ -466,28 +470,100 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 
+		strncat(pidfile_path, "/", sizeof(pidfile_path) - strlen(pidfile_path) -1);
+		if (daemonize && daemon(0, 0)) {
+			printlog(LOG_ERR,"daemon: %s",strerror(errno));
+			exit(1);
+		}
+	}
+
+	if(pidfile) save_pidfile();
+
+	vnetmask.s_addr=htonl(~((1<< (32-maskbits)) - 1));
+	vnetwork.s_addr=vhost.s_addr & vnetmask.s_addr;
+	if ((vhost.s_addr & ~vnetmask.s_addr) == 0)
+		    vhost.s_addr=htonl(ntohl(vnetwork.s_addr) | 2);
+	if (vdhcp_start.s_addr == 0 && dhcpmgmt)
+		vdhcp_start.s_addr=htonl(ntohl(vnetwork.s_addr) | 15);
+	if (vnameserver.s_addr == 0)
+		vnameserver.s_addr=htonl(ntohl(vnetwork.s_addr) | 3);
+
+	/* netw */
+	slirp = slirp_init(0, vnetwork, vnetmask, vhost, NULL, tftp_path, NULL, 
+			vdhcp_start, vnameserver, conn);
+
+	if (sockname != NULL && strcmp(sockname,"-")==0) {
+		vdestream=vdestream_open(slirp,STDOUT_FILENO,vdeslirp_plug_recv,NULL);
+		if (vdestream == NULL)
+		{
+			printlog(LOG_ERR, "Could not connect to the PLUG: %s",
+					strerror(errno));
+			exit(1);
+		}
+		datafd=ctlfd=STDIN_FILENO;
+		quiet=1;
+	}
+
+	if (!quiet) {
+		lprint("Starting slirpvde: virtual_host=%s/%d\n", inet_ntoa(vhost), 
+				maskbits);
+		lprint("                   DNS         =%s\n", inet_ntoa(vnameserver));
+		if (vdhcp_start.s_addr != 0)
+			lprint("                   dhcp_start  =%s\n", inet_ntoa(vdhcp_start));
+		if (tftp_path != NULL)
+			lprint("                   tftp prefix =%s\n", tftp_path);
+		lprint("                   vde switch  =%s\n", 
+				(sockname == NULL)?"*DEFAULT*":sockname);
+	}
+
+	do_redir_tcp(rtcp,quiet);
+	do_redir_x(rx,quiet);
+
+	for(;;) {
+		FD_ZERO(&rs);
+		FD_ZERO(&ws);
+		FD_ZERO(&xs);
+		nfds= -1;
+		slirp_select_fill(&nfds,&rs,&ws,&xs);
+		
 		FD_SET(datafd,&rs);
 		FD_SET(ctlfd,&rs);
 		if (datafd>nfds) nfds=datafd;
 		if (ctlfd>nfds) nfds=ctlfd;
 		result=select(nfds+1,&rs,&ws,&xs,NULL);
-		//printf("SELECT %d %d\n",nfds,result);
-		if (FD_ISSET(datafd,&rs)) {
-			nx=vde_recv(conn,bufin,BUFSIZE,0);
-		  //fprintf(stderr,"TX to slirp %d\n",nx);
-			result--;
-		  slirp_input(bufin,nx);
-		  //fprintf(stderr,"TX to slirp %d exit\n",nx);
-	  }
-	  if (result > 0) {
-		  //fprintf(stderr,"slirp poll\n");
-		  slirp_select_poll(&rs,&ws,&xs);
-		  //fprintf(stderr,"slirp poll exit\n");
-	  }
-		if (FD_ISSET(ctlfd,&rs)) {
-			if(read(ctlfd,bufin,BUFSIZE)==0)
-				exit(0);
+		if (conn != NULL) {
+			//printf("SELECT %d %d\n",nfds,result);
+			if (FD_ISSET(datafd,&rs)) {
+				nx=vde_recv(conn,bufin,BUFSIZE,0);
+				//fprintf(stderr,"TX to slirp %d\n",nx);
+				//dumppkt(bufin,nx);
+				result--;
+				slirp_input(slirp,bufin,nx);
+				//fprintf(stderr,"TX to slirp %d exit\n",nx);
+			}
+			if (result > 0) {
+				//fprintf(stderr,"slirp poll\n");
+				slirp_select_poll(&rs,&ws,&xs,0);
+				//fprintf(stderr,"slirp poll exit\n");
+			}
+			if (FD_ISSET(ctlfd,&rs)) {
+				if(read(ctlfd,bufin,BUFSIZE)==0)
+					exit(0);
+			}
+		} else { /* vdestream != NULL */
+			if (FD_ISSET(datafd,&rs)) {
+				nx=read(datafd,bufin,BUFSIZE);
+				if (nx==0)
+					exit(0);
+				vdestream_recv(vdestream, bufin, nx);
+				result--;
+			}
+			if (result > 0) {
+				//fprintf(stderr,"slirp poll\n");
+				slirp_select_poll(&rs,&ws,&xs,0);
+				//fprintf(stderr,"slirp poll exit\n");
+			}
 		}
-  }
+	}
   return(0);
 }

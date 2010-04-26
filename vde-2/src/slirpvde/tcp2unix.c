@@ -5,9 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <config.h>
-#include <vde.h>
-#include <vdecommon.h>
 
 struct tcp2unix {
 	int port;
