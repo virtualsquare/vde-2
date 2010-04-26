@@ -10,11 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *	This product includes software developed by the University of
- *	California, Berkeley and its contributors.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -83,8 +79,8 @@ struct icmp {
 			struct ip idi_ip;
 			/* options and then 64 bits of data */
 		} id_ip;
-		u_long	id_mask;
-		char	id_data[1];
+		uint32_t	id_mask;
+		char		id_data[1];
 	} icmp_dun;
 #define	icmp_otime	icmp_dun.id_ts.its_otime
 #define	icmp_rtime	icmp_dun.id_ts.its_rtime
@@ -157,8 +153,9 @@ struct icmp {
 	(type) == ICMP_IREQ || (type) == ICMP_IREQREPLY || \
 	(type) == ICMP_MASKREQ || (type) == ICMP_MASKREPLY)
 
-void icmp_input _P((struct mbuf *, int));
-void icmp_error _P((struct mbuf *, u_char, u_char, int, char *));
-void icmp_reflect _P((struct mbuf *));
+void icmp_input(struct mbuf *, int);
+void icmp_error(struct mbuf *msrc, u_char type, u_char code, int minsize,
+                const char *message);
+void icmp_reflect(struct mbuf *);
 
 #endif

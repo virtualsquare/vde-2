@@ -10,11 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *	This product includes software developed by the University of
- *	California, Berkeley and its contributors.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -34,42 +30,28 @@
  * tcp_timer.c,v 1.2 1994/08/02 07:49:10 davidg Exp
  */
 
-#include "slirp.h"
+#include <slirp.h>
 
-#include <config.h>
-#include <vde.h>
-#include <vdecommon.h>
-
-#define max(x,y) ((x) > (y) ? (x) : (y))
-#define min(x,y) ((x) < (y) ? (x) : (y))
-
-int	tcp_keepidle = TCPTV_KEEP_IDLE;
-int	tcp_keepintvl = TCPTV_KEEPINTVL;
-int	tcp_maxidle;
-int	so_options = DO_KEEPALIVE;
-
-struct   tcpstat tcpstat;        /* tcp statistics */
-u_int32_t        tcp_now;                /* for RFC 1323 timestamps */
+static struct tcpcb *tcp_timers(register struct tcpcb *tp, int timer);
 
 /*
  * Fast timeout routine for processing delayed acks
  */
 void
-tcp_fasttimo()
+tcp_fasttimo(Slirp *slirp)
 {
 	register struct socket *so;
 	register struct tcpcb *tp;
 
 	DEBUG_CALL("tcp_fasttimo");
-	
-	so = tcb.so_next;
+
+	so = slirp->tcb.so_next;
 	if (so)
-	for (; so != &tcb; so = so->so_next)
+	for (; so != &slirp->tcb; so = so->so_next)
 		if ((tp = (struct tcpcb *)so->so_tcpcb) &&
 		    (tp->t_flags & TF_DELACK)) {
 			tp->t_flags &= ~TF_DELACK;
 			tp->t_flags |= TF_ACKNOW;
-			tcpstat.tcps_delack++;
 			(void) tcp_output(tp);
 		}
 }
@@ -80,26 +62,27 @@ tcp_fasttimo()
  * causes finite state machine actions if timers expire.
  */
 void
-tcp_slowtimo()
+tcp_slowtimo(Slirp *slirp)
 {
 	register struct socket *ip, *ipnxt;
 	register struct tcpcb *tp;
 	register int i;
 
 	DEBUG_CALL("tcp_slowtimo");
-	
-	tcp_maxidle = TCPTV_KEEPCNT * tcp_keepintvl;
+
 	/*
 	 * Search through tcb's and update active timers.
 	 */
-	ip = tcb.so_next;
-	if (ip == 0)
-	   return;
-	for (; ip != &tcb; ip = ipnxt) {
+	ip = slirp->tcb.so_next;
+        if (ip == NULL) {
+            return;
+        }
+	for (; ip != &slirp->tcb; ip = ipnxt) {
 		ipnxt = ip->so_next;
 		tp = sototcpcb(ip);
-		if (tp == 0)
-			continue;
+                if (tp == NULL) {
+                        continue;
+                }
 		for (i = 0; i < TCPT_NTIMERS; i++) {
 			if (tp->t_timer[i] && --tp->t_timer[i] == 0) {
 				tcp_timers(tp,i);
@@ -113,20 +96,15 @@ tcp_slowtimo()
 tpgone:
 		;
 	}
-	tcp_iss += TCP_ISSINCR/PR_SLOWHZ;		/* increment iss */
-#ifdef TCP_COMPAT_42
-	if ((int)tcp_iss < 0)
-		tcp_iss = 0;				/* XXX */
-#endif
-	tcp_now++;					/* for timestamps */
+	slirp->tcp_iss += TCP_ISSINCR/PR_SLOWHZ;	/* increment iss */
+	slirp->tcp_now++;				/* for timestamps */
 }
 
 /*
  * Cancel all timers for TCP tp.
  */
 void
-tcp_canceltimers(tp)
-	struct tcpcb *tp;
+tcp_canceltimers(struct tcpcb *tp)
 {
 	register int i;
 
@@ -134,21 +112,19 @@ tcp_canceltimers(tp)
 		tp->t_timer[i] = 0;
 }
 
-int	tcp_backoff[TCP_MAXRXTSHIFT + 1] =
+const int tcp_backoff[TCP_MAXRXTSHIFT + 1] =
    { 1, 2, 4, 8, 16, 32, 64, 64, 64, 64, 64, 64, 64 };
 
 /*
  * TCP timer processing.
  */
-struct tcpcb *
-tcp_timers(tp, timer)
-	register struct tcpcb *tp;
-	int timer;
+static struct tcpcb *
+tcp_timers(register struct tcpcb *tp, int timer)
 {
 	register int rexmt;
-	
+
 	DEBUG_CALL("tcp_timers");
-	
+
 	switch (timer) {
 
 	/*
@@ -159,8 +135,8 @@ tcp_timers(tp, timer)
 	 */
 	case TCPT_2MSL:
 		if (tp->t_state != TCPS_TIME_WAIT &&
-		    tp->t_idle <= tcp_maxidle)
-			tp->t_timer[TCPT_2MSL] = tcp_keepintvl;
+		    tp->t_idle <= TCP_MAXIDLE)
+			tp->t_timer[TCPT_2MSL] = TCPTV_KEEPINTVL;
 		else
 			tp = tcp_close(tp);
 		break;
@@ -171,12 +147,12 @@ tcp_timers(tp, timer)
 	 * to a longer retransmit interval and retransmit one segment.
 	 */
 	case TCPT_REXMT:
-		
+
 		/*
 		 * XXXXX If a packet has timed out, then remove all the queued
 		 * packets for that session.
 		 */
-		
+
 		if (++tp->t_rxtshift > TCP_MAXRXTSHIFT) {
 			/*
 			 * This is a hack to suit our terminal server here at the uni of canberra
@@ -185,33 +161,31 @@ tcp_timers(tp, timer)
 			 * keep retransmitting it, it'll keep eating the zeroes, so we keep
 			 * retransmitting, and eventually the connection dies...
 			 * (this only happens on incoming data)
-			 * 
+			 *
 			 * So, if we were gonna drop the connection from too many retransmits,
 			 * don't... instead halve the t_maxseg, which might break up the NULLs and
 			 * let them through
-			 * 
+			 *
 			 * *sigh*
 			 */
-			
+
 			tp->t_maxseg >>= 1;
 			if (tp->t_maxseg < 32) {
 				/*
 				 * We tried our best, now the connection must die!
 				 */
 				tp->t_rxtshift = TCP_MAXRXTSHIFT;
-				tcpstat.tcps_timeoutdrop++;
 				tp = tcp_drop(tp, tp->t_softerror);
 				/* tp->t_softerror : ETIMEDOUT); */ /* XXX */
 				return (tp); /* XXX */
 			}
-			
+
 			/*
 			 * Set rxtshift to 6, which is still at the maximum
 			 * backoff time
 			 */
 			tp->t_rxtshift = 6;
 		}
-		tcpstat.tcps_rexmttimeo++;
 		rexmt = TCP_REXMTVAL(tp) * tcp_backoff[tp->t_rxtshift];
 		TCPT_RANGESET(tp->t_rxtcur, rexmt,
 		    (short)tp->t_rttmin, TCPTV_REXMTMAX); /* XXX */
@@ -225,7 +199,6 @@ tcp_timers(tp, timer)
 		 * retransmit times until then.
 		 */
 		if (tp->t_rxtshift > TCP_MAXRXTSHIFT / 4) {
-/*			in_losing(tp->t_inpcb); */
 			tp->t_rttvar += (tp->t_srtt >> TCP_RTT_SHIFT);
 			tp->t_srtt = 0;
 		}
@@ -247,7 +220,7 @@ tcp_timers(tp, timer)
 		 * size increase exponentially with time.  If the
 		 * window is larger than the path can handle, this
 		 * exponential growth results in dropped packet(s)
-		 * almost immediately.  To get more time between 
+		 * almost immediately.  To get more time between
 		 * drops but still "push" the network to take advantage
 		 * of improving conditions, we switch from exponential
 		 * to linear window opening at some threshold size.
@@ -274,7 +247,6 @@ tcp_timers(tp, timer)
 	 * Force a byte to be output, if possible.
 	 */
 	case TCPT_PERSIST:
-		tcpstat.tcps_persisttimeo++;
 		tcp_setpersist(tp);
 		tp->t_force = 1;
 		(void) tcp_output(tp);
@@ -286,13 +258,11 @@ tcp_timers(tp, timer)
 	 * or drop connection if idle for too long.
 	 */
 	case TCPT_KEEP:
-		tcpstat.tcps_keeptimeo++;
 		if (tp->t_state < TCPS_ESTABLISHED)
 			goto dropit;
 
-/*		if (tp->t_socket->so_options & SO_KEEPALIVE && */
-		if ((so_options) && tp->t_state <= TCPS_CLOSE_WAIT) {
-		    	if (tp->t_idle >= tcp_keepidle + tcp_maxidle)
+		if ((SO_OPTIONS) && tp->t_state <= TCPS_CLOSE_WAIT) {
+		    	if (tp->t_idle >= TCPTV_KEEP_IDLE + TCP_MAXIDLE)
 				goto dropit;
 			/*
 			 * Send a packet designed to force a response
@@ -306,26 +276,15 @@ tcp_timers(tp, timer)
 			 * by the protocol spec, this requires the
 			 * correspondent TCP to respond.
 			 */
-			tcpstat.tcps_keepprobe++;
-#ifdef TCP_COMPAT_42
-			/*
-			 * The keepalive packet must have nonzero length
-			 * to get a 4.2 host to respond.
-			 */
-			tcp_respond(tp, &tp->t_template, (struct mbuf *)NULL,
-			    tp->rcv_nxt - 1, tp->snd_una - 1, 0);
-#else
 			tcp_respond(tp, &tp->t_template, (struct mbuf *)NULL,
 			    tp->rcv_nxt, tp->snd_una - 1, 0);
-#endif
-			tp->t_timer[TCPT_KEEP] = tcp_keepintvl;
+			tp->t_timer[TCPT_KEEP] = TCPTV_KEEPINTVL;
 		} else
-			tp->t_timer[TCPT_KEEP] = tcp_keepidle;
+			tp->t_timer[TCPT_KEEP] = TCPTV_KEEP_IDLE;
 		break;
 
 	dropit:
-		tcpstat.tcps_keepdrops++;
-		tp = tcp_drop(tp, 0); /* ETIMEDOUT); */
+		tp = tcp_drop(tp, 0);
 		break;
 	}
 

@@ -10,11 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *	This product includes software developed by the University of
- *	California, Berkeley and its contributors.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -37,34 +33,16 @@
 /*
  * Changes and additions relating to SLiRP
  * Copyright (c) 1995 Danny Gasparovski.
- * 
- * Please read the file COPYRIGHT for the 
+ *
+ * Please read the file COPYRIGHT for the
  * terms and conditions of the copyright.
  */
 
-#include "slirp.h"
+#include <slirp.h>
 
-#include <config.h>
-#include <vde.h>
-#include <vdecommon.h>
-
-#define max(x,y) ((x) > (y) ? (x) : (y))
-#define min(x,y) ((x) < (y) ? (x) : (y))
-
-/*
- * Since this is only used in "stats socket", we give meaning
- * names instead of the REAL names
- */
-char *tcpstates[] = {
-/*	"CLOSED",       "LISTEN",       "SYN_SENT",     "SYN_RCVD", */
-	"REDIRECT",	"LISTEN",	"SYN_SENT",     "SYN_RCVD",
-	"ESTABLISHED",  "CLOSE_WAIT",   "FIN_WAIT_1",   "CLOSING",
-	"LAST_ACK",     "FIN_WAIT_2",   "TIME_WAIT",
-};
-
-u_char  tcp_outflags[TCP_NSTATES] = {
+static const u_char  tcp_outflags[TCP_NSTATES] = {
 	TH_RST|TH_ACK, 0,      TH_SYN,        TH_SYN|TH_ACK,
-	TH_ACK,        TH_ACK, TH_FIN|TH_ACK, TH_FIN|TH_ACK, 
+	TH_ACK,        TH_ACK, TH_FIN|TH_ACK, TH_FIN|TH_ACK,
 	TH_FIN|TH_ACK, TH_ACK, TH_ACK,
 };
 
@@ -75,8 +53,7 @@ u_char  tcp_outflags[TCP_NSTATES] = {
  * Tcp output routine: figure out what should be sent and send it.
  */
 int
-tcp_output(tp)
-	register struct tcpcb *tp;
+tcp_output(struct tcpcb *tp)
 {
 	register struct socket *so = tp->t_socket;
 	register long len, win;
@@ -86,10 +63,10 @@ tcp_output(tp)
 	u_char opt[MAX_TCPOPTLEN];
 	unsigned optlen, hdrlen;
 	int idle, sendalot;
-	
+
 	DEBUG_CALL("tcp_output");
 	DEBUG_ARG("tp = %lx", (long )tp);
-	
+
 	/*
 	 * Determine length of data that should be transmitted,
 	 * and flags that will be used.
@@ -110,9 +87,9 @@ again:
 	win = min(tp->snd_wnd, tp->snd_cwnd);
 
 	flags = tcp_outflags[tp->t_state];
-	
+
 	DEBUG_MISC((dfd, " --- tcp_output flags = 0x%x\n",flags));
-	
+
 	/*
 	 * If in persist timeout with window of 0, send 1 byte.
 	 * Otherwise, if window is small but nonzero
@@ -165,7 +142,7 @@ again:
 			tp->snd_nxt = tp->snd_una;
 		}
 	}
-	
+
 	if (len > tp->t_maxseg) {
 		len = tp->t_maxseg;
 		sendalot = 1;
@@ -207,7 +184,7 @@ again:
 	 * window, then want to send a window update to peer.
 	 */
 	if (win > 0) {
-		/* 
+		/*
 		 * "adv" is the amount we can increase the window,
 		 * taking into account that we are limited by
 		 * TCP_MAXWIN << tp->rcv_scale.
@@ -270,8 +247,6 @@ again:
 	/*
 	 * No reason to send a segment, just return.
 	 */
-	tcpstat.tcps_didnuttin++;
-	
 	return (0);
 
 send:
@@ -295,41 +270,11 @@ send:
 			mss = htons((u_int16_t) tcp_mss(tp, 0));
 			memcpy((caddr_t)(opt + 2), (caddr_t)&mss, sizeof(mss));
 			optlen = 4;
-
-/*			if ((tp->t_flags & TF_REQ_SCALE) &&
- *			    ((flags & TH_ACK) == 0 ||
- *			    (tp->t_flags & TF_RCVD_SCALE))) {
- *				*((u_int32_t *) (opt + optlen)) = htonl(
- *					TCPOPT_NOP << 24 |
- *					TCPOPT_WINDOW << 16 |
- *					TCPOLEN_WINDOW << 8 |
- *					tp->request_r_scale);
- *				optlen += 4;
- *			}
- */
 		}
  	}
- 
- 	/*
-	 * Send a timestamp and echo-reply if this is a SYN and our side 
-	 * wants to use timestamps (TF_REQ_TSTMP is set) or both our side
-	 * and our peer have sent timestamps in our SYN's.
- 	 */
-/* 	if ((tp->t_flags & (TF_REQ_TSTMP|TF_NOOPT)) == TF_REQ_TSTMP &&
- *	     (flags & TH_RST) == 0 &&
- *	    ((flags & (TH_SYN|TH_ACK)) == TH_SYN ||
- *	     (tp->t_flags & TF_RCVD_TSTMP))) {
- *		u_int32_t *lp = (u_int32_t *)(opt + optlen);
- *
- *		/ * Form timestamp option as shown in appendix A of RFC 1323. *  /
- *		*lp++ = htonl(TCPOPT_TSTAMP_HDR);
- *		*lp++ = htonl(tcp_now);
- *		*lp   = htonl(tp->ts_recent);
- *		optlen += TCPOLEN_TSTAMP_APPA;
- *	}
- */
+
  	hdrlen += optlen;
- 
+
 	/*
 	 * Adjust data length if insertion of options will
 	 * bump the packet length beyond the t_maxseg length.
@@ -345,40 +290,17 @@ send:
 	 * the template for sends on this connection.
 	 */
 	if (len) {
-		if (tp->t_force && len == 1)
-			tcpstat.tcps_sndprobe++;
-		else if (SEQ_LT(tp->snd_nxt, tp->snd_max)) {
-			tcpstat.tcps_sndrexmitpack++;
-			tcpstat.tcps_sndrexmitbyte += len;
-		} else {
-			tcpstat.tcps_sndpack++;
-			tcpstat.tcps_sndbyte += len;
-		}
-
-		m = m_get();
+		m = m_get(so->slirp);
 		if (m == NULL) {
-/*			error = ENOBUFS; */
 			error = 1;
 			goto out;
 		}
-		m->m_data += if_maxlinkhdr;
+		m->m_data += IF_MAXLINKHDR;
 		m->m_len = hdrlen;
-		
-		/* 
-		 * This will always succeed, since we make sure our mbufs
-		 * are big enough to hold one MSS packet + header + ... etc.
-		 */
-/*		if (len <= MHLEN - hdrlen - max_linkhdr) { */
 
-			sbcopy(&so->so_snd, off, (int) len, mtod(m, caddr_t) + hdrlen);
-			m->m_len += len;
+		sbcopy(&so->so_snd, off, (int) len, mtod(m, caddr_t) + hdrlen);
+		m->m_len += len;
 
-/*		} else {
- *			m->m_next = m_copy(so->so_snd.sb_mb, off, (int) len);
- *			if (m->m_next == 0)
- *				len = 0;
- *		}
- */
 		/*
 		 * If we're sending everything we've got, set PUSH.
 		 * (This will keep happy those implementations which only
@@ -388,27 +310,17 @@ send:
 		if (off + len == so->so_snd.sb_cc)
 			flags |= TH_PUSH;
 	} else {
-		if (tp->t_flags & TF_ACKNOW)
-			tcpstat.tcps_sndacks++;
-		else if (flags & (TH_SYN|TH_FIN|TH_RST))
-			tcpstat.tcps_sndctrl++;
-		else if (SEQ_GT(tp->snd_up, tp->snd_una))
-			tcpstat.tcps_sndurg++;
-		else
-			tcpstat.tcps_sndwinup++;
-
-		m = m_get();
+		m = m_get(so->slirp);
 		if (m == NULL) {
-/*			error = ENOBUFS; */
 			error = 1;
 			goto out;
 		}
-		m->m_data += if_maxlinkhdr;
+		m->m_data += IF_MAXLINKHDR;
 		m->m_len = hdrlen;
 	}
 
 	ti = mtod(m, struct tcpiphdr *);
-	
+
 	memcpy((caddr_t)ti, &tp->t_template, sizeof (struct tcpiphdr));
 
 	/*
@@ -416,7 +328,7 @@ send:
 	 * window for use in delaying messages about window sizes.
 	 * If resending a FIN, be sure not to use a new sequence number.
 	 */
-	if (flags & TH_FIN && tp->t_flags & TF_SENTFIN && 
+	if (flags & TH_FIN && tp->t_flags & TF_SENTFIN &&
 	    tp->snd_nxt == tp->snd_max)
 		tp->snd_nxt--;
 	/*
@@ -453,13 +365,9 @@ send:
 	if (win < (long)(tp->rcv_adv - tp->rcv_nxt))
 		win = (long)(tp->rcv_adv - tp->rcv_nxt);
 	ti->ti_win = htons((u_int16_t) (win>>tp->rcv_scale));
-	
+
 	if (SEQ_GT(tp->snd_up, tp->snd_una)) {
 		ti->ti_urp = htons((u_int16_t)(tp->snd_up - ntohl(ti->ti_seq)));
-#ifdef notdef		
-	if (SEQ_GT(tp->snd_up, tp->snd_nxt)) {
-		ti->ti_urp = htons((u_int16_t)(tp->snd_up - tp->snd_nxt));
-#endif
 		ti->ti_flags |= TH_URG;
 	} else
 		/*
@@ -507,7 +415,6 @@ send:
 			if (tp->t_rtt == 0) {
 				tp->t_rtt = 1;
 				tp->t_rtseq = startseq;
-				tcpstat.tcps_segstimed++;
 			}
 		}
 
@@ -538,43 +445,20 @@ send:
 	 * the template, but need a way to checksum without them.
 	 */
 	m->m_len = hdrlen + len; /* XXX Needed? m_len should be correct */
-	
+
     {
-	    
+
 	((struct ip *)ti)->ip_len = m->m_len;
 
-	((struct ip *)ti)->ip_ttl = ip_defttl;
+	((struct ip *)ti)->ip_ttl = IPDEFTTL;
 	((struct ip *)ti)->ip_tos = so->so_iptos;
-	    
-/* #if BSD >= 43 */
-	/* Don't do IP options... */
-/*	error = ip_output(m, tp->t_inpcb->inp_options, &tp->t_inpcb->inp_route,
- *	    so->so_options & SO_DONTROUTE, 0);
- */
-	error = ip_output(so, m);
 
-/* #else
- *	error = ip_output(m, (struct mbuf *)0, &tp->t_inpcb->inp_route, 
- *	    so->so_options & SO_DONTROUTE);
- * #endif
- */
+	error = ip_output(so, m);
     }
 	if (error) {
 out:
-/*		if (error == ENOBUFS) {
- *			tcp_quench(tp->t_inpcb, 0);
- *			return (0);
- *		}
- */
-/*		if ((error == EHOSTUNREACH || error == ENETDOWN)
- *		    && TCPS_HAVERCVDSYN(tp->t_state)) {
- *			tp->t_softerror = error;
- *			return (0);
- *		}
- */
 		return (error);
 	}
-	tcpstat.tcps_sndtotal++;
 
 	/*
 	 * Data sent (as far as we can tell).
@@ -593,14 +477,10 @@ out:
 }
 
 void
-tcp_setpersist(tp)
-	register struct tcpcb *tp;
+tcp_setpersist(struct tcpcb *tp)
 {
     int t = ((tp->t_srtt >> 2) + tp->t_rttvar) >> 1;
 
-/*	if (tp->t_timer[TCPT_REXMT])
- *		panic("tcp_output REXMT");
- */
 	/*
 	 * Start/restart persistence timer.
 	 */

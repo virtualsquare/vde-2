@@ -1,5 +1,3 @@
-#ifndef SLIRP_BOOT_H_
-#define SLIRP_BOOT_H_
 /* bootp/dhcp defines */
 
 #define BOOTP_SERVER	67
@@ -65,6 +63,7 @@
 #define RFC2132_MSG_TYPE	53
 #define RFC2132_SRV_ID		54
 #define RFC2132_PARAM_LIST	55
+#define RFC2132_MESSAGE		56
 #define RFC2132_MAX_SIZE	57
 #define RFC2132_RENEWAL_TIME    58
 #define RFC2132_REBIND_TIME     59
@@ -73,7 +72,7 @@
 #define DHCPOFFER		2
 #define DHCPREQUEST		3
 #define DHCPACK			5
-#define DHCPNACK		6
+#define DHCPNAK			6
 
 #define RFC1533_VENDOR_MAJOR	0
 #define RFC1533_VENDOR_MINOR	0
@@ -100,9 +99,9 @@ struct bootp_t {
     uint8_t bp_htype;
     uint8_t bp_hlen;
     uint8_t bp_hops;
-    unsigned int bp_xid;
-    unsigned short bp_secs;
-    unsigned short unused;
+    uint32_t bp_xid;
+    uint16_t bp_secs;
+    uint16_t unused;
     struct in_addr bp_ciaddr;
     struct in_addr bp_yiaddr;
     struct in_addr bp_siaddr;
@@ -113,6 +112,11 @@ struct bootp_t {
     uint8_t bp_vend[DHCP_OPT_LEN];
 };
 
-void bootp_input(struct mbuf *m);
+typedef struct {
+    uint16_t allocated;
+    uint8_t macaddr[6];
+} BOOTPClient;
 
-#endif
+#define NB_BOOTP_CLIENTS 16
+
+void bootp_input(struct mbuf *m);
