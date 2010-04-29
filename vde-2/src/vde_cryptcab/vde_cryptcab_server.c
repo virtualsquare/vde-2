@@ -16,11 +16,6 @@ static struct peer *list = NULL;
 static char *plugname;
 static enum e_enc_type enc_type = ENC_SSH;
 
-static struct itimerval TIMER = {
-	.it_interval={ .tv_sec=0, .tv_usec=0},
-	.it_value={ .tv_sec=SESSION_TIMEOUT/2, .tv_usec=0 }
-};
-
 /*
  * Add a peer to the main list.
  * Client will have a list of one peer only,
@@ -112,6 +107,10 @@ static struct peer *clean_peerlist(struct peer *sublist)
 	struct timeval now;
 	char filename[128];
 	struct peer *nxt;
+	
+	if (sublist == list) {
+		vc_printlog(4, "Cleaning list of peer from expired clients....");
+	}
 
 	if(!sublist)
 		return NULL;
@@ -174,14 +173,6 @@ static struct peer *getpeer(struct sockaddr_in saddr)
 /*
  * Get a pointer to the peer in the list which key filename is the same of that in the login datagram. 
  */
-
-static void
-autocleaner(int signo)
-{
-	struct itimerval *old=NULL;
-	list=clean_peerlist(list);
-	setitimer(ITIMER_REAL, &TIMER, old);
-}
 
 static void
 do_exit(int signo){
@@ -328,15 +319,17 @@ static int recv_datagram_srv(struct datagram *pkt, int nfd)
 	pfd[0].events=POLLIN|POLLHUP;
 	peerlist = populate_peerlist(pfd);
 
-	 do{
-		pollret = poll(pfd,1+numberofpeers(),1000);
-		if(pollret<0){
-		 	if(errno==EINTR)
-		   		return 0;
-		 	perror("poll");
-		 	exit(1);
-		}
-   	} while (pollret==0);
+	pollret = poll(pfd,1+numberofpeers(),1000);
+	if(pollret<0){
+	 	if(errno==EINTR)
+	   		return 0;
+	 	perror("poll");
+	 	exit(1);
+	}
+	if (pollret == 0) {
+		list = clean_peerlist(list);
+		return 0;
+	}
 
   
 	for(;;){
@@ -362,9 +355,13 @@ static int recv_datagram_srv(struct datagram *pkt, int nfd)
 		}
 
 		// This increment comes with "static int i" def, to ensure fairness among peers.
+		// whenever a loop is complete, try to cleanup old peers from list.
 		i++;	  
-		if(i>numberofpeers())
+		if(i>numberofpeers()) {
+		 	list = clean_peerlist(list);	
 			i=1;
+			return 0;
+		}
 
 		if (pfd[i].revents&POLLNVAL || pfd[i].revents&POLLHUP){
 			usleep(10000);
@@ -400,11 +397,8 @@ void cryptcab_server(char *_plugname, unsigned short udp_port, enum e_enc_type _
 	sigemptyset(&sa_timer.sa_mask);
 	sigemptyset(&sa_exit.sa_mask);
 	sa_exit.sa_handler = do_exit;
-	sa_timer.sa_handler = autocleaner;
-	sigaction(SIGALRM, &sa_timer, NULL);
 	sigaction(SIGINT, &sa_exit, NULL);
 	sigaction(SIGTERM, &sa_exit, NULL);
-	kill(getpid(),SIGALRM);
 	
 	if(enc_type == ENC_PRESHARED && (!pre_shared || access(pre_shared,R_OK)!=0)){
 		fprintf(stderr,"Error accessing pre-shared key %s\n",pre_shared);

@@ -13,7 +13,7 @@
 #include "cryptcab.h"
 #define KEEPALIVE_INTERVAL 30
 
-static unsigned char may_login = 1, keepalives = 0;
+static unsigned char keepalives = 0;
 static char *remoteusr, *remotehost;
 static unsigned short remoteport;
 static char *plugname, *pre_shared;
@@ -29,11 +29,6 @@ static void send_keepalive(struct peer *p){
 	gettimeofday(&last_out_time, NULL);
 }
 
-static void client_maylogin(int signo)
-{
-	may_login=1;
-}
-
 
 /*
  * Send a login packet. This is the first phase of 4WHS
@@ -46,18 +41,17 @@ blowfish_login(struct peer *p)
 
 static void try_to_login(struct peer *p)
 {
-
-	struct itimerval *old=NULL;
-	struct itimerval nxt={
-		.it_interval={.tv_sec=0, .tv_usec=0},
-		.it_value={.tv_sec=5, .tv_usec=0}
-	};
-	if(!may_login)
+	static struct timeval last_login_time; 
+	struct timeval now;
+	gettimeofday(&now, 0);
+	if (now.tv_sec < last_login_time.tv_sec  || now.tv_sec - last_login_time.tv_sec < 5) {
+		vc_printlog(4,"Attempt to login to  %s (udp port %hu): please wait, login in progress...",remotehost,remoteport);
 		return;
+	}
+		
 	vc_printlog(2,"Logging in to %s (udp port %hu)",remotehost,remoteport);
 	blowfish_login(p);
-	may_login=0;
-	setitimer(ITIMER_REAL, &nxt, old);
+	gettimeofday(&last_login_time, 0);
 }
 
 
@@ -105,7 +99,10 @@ static struct peer
 	memset(ret,0, sizeof(struct peer));	
 
 	for(i=0; i<FILENAMESIZE-1;i++){
-		read(fd,&c,1);
+		if (read(fd,&c,1) < 0) {
+			perror("could not read filename ");
+			goto failure;
+		}
 		c=(c%25);
 		//fprintf(stderr,"c=%u\n",c);
 		ret->id[i]=(char)('a' + c);
@@ -120,8 +117,10 @@ static struct peer
 	}
 	memcpy(ret->key,key,16);
 	memcpy(ret->iv,iv,8);
-	write(od,key,16);
-	write(od,iv,8);
+	if (write(od,key,16) < 0 || write(od,iv,8) < 0) {
+		perror("Could not write blowfish key");
+		goto failure;
+	}
 	close (od);
 	vc_printlog(2,"Done.");	
 	return ret;
@@ -262,7 +261,6 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 	struct datagram pkt, pkt_dec;
 	struct peer _peer;
 	struct peer *p1 = &_peer;
-	struct sigaction sa_timer;
 	
 	plugname = _plugname;
 	remoteusr = _remoteusr;
@@ -274,11 +272,6 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 	scp_extra_options = _scp_extra_options;
 
 	memset(&last_out_time,0, sizeof(struct timeval));
-
-	sigemptyset(&sa_timer.sa_mask);
-	sa_timer.sa_handler = client_maylogin;
-	sigaction(SIGALRM, &sa_timer, NULL);
-
 
 	if(enc_type == ENC_PRESHARED && (!pre_shared || access(pre_shared,R_OK)!=0)){
 		vc_printlog(0,"Error accessing pre-shared key %s: %s\n",pre_shared,strerror(errno));
