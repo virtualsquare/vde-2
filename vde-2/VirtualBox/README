@@ -1,3 +1,12 @@
+VDE is a standard feature of Virtual Box 3.2.0.
+
+The "VDE Adapter" option automatically appears when VirtualBox runs on a
+host with VDE support (i.e. if VirtualBox can load the libvdeplug library).
+
+(Renzo Davoli, May 08 2010).
+----
+Obsolete info for 3.1.6
+
 This directory contains a preliminary patch to add a native support for VDE
 in VirtualBox.
 
