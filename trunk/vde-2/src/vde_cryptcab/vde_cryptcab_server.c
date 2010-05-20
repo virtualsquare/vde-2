@@ -355,10 +355,8 @@ static int recv_datagram_srv(struct datagram *pkt, int nfd)
 		}
 
 		// This increment comes with "static int i" def, to ensure fairness among peers.
-		// whenever a loop is complete, try to cleanup old peers from list.
 		i++;	  
 		if(i>numberofpeers()) {
-		 	list = clean_peerlist(list);	
 			i=1;
 			return 0;
 		}
