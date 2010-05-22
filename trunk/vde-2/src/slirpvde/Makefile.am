@@ -12,7 +12,7 @@ slirpvde_SOURCES = \
 		   misc.c \
 		   misc.h \
 		   cksum.c \
-		   icmp_var.h \
+		   debug.h \
 		   if.c \
 		   if.h \
 		   ip.h \
@@ -24,12 +24,14 @@ slirpvde_SOURCES = \
 		   main.h \
 		   mbuf.c \
 		   mbuf.h \
+		   osdep.h \
+		   qemu-queue.h \
+		   qemu-common.h \
 		   sbuf.c \
 		   sbuf.h \
 		   slirp.c \
 		   slirp_config.h \
 		   slirp.h \
-		   ctl.h \
 		   socket.c \
 		   socket.h \
 		   tcp.h \
