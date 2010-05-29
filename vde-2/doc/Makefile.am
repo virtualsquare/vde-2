@@ -13,7 +13,9 @@ EXTRA_DIST = \
 	README.bochs \
 	README.qemu \
 	README.slirpvde \
-	README.vde_over_ns
+	README.vde_over_ns \
+	README.VirtualBox \
+	VirtualBox-3.1.6_OSE_VDE.patch
 
 vdecmddir = $(sysconfdir)/vde2/
 dist_vdecmd_DATA = vdecmd
