@@ -44,6 +44,9 @@ MODULE_DESCRIPTION("IPN Kernel Module");
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 #define IPN_PRE2625
 #endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+#define IPN_PRE2632
+#endif
 
 /*extension of RCV_SHUTDOWN defined in include/net/sock.h
  * when the bit is set recv fails */
@@ -90,8 +93,13 @@ static int ipn_sendmsg(struct kiocb *, struct socket *,
 		struct msghdr *, size_t);
 static int ipn_recvmsg(struct kiocb *, struct socket *,
 		struct msghdr *, size_t, int);
+#ifndef IPN_PRE2632
+static int ipn_setsockopt(struct socket *sock, int level, int optname,
+		char __user *optval, unsigned int optlen);
+#else
 static int ipn_setsockopt(struct socket *sock, int level, int optname,
 		char __user *optval, int optlen);
+#endif
 static int ipn_getsockopt(struct socket *sock, int level, int optname,
 		char __user *optval, int __user *optlen);
 
@@ -285,8 +293,11 @@ struct ipn_node *ipn_node_create(struct net *net)
  * when a node is "persistent", ipn_node survives while ipn_sock gets released*/
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
 static int ipn_create(struct socket *sock, int protocol)
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
 static int ipn_create(struct net *net,struct socket *sock, int protocol)
+#else
+static int ipn_create(struct net *net,struct socket *sock, 
+		int protocol, int kern)
 #endif
 {
 	struct ipn_sock *ipn_sk;
@@ -1509,8 +1520,14 @@ static int ipn_netresize(struct ipn_network *ipnn,int newsize)
 }
 
 /* IPN SETSOCKOPT */
+#ifndef IPN_PRE2632
 static int ipn_setsockopt(struct socket *sock, int level, int optname,
-		char __user *optval, int optlen) {
+		char __user *optval, unsigned int optlen) 
+#else
+static int ipn_setsockopt(struct socket *sock, int level, int optname,
+		char __user *optval, int optlen) 
+#endif
+{
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
 	struct ipn_network *ipnn=ipn_node->ipn;
 
