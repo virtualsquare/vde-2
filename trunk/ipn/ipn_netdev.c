@@ -36,8 +36,8 @@
 #define DRV_NAME  "ipn"
 #define DRV_VERSION "0.3.1"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
-#define IPN_PRE2630
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
+#define IPN_PRE2629
 #endif
 
 static const struct ethtool_ops ipn_ethtool_ops;
@@ -115,18 +115,7 @@ struct sk_buff *ipn_handle_hook(struct ipn_node *ipn_node, struct sk_buff *skb)
 	return (skb);
 }
 
-static void ipntap_setup(struct net_device *dev)
-{
-#ifdef IPN_PRE2630
-	dev->open = ipntap_net_open;
-	dev->hard_start_xmit = ipn_net_xmit;
-	dev->stop = ipntap_net_close;
-	dev->get_stats = ipntap_net_stats;
-#endif
-	dev->ethtool_ops = &ipn_ethtool_ops;
-}
-
-#ifndef IPN_PRE2630
+#ifndef IPN_PRE2629
 static struct net_device_ops ipntap_netdev_ops = {
 	.ndo_open = ipntap_net_open,
 	.ndo_start_xmit = ipn_net_xmit,
@@ -134,6 +123,17 @@ static struct net_device_ops ipntap_netdev_ops = {
 	.ndo_get_stats = ipntap_net_stats
 };
 #endif
+
+static void ipntap_setup(struct net_device *dev)
+{
+#ifdef IPN_PRE2629
+	dev->open = ipntap_net_open;
+	dev->hard_start_xmit = ipn_net_xmit;
+	dev->stop = ipntap_net_close;
+	dev->get_stats = ipntap_net_stats;
+#endif
+	dev->ethtool_ops = &ipn_ethtool_ops;
+}
 
 struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *err)
 {
@@ -146,7 +146,7 @@ struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *e
 			dev=alloc_netdev(sizeof(struct ipntap), name, ipntap_setup);
 			if (!dev)
 				*err= -ENOMEM;
-#ifndef IPN_PRE2630
+#ifndef IPN_PRE2629
 			dev_net_set(dev, net);
 			dev->netdev_ops = &ipntap_netdev_ops;
 #endif
@@ -258,7 +258,7 @@ void ipn_netdev_sendmsg(struct ipn_node *to,struct msgpool_item *msg)
 	switch (to->flags & IPN_NODEFLAG_DEVMASK) {
 		case IPN_NODEFLAG_TAP:
 			skb->protocol = eth_type_trans(skb, dev);
-			netif_rx(skb);
+			netif_rx_ni(skb);
 			ipntap->stats.rx_packets++;
 			ipntap->stats.rx_bytes += msg->len;
 			break;
