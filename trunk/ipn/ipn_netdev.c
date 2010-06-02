@@ -161,6 +161,13 @@ struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *e
 			random_ether_addr(dev->dev_addr);
 			break;
 		case IPN_NODEFLAG_GRAB:
+#ifdef IPN_STEALING
+			/* only if bridge is not working */
+			if (ipn_handle_frame_hook != (void *) ipn_handle_hook) {
+				printk (KERN_WARNING "IPN interface GRAB disabled (stealing mode) if bridge is loaded\n");
+				return NULL;
+			}
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
 			dev=dev_get_by_name(name);
 #else
@@ -306,16 +313,25 @@ static const struct ethtool_ops ipn_ethtool_ops = {
 
 int ipn_netdev_init(void)
 {
-	ipn_handle_frame_hook=
 #ifdef IPN_STEALING
-		(void *)
+	if (ipn_handle_frame_hook != NULL) 
+		printk (KERN_WARNING "IPN interface GRAB disabled (stealing mode) if bridge is loaded\n");
+	else
 #endif
-		ipn_handle_hook;
+		ipn_handle_frame_hook=
+#ifdef IPN_STEALING
+			(void *)
+#endif
+			ipn_handle_hook;
 
 	return 0;
 }
 
 void ipn_netdev_fini(void)
 {
-	ipn_handle_frame_hook=NULL;
+#ifdef IPN_STEALING
+	/* only if bridge is not working */
+	if (ipn_handle_frame_hook == (void *) ipn_handle_hook)
+#endif
+		ipn_handle_frame_hook=NULL;
 }
