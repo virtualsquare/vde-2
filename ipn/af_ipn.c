@@ -1314,12 +1314,19 @@ int ipn_proto_injectmsg(struct ipn_node *from, struct msgpool_item *msg)
 {
 	struct ipn_network *ipnn=from->ipn;
 	int err=0;
-	if (down_interruptible(&ipnn->ipnn_mutex))
+	static int recinject=0;
+	//printk("INJECTMSG IN\n");
+	if (recinject) 
+		ipn_protocol_table[ipnn->protocol]->ipn_p_handlemsg(from, msg);
+	else if (down_interruptible(&ipnn->ipnn_mutex))
 		err=-ERESTARTSYS;
 	else {
+		recinject=1;
 		ipn_protocol_table[ipnn->protocol]->ipn_p_handlemsg(from, msg);
+		recinject=0;
 		up(&ipnn->ipnn_mutex);
 	}
+	//printk("INJECTMSG OUT %d\n",err);
 	return err;
 }
 
