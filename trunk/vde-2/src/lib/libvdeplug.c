@@ -210,8 +210,6 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	if((conn->fddata = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_ANY)) >= 0) {
 		/* IPN_STOLEN service exists */
 		sockun->sun_family = AF_IPN_STOLEN;
-	}
-	if (conn->fddata >= 0) {
 		if (port != 0 || req->type == REQ_NEW_PORT0)
 			setsockopt(conn->fddata,0,IPN_SO_PORT,&port,sizeof(port));
 		/* If we're given a sockname, just try it */
@@ -242,7 +240,8 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			*(conn->inpath.sun_path)=0; /*null string, do not delete "return path"*/
 			conn->fdctl=-1;
 			goto cleanup;
-		}
+		} else
+			close(conn->fddata);
 	}
 #endif
 	if((conn->fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
