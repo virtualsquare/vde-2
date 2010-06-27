@@ -13,6 +13,8 @@ lib_LTLIBRARIES = \
 	libvdeplug.la \
 	libvdehist.la
 
+# read before touching http://www.gnu.org/software/libtool/manual/libtool.html#Updating-version-info
+
 libvdesnmp_la_LIBADD = $(LIBADD)
 libvdesnmp_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
 
@@ -20,7 +22,7 @@ libvdemgmt_la_LIBADD = $(LIBADD)
 libvdemgmt_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
 
 libvdeplug_la_LIBADD = $(LIBADD)
-libvdeplug_la_LDFLAGS = $(AM_LDFLAGS) -version-number 2:1 -export-dynamic
+libvdeplug_la_LDFLAGS = $(AM_LDFLAGS) -version-number 3:0:1 -export-dynamic
 
 libvdehist_la_LIBADD = $(LIBADD)
 libvdehist_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
