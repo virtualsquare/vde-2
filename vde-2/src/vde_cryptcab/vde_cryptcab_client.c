@@ -188,7 +188,7 @@ static int recv_datagram(struct datagram *pkt, int nfd, struct peer *p1)
 {
 	int pollret;
 	static struct pollfd pfd[2];
-	size_t peerlen;
+	socklen_t peerlen;
 	int datafd;
 	struct timeval now;
 	

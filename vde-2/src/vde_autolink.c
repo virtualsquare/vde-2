@@ -348,7 +348,7 @@ char *strrplc(char **s, char *old, char *new)
 	if ( limit == NULL )
 		return NULL;
 
-	headlen = (int)limit - (int)old_s;
+	headlen = (int)(limit - old_s);
 	diff = newlen - oldlen;
 	taillen = slen  - ( headlen + oldlen );
 
@@ -606,10 +606,10 @@ int alinklinkonoff(int fd, char *arg)
 
 	/* check if we have name and type */
         endname = strstr(arg, " ");
-        namelen = (int)endname - (int)arg;
+        namelen = (int)(endname - arg);
 	if( namelen <= 0 ) return EINVAL;
 
-        vallen = ((int)arg+strlen(arg)) - ((int)endname+1);
+        vallen = (int)(arg+strlen(arg) - (endname+1));
 	if( vallen <= 0 ) return EINVAL;
 	
 	if( sscanf(endname+1, "%i", &value) != 1)
@@ -650,7 +650,7 @@ int alinkdeltypelink(int fd, char *arg)
 
 	/* check if we have name and type */
         endname = strstr(arg, " ");
-        namelen = (int)endname - (int)arg;
+        namelen = (int)(endname - arg);
 	if( namelen <= 0 ) return EINVAL;
 
         typelen = strlen(arg) - namelen -1;
@@ -708,7 +708,7 @@ int alinkaddtypelink(int fd, char *arg)
 
 	/* check if we have name and type */
         endname = strstr(arg, " ");
-        namelen = (int)endname - (int)arg;
+        namelen = (int)(endname - arg);
 	if( namelen <= 0 ) return EINVAL;
 
         typelen = strlen(arg) - namelen -1;
@@ -827,7 +827,7 @@ int alinkaddlink(int fd, char *arg)
 
 	/* check if we have name and remotehost */
         endname = strstr(arg, " ");
-        namelen = (int)endname - (int)arg;
+        namelen = (int)(endname - arg);
 	if( namelen <= 0 ) return EINVAL;
 
         hostlen = strlen(arg) - namelen -1;
@@ -986,7 +986,7 @@ int alinkaddwire(int fd, char* arg)
 
 	/* check if we have type and command */
         char *endtype = strstr(arg, " ");
-        typelen =  (int)endtype - (int)arg;
+        typelen =  (int)(endtype - arg);
 	if( typelen <= 0 ) return EINVAL;
         cmdlen = strlen(arg) - typelen -1;
 	if( cmdlen <= 0 ) return EINVAL;
