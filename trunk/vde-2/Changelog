@@ -1,3 +1,15 @@
+VDE 2.3.0, 2010-05-29
+	* Remove some hardcoded paths and use SYSCONFDIR/LOCALSTATEDIR instead.
+	* [vde_switch] Fix multiple vlan tagging when packetfilter is used.
+	* Build system fixes.
+	* Ship README and patch to add VDE support in VirtualBox (included in
+	  VirtualBox since 3.2.0).
+	* Ship an updated version of slirp taken from QEMU and include VDE support.
+	* [vde_cryptcab] Remove SIGALRM-based timers.
+	* [vde_l3] Fix unicast test (sourceforge: #2726725)
+	* [libvdeplug] Add vdestream abstraction to send/receive bytes (previously in
+	  vde_plug)
+
 VDE 2.2.3, 2009-05-05
 	* [vdeterm] Moved history management in a separate library.
 	* [vde_switch] Console bug fixes.
