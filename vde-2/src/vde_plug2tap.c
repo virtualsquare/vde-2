@@ -272,7 +272,7 @@ int main(int argc, char **argv)
 				break;
 
 			case 'm':
-				sscanf(optarg,"%o",&(open_args.mode));
+				sscanf(optarg,"%o",(unsigned int *)&(open_args.mode));
 				break;
 
 			case 'g':

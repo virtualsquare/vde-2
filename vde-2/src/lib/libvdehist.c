@@ -26,6 +26,8 @@
 #include <poll.h>
 #include <arpa/telnet.h>
 
+#include <vdecommon.h>
+
 #define BUFSIZE 1024
 #define HISTORYSIZE 32
 
