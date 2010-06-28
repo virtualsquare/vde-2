@@ -411,7 +411,7 @@ int main(int argc, char **argv)
 								 break;
 			case 'N' : inet_aton(optarg,&vnameserver);
 								 break;
-			case 'm' : sscanf(optarg,"%o",&(open_args.mode));
+			case 'm' : sscanf(optarg,"%o",(unsigned int *)&(open_args.mode));
 								 break;
 			case 'g' : open_args.group=strdup(optarg);
 								 break;

@@ -346,7 +346,7 @@ int main(int argc, char **argv)
 
     if (argc > 2 && ((strcmp(argv[1],"--mod")==0))
 	    ){
-	sscanf(argv[2],"%o",&mode);
+	sscanf(argv[2],"%o",(unsigned int *)&mode);
 	argv+=2;
 	argc-=2;
     }
