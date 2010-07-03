@@ -1,0 +1,278 @@
+Using VDE with Qemu HOWTO
+by Jim Brown
+5 Oct 2004
+Version 0.2
+
+-----------------------------------------------------------------------------
+
+Introduction
+	Copyright
+	What is qemu?
+	What is VDE?
+
+Configuring and Installing VDE
+	Installation
+	vdeq & vdeqemu
+
+User-mode networking
+	How to enable user-mode networking
+	Firewall configuration
+
+Slirp (rootless) networking
+	What is slirp networking?
+	How to enable slirp networking?
+
+Setting up qemu
+	How to set up the guest OS
+
+Credits
+
+-----------------------------------------------------------------------------
+
+Introduction
+
+Copyright
+
+Copyright (c) 2004 Jim Brown.
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU Free Documentation License, Version 1.2
+or any later version published by the Free Software Foundation;
+with no Invariant Sections, no Front-Cover Texts, and no Back-Cover
+Texts.  A copy of the license is available at http://www.gnu.org/licenses/fdl.txt
+
+What is qemu?
+
+	Qemu is a FAST! processor emulator by Fabrice Bellard, available at
+http://fabrice.bellard.free.fr/qemu/. It is capable of emulationg the x86 and
+PowerPC processors with support for other processors on the way. The original
+purpose of qemu was to allow running x86-specific Linux applications, such as
+WINE or DosEmu, on non-x86 systems. However, qemu has expanded into becoming
+a full-fledged emulator. On the x86 side, it is capable of running Linux,
+MS-DOS, Windows 95/98/Me, Windows NT/2k, Windows XP, Solaris, OpenBSD, and
+FreeBSD. See http://fabrice.bellard.free.fr/qemu/ossupport.html for the full
+listing.
+
+	This howto assumes that you have already installed and set up qemu.
+
+What is VDE?
+
+	VDE is short for Virtual Distributed Ethernet. VDE, written by
+Renzo Davoli, is based off of uml_switch by Jeff Dike. It is available at
+http://sourceforge.net/projects/vde/. It has many uses, the main one providing
+support for networking with emulated computers. (Not just qemu, but support
+for user-mode linux and Bochs also exists). VDE must be set up and installed by
+root, but the programs which use it do not need root privligies.
+
+	This howto will walk you through the simple process of installing
+VDE and setting up qemu to use it.
+
+-----------------------------------------------------------------------------
+
+Configuring and Installing VDE
+
+Installation
+
+	You may obtain the source code at http://sourceforge.net/projects/vde/.
+The version of VDE which I used was 1.4.1, but this HOWTO should apply to all
+versions.
+
+	Once you have downloaded the source code, extract it. I assume you
+will have extracted it to /space/vde. Go into that directory, and simply type
+"make" followed by "make install". Now you should have vde_switch in /usr/bin.
+
+vdeq & vdeqemu
+
+	Now cd into the qemu directory. Type "make". This will build vdeq.
+Qemu on its own only supports full networking with tuntap, which requires
+root priviliges or an exposed /dev/net/tun. There is a -user-net option, but
+that is not as useful as full networking. In order for qemu to use VDE, it must
+be passed the file descriptor for a tun device. Futhermore the tun device itself
+must already be configured to use VDE. vdeq sets this up and passes it to qemu
+via the -tun-fd switch.
+
+	There is no "make install". Instead, you just manually copy vdeq to
+/usr/bin. It might also be helpful to copy or link vdeq to vdeqemu. vdeq
+requires that the location of the qemu binary be passes to it as the first
+command line parameter, but vdeqemu only needs the options you want to pass to
+qemu. vdeqemu will locate the qemu binary itself (this requires that you install
+qemu system-wide or have the qemu directory in your PATH).
+
+For example if you have:
+vdeq qemu -hda /mnt/myimage -m 64 -boot a
+
+you can shorten this into
+
+vdeqemu -hda /mnt/myimage -m 64 -boot a
+
+-----------------------------------------------------------------------------
+
+User-mode Networking
+
+How to enable user-mode networking
+
+	The following commands will need to be run as root:
+
+# vde_switch -tap tap0 -daemon
+
+If you need to run a sniffer, just in case you want to analyze the traffic,
+you can also run it like this:
+
+# vde_switch -hub -tap tap0 -daemon
+
+(The -hub option is not available for version 1.4.1 of VDE, you will need a
+later version. I don't know what the minimal version is but 1.5.1 does support
+this option.)
+
+Then you must run this:
+
+# ifconfig tap0 <ip>
+# chmod 755 /tmp/vde.ctl
+
+	The vde_switch command will run VDE in the background. The -tap tap0
+parameter tells VDE to set up the device tap0 using tuntap. -daemon runs
+vde_switch in the background. -hub tells VDE to broadcast the message to all 
+segment, just like real hub that you use on real network.
+
+	<ip> is the ip address of the gateway you want to use for the guest
+OS(es). For example:
+
+# ifconfig tap0 192.168.254.254
+
+	will make 192.168.254.254 the gateway between guest and host, and your 
+guest OS(es) will belong to the subnet 192.168.254.0 with a netmask of 255.255.255.0 
+and an ip address of 192.168.254.XXX (where you get to pick the XXX). You must have
+the IP of the qemu guest and the IP of the gateway on the same subnet! While it
+may be possible to have them on separate subnets, it will certainly be harder
+to configure (and you won't like the way your routing tables will look either).
+
+[Sidebar: The "gateway" is actually the host OS itself on the tap0 interface.
+The host on the tap0 interface, aka 192.168.254.254, routes between the guest
+OS and the host's eth0 interface (which on is the real network). The host on the
+eth0 interface (ex. 192.168.0.2) can then route between the tap0 interface and
+the real network / the internet.]
+
+(Note that you might be required to do this:
+
+# ifconfig tap0 192.168.254.254 netmask 255.255.255.0
+
+Normally ifconfig should pick the correct netmask for you, but if it doesn't
+for some reason then you will have to specify it manually. See ifconfig(8) for
+details.
+
+)
+
+Note that you must run this before you run your firewall. I found it helpful
+to put this into a script, and have the script load before the firewall does.
+
+Firewall configuration
+
+	You will need to enable masquerading between tap0 and your local area
+network (for example, eth0). You will also need to enable masquerading between
+tap0 and ppp0 if you use a dialup connection to the internet. The commands
+
+# echo "1" > /proc/sys/net/ipv4/ip_forward
+# iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+# iptables -t nat -A POSTROUTING -o ppp0 -j MASQUERADE
+
+	will allow you to enable this manually.
+
+-----------------------------------------------------------------------------
+
+Slirp networking
+
+What is slirp networking?
+
+Slirp was an early program that existed before the masses knew of the internet.
+Back then, those who knew of it could access it only in one way: through a
+Unix shell account (or other such terminal account). This meant that one had to
+do all the things they wanted to in that terminal window. Back then, there were
+two dial up protocols: PPP and SLIP. PPP is now the standard but back then SLIP
+was more common (as it was cheaper).
+
+Slirp was designed to turn those shell accounts into SLIP connections. It worked
+by converting SLIP packets into socket connections. What you had to do was to
+run slirp on the computer you had the shell account on, and then connect your
+SLIP driver/dialer to the terminal slirp was running on (normally this
+'terminal' was in fact a modem). Slirp would then interpret the data that SLIP
+sent and transfer the data between the user's computer and the internet. To
+the user, it looked like they were actually connected directly to the internet
+through a firewall.
+
+Slirp is not used today (to the best of my knowledge) but the innovative idea it
+had is used by both qemu and vde. Instead of converting SLIP packets however,
+they convert ethernet packets. qemu's slirp networking is similar to vde's
+but it is simpler to use and also limited to a single qemu instance (you can
+not link multiple guest OSes together on the same network with slirp networking
+unless you use VDE).
+
+How to enable slirp networking?
+
+This is very similar to TUNTAP networking in the previous section, but the
+commands are slightly different. In addition, you do not need to set up
+routing or firewall rules.
+
+First off, you load vde_switch (no parameters are required for this case,
+although you can pass the -unix parameter if you want to use a different
+socket - required if you already have tuntap networking on the default
+socket).
+
+vde_switch
+
+or
+
+vde_switch -unix /tmp/unx.ctl
+
+The latter is required if you are running both slirp and tuntap or multiple
+slirp networks (for that matter, if you are running multiple tuntap networks).
+More on that later.
+
+Now you need the slirpvde command. slirpvde is the utilitry that provides the
+slirp functionality - it intercepts ethernet packets on the network and
+forwards them through the real network via emulation. To use it, you want
+to do this:
+
+slirpvde -s /tmp/unx.ctl -n 192.168.2.0 -d
+
+The -s tells slirpvde that vde_switch is running on /tmp/unx.ctl [this switch
+can be omitted if you called vde_switch by itself]. The -d switch tells
+slirpvde to emulate a DHCP server. This is not required but it allows for
+automatic configuration of the guest OS (it is basicly the same as qemu's
+builtin DHCP server). Depending on your needs, you may be better off running
+a real DHCP server in one of the guest OSes.
+
+The last option, -n, tells slirpvde
+what subnet the network should be on (this is also used by the DHCP server to
+figure out what ip addresses to assign). The gateway ip when using slirpvde
+is X.X.X.2 (where X.X.X equals the first 3 parts of the subnet you passed to
+it via -n, in this example 192.168.2) and the default DNS server is X.X.X.3
+
+You can not change the gateway ip to something other than .2 and the DNS ip
+to something other than .3 unless you change the source in slirpvde and
+recompile.
+
+-----------------------------------------------------------------------------
+
+Setting up qemu
+
+How to set up the guest OS
+
+	Set up the guest OS so that the default route is through the gateway
+ip, <ip> (for example 192.168.254.254). Also set up the subnet and netmask
+parameters as appropriate (for example 192.168.254.0 and 255.255.255.0).
+The guest OS should see the ethernet device and be able to use it to access
+the gateway. (Caveat: I haven't been able to do this for MS-DOS, and for Minix
+2.0.4 I had to apply a patch to qemu since Minix is broken. Uodate: Minix 2.0.4
+is still broken but a patch has been released to fix it. Using this patch,
+Minix works on a vanilla qemu.) Also don't forget to set up the IP of the guest
+OS itself (for example 192.168.254.1).
+
+-----------------------------------------------------------------------------
+
+Credits
+
+	This HOWTO relied heavily on the documentation that Renzo wrote for
+vde-1.4.1.
+	Thanks to Mulyadi Santosa for helping with the first revision of
+this document, and to Renzo for his input. (P.S. Will add info for ale4net
+and slirpvde as soon as I figure out how to use it ;)
+

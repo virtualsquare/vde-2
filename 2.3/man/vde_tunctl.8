@@ -1,0 +1,53 @@
+.TH "VDE_TUNCTL" "8" 
+.SH "NAME" 
+vde_tunctl \(em create and manage persistent TUN/TAP interfaces 
+.SH "SYNOPSIS" 
+.PP 
+\fBvde_tunctl\fR [\fB-f\fP \fItun-clone-device\fR]  [\fB-u\fP \fIowner\fR]  [\fB-t\fP \fIdevice-name\fR]  
+.PP 
+\fBvde_tunctl\fR [\fB-f\fP \fItun-clone-device\fR] \fB-d\fP \fIdevice-name\fR  
+.SH "DESCRIPTION" 
+.PP 
+\fBvde_tunctl\fR allows the host sysadmin to 
+preconfigure a TUN/TAP device for use by a particular user.  That 
+user may open and use the device, but may not change any aspects 
+of the host side of the interface. 
+.PP
+vde_tunctl is a simple copy of \fBtunctl\fR done for practical purposes.
+.SH "USAGE" 
+.PP 
+To create an interface for use by a particular user, invoke 
+tunctl without the \-d option: 
+.PP 
+.nf 
+# \fBvde_tunctl \-u someuser\fP  
+Set 'tap0' persistent and owned by uid 500 
+ 
+.fi 
+.PP 
+Then, configure the interface as normal: 
+.PP 
+.nf 
+# \fBifconfig tap0 192.168.0.254 up\fP  
+# \fBroute add \-host 192.168.0.253 dev tap0\fP  
+# \fBbash \-c 'echo 1 > /proc/sys/net/ipv4/conf/tap0/proxy_arp'\fP  
+# \fBarp \-Ds 192.168.0.253 eth0 pub\fP        
+.fi 
+.PP 
+To delete the interface, use the \-d option: 
+.PP 
+.nf 
+# \fBvde_tunctl \-d tap0\fP  
+Set 'tap0' nonpersistent 
+ 
+.fi 
+.SH "SEE ALSO" 
+.PP 
+\fBvde_switch\fP(1)
+\fBvde_plug2tap\fP(1)
+.SH "AUTHOR" 
+.PP 
+tunctl was written by Jeff Dike jdike@karaya.com 
+.PP 
+This manual page is based on tunctl manual page written by Matt Zimmerman mdz@debian.org for 
+the \fBDebian GNU/Linux\fP system. 
