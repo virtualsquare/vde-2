@@ -791,6 +791,18 @@ static int portcreate(int val)
 	return 0;
 }
 
+static int portcreateauto(FILE* fd)
+{
+	int port = alloc_port(0);
+
+	if (port < 0)
+		return ENOSPC;
+
+	portv[port]->flag |= NOTINPOOL;
+	printoutc(fd, "Port %04d", port);
+	return 0;
+}
+
 static int epclose(char *arg)
 {
 	int port,id;
@@ -1189,6 +1201,7 @@ static struct comlist cl[]={
 	/*{"port/setmacaddr","MAC","set the switch MAC address",setmacaddr,STRARG},*/
 	{"port/sethub","0/1","1=HUB 0=switch",portsethub,INTARG},
 	{"port/setvlan","N VLAN","set port VLAN (untagged)",portsetvlan,STRARG},
+	{"port/createauto","","create a port with an automatically allocated id (inactive|notallocatable)",portcreateauto,NOARG|WITHFILE},
 	{"port/create","N","create the port N (inactive|notallocatable)",portcreate,INTARG},
 	{"port/remove","N","remove the port N",portremove,INTARG},
 	{"port/allocatable","N 0/1","Is the port allocatable as unnamed? 1=Y 0=N",portallocatable,STRARG},
