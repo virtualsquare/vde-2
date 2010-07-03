@@ -1298,10 +1298,15 @@ static int handle_cmd(int fd,char *inbuf)
 			if (fd>=0 && commandlist[i].type & WITHFILE)
 				printoutc(fd,".");
 		}
-		if (fd >= 0)
-			printoutc(fd,"1%03d %s",rv,strerror(rv));
-		else if (rv != 0)
+		if (fd >= 0) {
+			if (rv == 0) {
+				printoutc(fd,"1000 Success");
+			} else {
+				printoutc(fd,"1%03d %s",rv,strerror(rv));
+			}
+		} else if (rv != 0) {
 			printlog(LOG_ERR,"rc command error: %s %s",cmd,strerror(rv));
+		}
 		return rv;
 	}
 	return rv;
