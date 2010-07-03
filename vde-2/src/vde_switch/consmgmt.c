@@ -307,8 +307,11 @@ static int handle_cmd(int type,int fd,char *inbuf)
 				}
 			}
 		}
-		if (rv >=0)
+		if (rv == 0) {
+			printoutc(f,"1000 Success");
+		} else if (rv > 0) {
 			printoutc(f,"1%03d %s",rv,strerror(rv));
+		}
 		fclose(f);
 		if (fd >= 0)
 			write(fd,outbuf,outbufsize);

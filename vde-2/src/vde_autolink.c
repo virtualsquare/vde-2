@@ -1117,7 +1117,11 @@ static int handle_cmd(int fd,char *inbuf)
 			rv=cl[i].fun(fd,inbuf);
 			printoutc(fd,".");
 		}
-		printoutc(fd,"1%03d %s",rv,strerror(rv));
+		if (rv == 0) {
+			printoutc(fd,"1000 Success");
+		} else {
+			printoutc(fd,"1%03d %s",rv,strerror(rv));
+		}
 		return rv;
 	}
 	return rv;
