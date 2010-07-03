@@ -9,6 +9,8 @@ VDE 2.3.0, 2010-05-29
 	* [vde_l3] Fix unicast test (sourceforge: #2726725)
 	* [libvdeplug] Add vdestream abstraction to send/receive bytes (previously in
 	  vde_plug)
+	* [vde_switch] New command "port/createauto" to create a new port with an
+	  automatically allocated ID
 
 VDE 2.2.3, 2009-05-05
 	* [vdeterm] Moved history management in a separate library.
