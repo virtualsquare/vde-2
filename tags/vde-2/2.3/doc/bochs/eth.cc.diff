@@ -1,0 +1,15 @@
+72a73,75
+> #if HAVE_VDE
+> extern class bx_vde_locator_c bx_vde_match;
+> #endif
+126a130,135
+> #if HAVE_VDE
+>   {
+>     if (!strcmp(type, "vde"))    
+>       ptr = (eth_locator_c *) &bx_vde_match;
+>   }
+> #endif
+152c161
+< #if (HAVE_ETHERTAP==1) || (HAVE_TUNTAP==1)
+---
+> #if (HAVE_ETHERTAP==1) || (HAVE_TUNTAP==1) || (HAVE_VDE==1)

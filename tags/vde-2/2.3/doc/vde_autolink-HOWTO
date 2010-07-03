@@ -1,0 +1,65 @@
+1. (non necessario) usare guessnet o similare per configurare in modo
+   automatico le interfacce di rete
+
+2. lanciare vde_switch (spanning tree ON)
+
+        vde_switch -F -tap tap0 -sock /tmp/test.ctl -M /tmp/test.mgmt
+
+3. lanciare vde_autolink
+	
+	vde_autolink -s /tmp/test.ctl -S /tmp/test.mgmt -M /tmp/test.alink
+
+4. definire il link in vde_autolink
+  (tappo6 e tappo sono due entry di /etc/hosts che ho settato per comodita',
+   ovviamente si possono usare i nomi o gli indirizzi ip)
+
+	addwire SSH dpipe ssh lbigliar@$remotehost vde_plug = vde_plug -p $myport $mysock
+        addlink VDEUNI tappo6 tappo
+        addtypelink VDEUNI SSH
+        linkonoff VDEUNI 1
+
+5. scriptino di esempio che tira su e giu' l'interfaccia del tunnel
+   (necessita superuser)
+
+	#!/bin/sh
+	
+	ALINKMGMT="/tmp/test.alink"
+	QUERYCMD="unixtermcmd"
+	UPTUNN="ifup tap0"
+	DOWNTUNN="ifdown tap0"
+	
+	TUNNEL=0
+	
+	while [ 0 ]
+	do
+		OUTPUT=`$QUERYCMD $ALINKMGMT runninglinks`
+		RET=$?
+		if [ $RET -eq 255 ]; then
+			if [ $TUNNEL -eq 1 ]; then
+				$DOWNTUNN
+			fi
+			exit
+		fi
+		if [ ! $RET -eq 0 ]; then
+			continue
+		fi
+		echo "$OUTPUT" | grep RHOST > /dev/null
+		if [ $? -eq 0 ]; then
+			if [ $TUNNEL -eq 0 ]; then
+				echo ---$UPTUNN---
+				$UPTUNN 2>&1 > /dev/null
+				TUNNEL=1
+			fi
+		else
+			if [ $TUNNEL -eq 1 ]; then
+				echo ---$DOWNTUNN---
+				$DOWNTUNN 2>&1 > /dev/null
+				TUNNEL=0
+			fi
+		fi
+		sleep 30
+	done
+
+
+
+
