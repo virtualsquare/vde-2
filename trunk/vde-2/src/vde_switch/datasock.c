@@ -363,9 +363,17 @@ static int parseopt(int c, char *optarg)
 	struct group *grp;
 	switch (c) {
 		case 's':
-			/* This should return NULL as the path probably does not exist */
-			vde_realpath(optarg, real_ctl_socket);
-			ctl_socket = real_ctl_socket;
+			if (((mkdir(optarg, 0777) < 0) && (errno != EEXIST))) {
+				fprintf(stderr,"Cannot create ctl directory '%s': %s\n",
+					optarg, strerror(errno));
+				exit(1);
+			}
+			ctl_socket = vde_realpath(optarg, real_ctl_socket);
+			if (!ctl_socket) {
+				fprintf(stderr,"Cannot resolve ctl dir path '%s': %s\n",
+					optarg, strerror(errno));
+				exit(1);
+			}
 			break;
 		case 'm':
 			sscanf(optarg,"%o",&mode);
@@ -431,10 +439,8 @@ static void init(void)
 		printlog(LOG_ERR,"Could not set O_NONBLOCK on connection fd %d: %s", connect_fd, strerror(errno));
 		return;
 	}
-	if (((mkdir(ctl_socket, 0777) < 0) && (errno != EEXIST))){
-		printlog(LOG_ERR,"Could not create the VDE ctl directory '%s': %s", ctl_socket, strerror(errno));
-		exit(-1);
-	}
+	/* ctl_socket dir is created while parsing to provide an existing path
+	 * to vde_realpath() */
 	if(chown(ctl_socket,-1,grp_owner) < 0) {
 		rmdir(ctl_socket);
 		printlog(LOG_ERR, "Could not chown socket '%s': %s", sun.sun_path, strerror(errno));
