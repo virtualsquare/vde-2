@@ -787,7 +787,9 @@ static int portcreate(int val)
 	if (portv[val] != NULL)
 		return EEXIST;
 	port=alloc_port(val);
-	if (port > 0) portv[port]->flag |= NOTINPOOL;
+	if (port < 0)
+		return ENOSPC;
+	portv[port]->flag |= NOTINPOOL;
 	return 0;
 }
 
