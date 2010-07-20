@@ -43,8 +43,8 @@ static unsigned int ctl_type;
 static unsigned int wd_type;
 static unsigned int data_type;
 
-static char real_ctl_socket[PATH_MAX];
-static char *ctl_socket = real_ctl_socket;
+static char *rel_ctl_socket = NULL;
+static char ctl_socket[PATH_MAX];
 
 static int mode = -1;
 static int dirmode = -1;
@@ -308,6 +308,10 @@ static void cleanup(unsigned char type,int fd,int arg)
 	int test_fd;
 
 	if (fd < 0) {
+		if (!strlen(ctl_socket)) {
+			/* ctl_socket has not been created yet */
+			return;
+		}
 		if((test_fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
 			printlog(LOG_ERR,"socket %s",strerror(errno));
 		}
@@ -363,15 +367,8 @@ static int parseopt(int c, char *optarg)
 	struct group *grp;
 	switch (c) {
 		case 's':
-			if (((mkdir(optarg, 0777) < 0) && (errno != EEXIST))) {
-				fprintf(stderr,"Cannot create ctl directory '%s': %s\n",
-					optarg, strerror(errno));
-				exit(1);
-			}
-			ctl_socket = vde_realpath(optarg, real_ctl_socket);
-			if (!ctl_socket) {
-				fprintf(stderr,"Cannot resolve ctl dir path '%s': %s\n",
-					optarg, strerror(errno));
+			if (!(rel_ctl_socket = strdup(optarg))) {
+				fprintf(stderr, "Memory error while parsing '%s'\n", optarg);
 				exit(1);
 			}
 			break;
@@ -439,8 +436,21 @@ static void init(void)
 		printlog(LOG_ERR,"Could not set O_NONBLOCK on connection fd %d: %s", connect_fd, strerror(errno));
 		return;
 	}
-	/* ctl_socket dir is created while parsing to provide an existing path
-	 * to vde_realpath() */
+	/* resolve ctl_socket, eventually defaulting to standard paths */
+	if (rel_ctl_socket == NULL) {
+		rel_ctl_socket = (geteuid()==0)?VDESTDSOCK:VDETMPSOCK;
+	}
+	if (((mkdir(rel_ctl_socket, 0777) < 0) && (errno != EEXIST))) {
+		fprintf(stderr,"Cannot create ctl directory '%s': %s\n",
+			rel_ctl_socket, strerror(errno));
+		exit(-1);
+	}
+	if (!vde_realpath(rel_ctl_socket, ctl_socket)) {
+		fprintf(stderr,"Cannot resolve ctl dir path '%s': %s\n",
+			rel_ctl_socket, strerror(errno));
+		exit(1);
+	}
+
 	if(chown(ctl_socket,-1,grp_owner) < 0) {
 		rmdir(ctl_socket);
 		printlog(LOG_ERR, "Could not chown socket '%s': %s", sun.sun_path, strerror(errno));
@@ -498,7 +508,6 @@ static void delep (int fd, void* data, void *descr)
 
 void start_datasock(void)
 {
-	ctl_socket = (geteuid()==0)?VDESTDSOCK:VDETMPSOCK;
 	modfun.modname=swmi.swmname=MODULENAME;
 	swmi.swmnopts=Nlong_options;
 	swmi.swmopts=long_options;
