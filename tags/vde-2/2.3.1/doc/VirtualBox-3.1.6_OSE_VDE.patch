@@ -1,0 +1,1201 @@
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Devices/Builtins.cpp VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Builtins.cpp
+--- VirtualBox-3.1.6_OSE/src/VBox/Devices/Builtins.cpp	2010-03-25 20:55:45.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Builtins.cpp	2010-04-04 10:18:29.000000000 +0200
+@@ -237,6 +237,13 @@
+     if (RT_FAILURE(rc))
+         return rc;
+ #endif
++		/* ENABLE VDE */
++#if defined(RT_OS_LINUX) || defined(RT_OS_FREEBSD)
++    rc = pCallbacks->pfnRegister(pCallbacks, &g_DrvVDE);
++    if (RT_FAILURE(rc))
++        return rc;
++#endif
++		/* /ENABLE VDE */
+     rc = pCallbacks->pfnRegister(pCallbacks, &g_DrvIntNet);
+     if (RT_FAILURE(rc))
+         return rc;
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Devices/Builtins.h VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Builtins.h
+--- VirtualBox-3.1.6_OSE/src/VBox/Devices/Builtins.h	2010-03-25 20:55:45.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Builtins.h	2010-04-04 10:18:29.000000000 +0200
+@@ -106,6 +106,9 @@
+ #if defined(RT_OS_LINUX) || defined(RT_OS_FREEBSD)
+ extern const PDMDRVREG g_DrvHostInterface;
+ #endif
++#if defined(RT_OS_LINUX) || defined(RT_OS_FREEBSD)
++extern const PDMDRVREG g_DrvVDE;
++#endif
+ extern const PDMDRVREG g_DrvIntNet;
+ extern const PDMDRVREG g_DrvNAT;
+ extern const PDMDRVREG g_DrvNetSniffer;
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Devices/Makefile.kmk VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Makefile.kmk
+--- VirtualBox-3.1.6_OSE/src/VBox/Devices/Makefile.kmk	2010-03-25 20:55:47.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Makefile.kmk	2010-04-04 10:18:29.000000000 +0200
+@@ -909,8 +909,10 @@
+ 	Audio/ossaudio.c
+ endif # l4
+ 
++# ENABLE VDE: Network/DrvVDE.cpp added 
+ Drivers_SOURCES.linux = \
+ 	Network/DrvTAP.cpp \
++	Network/DrvVDE.cpp \
+ 	Audio/ossaudio.c \
+ 	Parallel/DrvHostParallel.cpp \
+ 	Serial/DrvHostSerial.cpp
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Devices/Network/DrvVDE.cpp VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Network/DrvVDE.cpp
+--- VirtualBox-3.1.6_OSE/src/VBox/Devices/Network/DrvVDE.cpp	1970-01-01 01:00:00.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Network/DrvVDE.cpp	2010-04-04 10:34:46.000000000 +0200
+@@ -0,0 +1,561 @@
++/** $Id: DrvVDE.cpp $ */
++/** @file
++ * VDE network transport driver.
++ */
++
++/*
++ * Copyright (C) 2010 Renzo Davoli. VirtualSquare. University of Bologna.
++ * Copyright (C) 2006-2007 Sun Microsystems, Inc.
++ *
++ * This file is part of VirtualBox Open Source Edition (OSE), as
++ * available from http://www.virtualbox.org. This file is free software;
++ * you can redistribute it and/or modify it under the terms of the GNU
++ * General Public License (GPL) as published by the Free Software
++ * Foundation, in version 2 as it comes in the "COPYING" file of the
++ * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
++ * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
++ *
++ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa
++ * Clara, CA 95054 USA or visit http://www.sun.com if you need
++ * additional information or have any questions.
++ */
++
++/*******************************************************************************
++*   Header Files                                                               *
++*******************************************************************************/
++#define LOG_GROUP LOG_GROUP_DRV_TUN
++#include <VBox/log.h>
++#include <VBox/pdmdrv.h>
++
++#include <iprt/assert.h>
++#include <iprt/ctype.h>
++#include <iprt/file.h>
++#include <iprt/string.h>
++#include <iprt/path.h>
++#include <iprt/thread.h>
++#include <iprt/asm.h>
++#include <iprt/semaphore.h>
++
++#include <sys/ioctl.h>
++#include <sys/poll.h>
++#include <sys/fcntl.h>
++#include <errno.h>
++#include <unistd.h>
++#include <limits.h>
++
++#include "Builtins.h"
++#include "libvdeplug_dyn.h"
++
++struct vdepluglib	vdeplughdl;
++
++/*******************************************************************************
++*   Structures and Typedefs                                                    *
++*******************************************************************************/
++/**
++ * Block driver instance data.
++ */
++typedef struct DRVVDE
++{
++    /** The network interface. */
++    PDMINETWORKCONNECTOR    INetworkConnector;
++    /** The network interface. */
++    PPDMINETWORKPORT        pPort;
++    /** Pointer to the driver instance. */
++    PPDMDRVINS              pDrvIns;
++    /** VDE device file handle. */
++    RTFILE                  FileDevice;
++    /** The configured VDE device name. */
++    char                   *pszDeviceName;
++    /** VDE setup application. */
++    char                   *pszSetupApplication;
++    /** VDE terminate application. */
++    char                   *pszTerminateApplication;
++    /** The write end of the control pipe. */
++    RTFILE                  PipeWrite;
++    /** The read end of the control pipe. */
++    RTFILE                  PipeRead;
++    /** Reader thread. */
++    PPDMTHREAD              pThread;
++
++		VDECONN                 *vdeconn;
++#ifdef VBOX_WITH_STATISTICS
++    /** Number of sent packets. */
++    STAMCOUNTER             StatPktSent;
++    /** Number of sent bytes. */
++    STAMCOUNTER             StatPktSentBytes;
++    /** Number of received packets. */
++    STAMCOUNTER             StatPktRecv;
++    /** Number of received bytes. */
++    STAMCOUNTER             StatPktRecvBytes;
++    /** Profiling packet transmit runs. */
++    STAMPROFILE             StatTransmit;
++    /** Profiling packet receive runs. */
++    STAMPROFILEADV          StatReceive;
++#endif /* VBOX_WITH_STATISTICS */
++
++#ifdef LOG_ENABLED
++    /** The nano ts of the last transfer. */
++    uint64_t                u64LastTransferTS;
++    /** The nano ts of the last receive. */
++    uint64_t                u64LastReceiveTS;
++#endif
++} DRVVDE, *PDRVVDE;
++
++
++/** Converts a pointer to VDE::INetworkConnector to a PRDVVDE. */
++#define PDMINETWORKCONNECTOR_2_DRVVDE(pInterface) ( (PDRVVDE)((uintptr_t)pInterface - RT_OFFSETOF(DRVVDE, INetworkConnector)) )
++
++
++/*******************************************************************************
++*   Internal Functions                                                         *
++*******************************************************************************/
++
++/**
++ * Send data to the network.
++ *
++ * @returns VBox status code.
++ * @param   pInterface      Pointer to the interface structure containing the called function pointer.
++ * @param   pvBuf           Data to send.
++ * @param   cb              Number of bytes to send.
++ * @thread  EMT
++ */
++static DECLCALLBACK(int) drvVDESend(PPDMINETWORKCONNECTOR pInterface, const void *pvBuf, size_t cb)
++{
++    PDRVVDE pThis = PDMINETWORKCONNECTOR_2_DRVVDE(pInterface);
++    STAM_COUNTER_INC(&pThis->StatPktSent);
++    STAM_COUNTER_ADD(&pThis->StatPktSentBytes, cb);
++    STAM_PROFILE_START(&pThis->StatTransmit, a);
++
++#ifdef LOG_ENABLED
++    uint64_t u64Now = RTTimeProgramNanoTS();
++    LogFlow(("drvVDESend: %-4d bytes at %llu ns  deltas: r=%llu t=%llu\n",
++             cb, u64Now, u64Now - pThis->u64LastReceiveTS, u64Now - pThis->u64LastTransferTS));
++    pThis->u64LastTransferTS = u64Now;
++#endif
++    Log2(("drvVDESend: pvBuf=%p cb=%#x\n"
++          "%.*Rhxd\n",
++          pvBuf, cb, cb, pvBuf));
++
++		int rc = vdeplughdl.vde_send(pThis->vdeconn, pvBuf, cb, 0);
++
++    STAM_PROFILE_STOP(&pThis->StatTransmit, a);
++    AssertRC(rc);
++    return rc;
++}
++
++
++/**
++ * Set promiscuous mode.
++ *
++ * This is called when the promiscuous mode is set. This means that there doesn't have
++ * to be a mode change when it's called.
++ *
++ * @param   pInterface      Pointer to the interface structure containing the called function pointer.
++ * @param   fPromiscuous    Set if the adaptor is now in promiscuous mode. Clear if it is not.
++ * @thread  EMT
++ */
++static DECLCALLBACK(void) drvVDESetPromiscuousMode(PPDMINETWORKCONNECTOR pInterface, bool fPromiscuous)
++{
++    LogFlow(("drvVDESetPromiscuousMode: fPromiscuous=%d\n", fPromiscuous));
++    /* nothing to do */
++}
++
++
++/**
++ * Notification on link status changes.
++ *
++ * @param   pInterface      Pointer to the interface structure containing the called function pointer.
++ * @param   enmLinkState    The new link state.
++ * @thread  EMT
++ */
++static DECLCALLBACK(void) drvVDENotifyLinkChanged(PPDMINETWORKCONNECTOR pInterface, PDMNETWORKLINKSTATE enmLinkState)
++{
++    LogFlow(("drvNATNotifyLinkChanged: enmLinkState=%d\n", enmLinkState));
++    /** @todo take action on link down and up. Stop the polling and such like. */
++}
++
++
++/**
++ * Asynchronous I/O thread for handling receive.
++ *
++ * @returns VINF_SUCCESS (ignored).
++ * @param   Thread          Thread handle.
++ * @param   pvUser          Pointer to a DRVVDE structure.
++ */
++static DECLCALLBACK(int) drvVDEAsyncIoThread(PPDMDRVINS pDrvIns, PPDMTHREAD pThread)
++{
++    PDRVVDE pThis = PDMINS_2_DATA(pDrvIns, PDRVVDE);
++    LogFlow(("drvVDEAsyncIoThread: pThis=%p\n", pThis));
++
++    if (pThread->enmState == PDMTHREADSTATE_INITIALIZING)
++        return VINF_SUCCESS;
++
++    STAM_PROFILE_ADV_START(&pThis->StatReceive, a);
++
++    /*
++     * Polling loop.
++     */
++    while (pThread->enmState == PDMTHREADSTATE_RUNNING)
++    {
++        /*
++         * Wait for something to become available.
++         */
++        struct pollfd aFDs[2];
++        aFDs[0].fd      = vdeplughdl.vde_datafd(pThis->vdeconn);
++        aFDs[0].events  = POLLIN | POLLPRI;
++        aFDs[0].revents = 0;
++        aFDs[1].fd      = pThis->PipeRead;
++        aFDs[1].events  = POLLIN | POLLPRI | POLLERR | POLLHUP;
++        aFDs[1].revents = 0;
++        STAM_PROFILE_ADV_STOP(&pThis->StatReceive, a);
++        errno=0;
++        int rc = poll(&aFDs[0], RT_ELEMENTS(aFDs), -1 /* infinite */);
++
++        /* this might have changed in the meantime */
++        if (pThread->enmState != PDMTHREADSTATE_RUNNING)
++            break;
++
++        STAM_PROFILE_ADV_START(&pThis->StatReceive, a);
++        if (    rc > 0
++            &&  (aFDs[0].revents & (POLLIN | POLLPRI))
++            &&  !aFDs[1].revents)
++        {
++            /*
++             * Read the frame.
++             */
++            char achBuf[16384];
++            ssize_t cbRead = 0;
++						cbRead = vdeplughdl.vde_recv(pThis->vdeconn, achBuf, sizeof(achBuf), 0);
++            if (cbRead >= 0)
++            {
++                /*
++                 * Wait for the device to have space for this frame.
++                 * Most guests use frame-sized receive buffers, hence non-zero cbMax
++                 * automatically means there is enough room for entire frame. Some
++                 * guests (eg. Solaris) use large chains of small receive buffers
++                 * (each 128 or so bytes large). We will still start receiving as soon
++                 * as cbMax is non-zero because:
++                 *  - it would be quite expensive for pfnCanReceive to accurately
++                 *    determine free receive buffer space
++                 *  - if we were waiting for enough free buffers, there is a risk
++                 *    of deadlocking because the guest could be waiting for a receive
++                 *    overflow error to allocate more receive buffers
++                 */
++                STAM_PROFILE_ADV_STOP(&pThis->StatReceive, a);
++                int rc = pThis->pPort->pfnWaitReceiveAvail(pThis->pPort, RT_INDEFINITE_WAIT);
++
++                STAM_PROFILE_ADV_START(&pThis->StatReceive, a);
++
++                /*
++                 * A return code != VINF_SUCCESS means that we were woken up during a VM
++                 * state transistion. Drop the packet and wait for the next one.
++                 */
++                if (RT_FAILURE(rc))
++                    continue;
++
++                /*
++                 * Pass the data up.
++                 */
++#ifdef LOG_ENABLED
++                uint64_t u64Now = RTTimeProgramNanoTS();
++                LogFlow(("drvVDEAsyncIoThread: %-4d bytes at %llu ns  deltas: r=%llu t=%llu\n",
++                         cbRead, u64Now, u64Now - pThis->u64LastReceiveTS, u64Now - pThis->u64LastTransferTS));
++                pThis->u64LastReceiveTS = u64Now;
++#endif
++                Log2(("drvVDEAsyncIoThread: cbRead=%#x\n" "%.*Rhxd\n", cbRead, cbRead, achBuf));
++                STAM_COUNTER_INC(&pThis->StatPktRecv);
++                STAM_COUNTER_ADD(&pThis->StatPktRecvBytes, cbRead);
++                rc = pThis->pPort->pfnReceive(pThis->pPort, achBuf, cbRead);
++                AssertRC(rc);
++            }
++            else
++            {
++                LogFlow(("drvVDEAsyncIoThread: RTFileRead -> %Rrc\n", rc));
++                if (rc == VERR_INVALID_HANDLE)
++                    break;
++                RTThreadYield();
++            }
++        }
++        else if (   rc > 0
++                 && aFDs[1].revents)
++        {
++            LogFlow(("drvVDEAsyncIoThread: Control message: enmState=%d revents=%#x\n", pThread->enmState, aFDs[1].revents));
++            if (aFDs[1].revents & (POLLHUP | POLLERR | POLLNVAL))
++                break;
++
++            /* drain the pipe */
++            char ch;
++            size_t cbRead;
++            RTFileRead(pThis->PipeRead, &ch, 1, &cbRead);
++        }
++        else
++        {
++            /*
++             * poll() failed for some reason. Yield to avoid eating too much CPU.
++             *
++             * EINTR errors have been seen frequently. They should be harmless, even
++             * if they are not supposed to occur in our setup.
++             */
++            if (errno == EINTR)
++                Log(("rc=%d revents=%#x,%#x errno=%p %s\n", rc, aFDs[0].revents, aFDs[1].revents, errno, strerror(errno)));
++            else
++                AssertMsgFailed(("rc=%d revents=%#x,%#x errno=%p %s\n", rc, aFDs[0].revents, aFDs[1].revents, errno, strerror(errno)));
++            RTThreadYield();
++        }
++    }
++
++
++    LogFlow(("drvVDEAsyncIoThread: returns %Rrc\n", VINF_SUCCESS));
++    STAM_PROFILE_ADV_STOP(&pThis->StatReceive, a);
++    return VINF_SUCCESS;
++}
++
++
++/**
++ * Unblock the send thread so it can respond to a state change.
++ *
++ * @returns VBox status code.
++ * @param   pDevIns     The pcnet device instance.
++ * @param   pThread     The send thread.
++ */
++static DECLCALLBACK(int) drvVDEAsyncIoWakeup(PPDMDRVINS pDrvIns, PPDMTHREAD pThread)
++{
++    PDRVVDE pThis = PDMINS_2_DATA(pDrvIns, PDRVVDE);
++
++    int rc = RTFileWrite(pThis->PipeWrite, "", 1, NULL);
++    AssertRC(rc);
++
++    return VINF_SUCCESS;
++}
++
++
++/**
++ * Queries an interface to the driver.
++ *
++ * @returns Pointer to interface.
++ * @returns NULL if the interface was not supported by the driver.
++ * @param   pInterface          Pointer to this interface structure.
++ * @param   enmInterface        The requested interface identification.
++ * @thread  Any thread.
++ */
++static DECLCALLBACK(void *) drvVDEQueryInterface(PPDMIBASE pInterface, PDMINTERFACE enmInterface)
++{
++    PPDMDRVINS pDrvIns = PDMIBASE_2_PDMDRV(pInterface);
++    PDRVVDE pThis = PDMINS_2_DATA(pDrvIns, PDRVVDE);
++    switch (enmInterface)
++    {
++        case PDMINTERFACE_BASE:
++            return &pDrvIns->IBase;
++        case PDMINTERFACE_NETWORK_CONNECTOR:
++            return &pThis->INetworkConnector;
++        default:
++            return NULL;
++    }
++}
++
++
++/**
++ * Destruct a driver instance.
++ *
++ * Most VM resources are freed by the VM. This callback is provided so that any non-VM
++ * resources can be freed correctly.
++ *
++ * @param   pDrvIns     The driver instance data.
++ */
++static DECLCALLBACK(void) drvVDEDestruct(PPDMDRVINS pDrvIns)
++{
++    LogFlow(("drvVDEDestruct\n"));
++    PDRVVDE pThis = PDMINS_2_DATA(pDrvIns, PDRVVDE);
++
++    /*
++     * Terminate the control pipe.
++     */
++    if (pThis->PipeWrite != NIL_RTFILE)
++    {
++        int rc = RTFileClose(pThis->PipeWrite);
++        AssertRC(rc);
++        pThis->PipeWrite = NIL_RTFILE;
++    }
++    if (pThis->PipeRead != NIL_RTFILE)
++    {
++        int rc = RTFileClose(pThis->PipeRead);
++        AssertRC(rc);
++        pThis->PipeRead = NIL_RTFILE;
++    }
++
++    MMR3HeapFree(pThis->pszDeviceName);
++    MMR3HeapFree(pThis->pszSetupApplication);
++    MMR3HeapFree(pThis->pszTerminateApplication);
++
++#ifdef VBOX_WITH_STATISTICS
++    /*
++     * Deregister statistics.
++     */
++    PDMDrvHlpSTAMDeregister(pDrvIns, &pThis->StatPktSent);
++    PDMDrvHlpSTAMDeregister(pDrvIns, &pThis->StatPktSentBytes);
++    PDMDrvHlpSTAMDeregister(pDrvIns, &pThis->StatPktRecv);
++    PDMDrvHlpSTAMDeregister(pDrvIns, &pThis->StatPktRecvBytes);
++    PDMDrvHlpSTAMDeregister(pDrvIns, &pThis->StatTransmit);
++    PDMDrvHlpSTAMDeregister(pDrvIns, &pThis->StatReceive);
++#endif /* VBOX_WITH_STATISTICS */
++}
++
++
++/**
++ * Construct a VDE network transport driver instance.
++ *
++ * @copydoc FNPDMDRVCONSTRUCT
++ */
++static DECLCALLBACK(int) drvVDEConstruct(PPDMDRVINS pDrvIns, PCFGMNODE pCfgHandle, uint32_t fFlags)
++{
++    PDRVVDE pThis = PDMINS_2_DATA(pDrvIns, PDRVVDE);
++
++    /*
++     * Init the static parts.
++     */
++    pThis->pDrvIns                      = pDrvIns;
++    pThis->pszDeviceName                = NULL;
++    pThis->pszSetupApplication          = NULL;
++    pThis->pszTerminateApplication      = NULL;
++
++    /* IBase */
++    pDrvIns->IBase.pfnQueryInterface    = drvVDEQueryInterface;
++    /* INetwork */
++    pThis->INetworkConnector.pfnSend                = drvVDESend;
++    pThis->INetworkConnector.pfnSetPromiscuousMode  = drvVDESetPromiscuousMode;
++    pThis->INetworkConnector.pfnNotifyLinkChanged   = drvVDENotifyLinkChanged;
++
++		if (!CFGMR3AreValuesValid(pCfgHandle,
++					"Network\0"
++					"Trunk\0"
++					"TrunkType\0"
++					"ReceiveBufferSize\0"
++					"SendBufferSize\0"
++					"RestrictAccess\0"
++					"SharedMacOnWire\0"
++					"IgnoreAllPromisc\0"
++					"QuietlyIgnoreAllPromisc\0"
++					"IgnoreClientPromisc\0"
++					"QuietlyIgnoreClientPromisc\0"
++					"IgnoreTrunkWirePromisc\0"
++					"QuietlyIgnoreTrunkWirePromisc\0"
++					"IgnoreTrunkHostPromisc\0"
++					"QuietlyIgnoreTrunkHostPromisc\0"
++					"IsService\0"))
++			return VERR_PDM_DRVINS_UNKNOWN_CFG_VALUES;
++
++		/*
++		 * Query the network port interface.
++		 */
++		pThis->pPort = (PPDMINETWORKPORT)pDrvIns->pUpBase->pfnQueryInterface(pDrvIns->pUpBase, PDMINTERFACE_NETWORK_PORT);
++		if (!pThis->pPort)
++		{
++			AssertMsgFailed(("Configuration error: the above device/driver didn't export the network port interface!\n"));
++			return VERR_PDM_MISSING_INTERFACE_ABOVE;
++		}
++
++		char szNetwork[PATH_MAX]; /* PATH_MAX */
++		int rc = CFGMR3QueryString(pCfgHandle, "Network", szNetwork, sizeof(szNetwork));
++		if (RT_FAILURE(rc))
++			*szNetwork=0;
++
++		/* LogRel(("VDEXXXXXX %s\n",szNetwork));*/
++
++    /*
++     * Read the configuration.
++     */
++		if (vdeplughdl.dl_handle == NULL)
++			libvdeplug_dynopen(vdeplughdl);
++		if (vdeplughdl.dl_handle == NULL) {
++			return PDMDrvHlpVMSetError(pThis->pDrvIns, VERR_PDM_HIF_OPEN_FAILED, RT_SRC_POS,
++				                                   N_("VDEplug library: not found"));
++		}
++		pThis->vdeconn=vdeplughdl.vde_open(szNetwork,"VirtualBOX",NULL);
++		if (pThis->vdeconn == NULL) {
++			return PDMDrvHlpVMSetError(pThis->pDrvIns, VERR_PDM_HIF_OPEN_FAILED, RT_SRC_POS,
++				                                   N_("Failed to connect to the VDE SWITCH"));
++		}
++
++
++    rc = VINF_SUCCESS;
++
++    /*
++     * Create the control pipe.
++     */
++    int fds[2];
++    if (pipe(&fds[0]) != 0) /** @todo RTPipeCreate() or something... */
++    {
++        int rc = RTErrConvertFromErrno(errno);
++        AssertRC(rc);
++        return rc;
++    }
++    pThis->PipeRead = fds[0];
++    pThis->PipeWrite = fds[1];
++
++    /*
++     * Create the async I/O thread.
++     */
++    rc = PDMDrvHlpPDMThreadCreate(pDrvIns, &pThis->pThread, pThis, drvVDEAsyncIoThread, drvVDEAsyncIoWakeup, 128 * _1K, RTTHREADTYPE_IO, "VDE");
++    AssertRCReturn(rc, rc);
++
++#ifdef VBOX_WITH_STATISTICS
++    /*
++     * Statistics.
++     */
++    PDMDrvHlpSTAMRegisterF(pDrvIns, &pThis->StatPktSent,       STAMTYPE_COUNTER, STAMVISIBILITY_ALWAYS, STAMUNIT_OCCURENCES,        "Number of sent packets.",          "/Drivers/VDE%d/Packets/Sent", pDrvIns->iInstance);
++    PDMDrvHlpSTAMRegisterF(pDrvIns, &pThis->StatPktSentBytes,  STAMTYPE_COUNTER, STAMVISIBILITY_ALWAYS, STAMUNIT_BYTES,             "Number of sent bytes.",            "/Drivers/VDE%d/Bytes/Sent", pDrvIns->iInstance);
++    PDMDrvHlpSTAMRegisterF(pDrvIns, &pThis->StatPktRecv,       STAMTYPE_COUNTER, STAMVISIBILITY_ALWAYS, STAMUNIT_OCCURENCES,        "Number of received packets.",      "/Drivers/VDE%d/Packets/Received", pDrvIns->iInstance);
++    PDMDrvHlpSTAMRegisterF(pDrvIns, &pThis->StatPktRecvBytes,  STAMTYPE_COUNTER, STAMVISIBILITY_ALWAYS, STAMUNIT_BYTES,             "Number of received bytes.",        "/Drivers/VDE%d/Bytes/Received", pDrvIns->iInstance);
++    PDMDrvHlpSTAMRegisterF(pDrvIns, &pThis->StatTransmit,      STAMTYPE_PROFILE, STAMVISIBILITY_ALWAYS, STAMUNIT_TICKS_PER_CALL,    "Profiling packet transmit runs.",  "/Drivers/VDE%d/Transmit", pDrvIns->iInstance);
++    PDMDrvHlpSTAMRegisterF(pDrvIns, &pThis->StatReceive,       STAMTYPE_PROFILE, STAMVISIBILITY_ALWAYS, STAMUNIT_TICKS_PER_CALL,    "Profiling packet receive runs.",   "/Drivers/VDE%d/Receive", pDrvIns->iInstance);
++#endif /* VBOX_WITH_STATISTICS */
++
++    return rc;
++}
++
++
++/**
++ * VDE network transport driver registration record.
++ */
++const PDMDRVREG g_DrvVDE =
++{
++    /* u32Version */
++    PDM_DRVREG_VERSION,
++    /* szDriverName */
++    "VDE",
++    /* pszDescription */
++    "VDE Network Transport Driver",
++    /* fFlags */
++    PDM_DRVREG_FLAGS_HOST_BITS_DEFAULT,
++    /* fClass. */
++    PDM_DRVREG_CLASS_NETWORK,
++    /* cMaxInstances */
++    ~0,
++    /* cbInstance */
++    sizeof(DRVVDE),
++    /* pfnConstruct */
++    drvVDEConstruct,
++    /* pfnDestruct */
++    drvVDEDestruct,
++    /* pfnIOCtl */
++    NULL,
++    /* pfnPowerOn */
++    NULL,
++    /* pfnReset */
++    NULL,
++    /* pfnSuspend */
++    NULL, /** @todo Do power on, suspend and resume handlers! */
++    /* pfnResume */
++    NULL,
++    /* pfnAttach */
++    NULL,
++    /* pfnDetach */
++    NULL,
++    /* pfnPowerOff */
++    NULL,
++    /* pfnSoftReset */
++    NULL,
++    /* u32EndVersion */
++    PDM_DRVREG_VERSION
++};
++
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Devices/Network/libvdeplug_dyn.h VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Network/libvdeplug_dyn.h
+--- VirtualBox-3.1.6_OSE/src/VBox/Devices/Network/libvdeplug_dyn.h	1970-01-01 01:00:00.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Devices/Network/libvdeplug_dyn.h	2010-04-04 10:34:54.000000000 +0200
+@@ -0,0 +1,119 @@
++/*
++ * libvdeplug - A library to connect to a VDE Switch.
++ * dynamic loading version (requires libdl).
++ *
++ * Copyright (C) 2006,2007,2010 Renzo Davoli, University of Bologna
++ *
++ * This library is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation version 2.1 of the License, or (at
++ * your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
++ * General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301, USA
++ */
++
++/* Use this include file when you need to write an application that can
++ * benefit from vde when available. 
++ * Linking libvdeplug to your programs you force your application users
++ * to have the library installed (otherway the dynamic linker complies
++ * and the program does not start).
++ *
++ * 
++ * usage:
++ * define a struct vdepluglib variable;
++ * eg:
++ *         struct vdepluglib vdeplug;
++ *
++ * test the availability of the library and load it:
++ *
++ *         libvdeplug_dynopen(vdeplug);
++ * if vdeplug.dl_handle is not NULL the library is ready otherwise it is
++ * not available in the target system.
++ *
++ * if libvdeplug does exist the library function can be called
++ * in this way:
++ *         vdeplug.vde_open(....)
++ *         vdeplug.vde_read(....)
++ *         vdeplug.vde_open(....)
++ *         vdeplug.vde_recv(....)
++ *         vdeplug.vde_send(....)
++ *         vdeplug.vde_datafd(....)
++ *         vdeplug.vde_ctlfd(....)
++ *         vdeplug.vde_close(....)
++ * libvdeplug_dynclose(vdeplug) can be used to deallocate the dynamic library
++ * when needed.
++ *************************************************/
++
++#ifndef _VDEDYNLIB_H
++#define _VDEDYNLIB_H
++#include <sys/types.h>
++#include <dlfcn.h>
++#define LIBVDEPLUG_INTERFACE_VERSION 1
++
++struct vdeconn;
++
++typedef struct vdeconn VDECONN;
++
++/* Open a VDE connection.
++ * vde_open_options:
++ *   port: connect to a specific port of the switch (0=any)
++ *   group: change the ownership of the communication port to a specific group
++ *        (NULL=no change)
++ *   mode: set communication port mode (if 0 standard socket mode applies)
++ */
++struct vde_open_args {
++	int port;
++	char *group;
++	mode_t mode;
++};
++	
++/* vde_open args:
++ *   vde_switch: switch id (path)
++ *   descr: description (it will appear in the port description on the switch)
++ */
++#define vde_open(vde_switch,descr,open_args) \
++	vde_open_real((vde_switch),(descr),LIBVDEPLUG_INTERFACE_VERSION,(open_args))
++
++struct vdepluglib {
++	void *dl_handle;
++	VDECONN * (*vde_open_real)(const char *vde_switch,char *descr,int interface_version, struct vde_open_args *open_args);
++	size_t (* vde_recv)(VDECONN *conn,void *buf,size_t len,int flags);
++	size_t (* vde_send)(VDECONN *conn,const void *buf,size_t len,int flags);
++	int (* vde_datafd)(VDECONN *conn);
++	int (* vde_ctlfd)(VDECONN *conn);
++	int (* vde_close)(VDECONN *conn);
++};
++
++typedef VDECONN * (* VDE_OPEN_REAL_T)(const char *vde_switch,char *descr,int interface_version, struct vde_open_args *open_args);
++typedef size_t (* VDE_RECV_T)(VDECONN *conn,void *buf,size_t len,int flags);
++typedef size_t (* VDE_SEND_T)(VDECONN *conn,const void *buf,size_t len,int flags);
++typedef int (* VDE_INT_FUN)(VDECONN *conn);
++#define libvdeplug_dynopen(x) do { \
++	(x).dl_handle=dlopen("libvdeplug.so",RTLD_NOW); \
++	if ((x).dl_handle) { \
++		(x).vde_open_real=(VDE_OPEN_REAL_T) dlsym((x).dl_handle,"vde_open_real"); \
++		(x).vde_recv=(VDE_RECV_T) dlsym((x).dl_handle,"vde_recv"); \
++		(x).vde_send=(VDE_SEND_T) dlsym((x).dl_handle,"vde_send"); \
++		(x).vde_datafd=(VDE_INT_FUN) dlsym((x).dl_handle,"vde_datafd"); \
++		(x).vde_ctlfd=(VDE_INT_FUN) dlsym((x).dl_handle,"vde_ctlfd"); \
++		(x).vde_close=(VDE_INT_FUN) dlsym((x).dl_handle,"vde_close"); \
++		} else { \
++		(x).vde_open_real=NULL; \
++		(x).vde_send= NULL; \
++		(x).vde_recv= NULL; \
++		(x).vde_datafd= (x).vde_ctlfd= (x).vde_close= NULL; \
++		}\
++		} while (0)
++
++#define libvdeplug_dynclose(x) do { \
++		dlclose((x).dl_handle); \
++		} while (0)
++
++#endif
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Frontends/VirtualBox/src/globals/VBoxGlobal.cpp VirtualBox-3.1.6_OSE_VDE/src/VBox/Frontends/VirtualBox/src/globals/VBoxGlobal.cpp
+--- VirtualBox-3.1.6_OSE/src/VBox/Frontends/VirtualBox/src/globals/VBoxGlobal.cpp	2010-03-25 20:56:15.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Frontends/VirtualBox/src/globals/VBoxGlobal.cpp	2010-04-04 10:18:34.000000000 +0200
+@@ -1849,6 +1849,11 @@
+                 else if (type == KNetworkAttachmentType_HostOnly)
+                     attType = attType.arg (tr ("Host-only adapter, '%1'",
+                         "details report (network)").arg (adapter.GetHostInterface()));
++								/* ENABLE VDE */
++                else if (type == KNetworkAttachmentType_VDE)
++                    attType = attType.arg (tr ("VDE network, '%1'",
++                        "details report (network)").arg (adapter.GetVDENetwork()));
++								/* /ENABLE VDE */
+                 else
+                     attType = attType.arg (vboxGlobal().toString (type));
+ 
+@@ -2796,6 +2801,10 @@
+         tr ("Internal Network", "NetworkAttachmentType");
+     mNetworkAttachmentTypes [KNetworkAttachmentType_HostOnly] =
+         tr ("Host-only Adapter", "NetworkAttachmentType");
++		/* ENABLE VDE */
++    mNetworkAttachmentTypes [KNetworkAttachmentType_VDE] =
++        tr ("VDE Adapter", "NetworkAttachmentType");
++		/* /ENABLE VDE */
+ 
+     mClipboardTypes [KClipboardMode_Disabled] =
+         tr ("Disabled", "ClipboardType");
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.cpp VirtualBox-3.1.6_OSE_VDE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.cpp
+--- VirtualBox-3.1.6_OSE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.cpp	2010-03-25 20:56:16.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.cpp	2010-04-04 10:18:34.000000000 +0200
+@@ -103,6 +103,12 @@
+             mHoiName = mAdapter.GetHostInterface();
+             if (mHoiName.isEmpty()) mHoiName = QString::null;
+             break;
++						/* ENABLE VDE */
++        case KNetworkAttachmentType_VDE:
++            mVDEName = mAdapter.GetVDENetwork();
++            if (mVDEName.isEmpty()) mVDEName = QString::null;
++            break;
++						/* /ENABLE VDE */
+         default:
+             break;
+     }
+@@ -143,6 +149,12 @@
+             mAdapter.SetHostInterface (alternativeName());
+             mAdapter.AttachToHostOnlyInterface();
+             break;
++						/* ENABLE VDE */
++				case KNetworkAttachmentType_VDE:
++						mAdapter.SetVDENetwork (alternativeName());
++						mAdapter.AttachToVDE();
++						break;
++						/* /ENABLE VDE */
+         default:
+             break;
+     }
+@@ -255,6 +267,11 @@
+         case KNetworkAttachmentType_HostOnly:
+             result = mHoiName;
+             break;
++						/* ENABLE VDE*/
++        case KNetworkAttachmentType_VDE:
++            result = mVDEName;
++            break;
++						/* /ENABLE VDE*/
+         default:
+             break;
+     }
+@@ -331,6 +348,13 @@
+             mCbAdapterName->insertItems (0, mParent->hoiList());
+             mCbAdapterName->setEditable (false);
+             break;
++						/* ENABLE VDE */
++        case KNetworkAttachmentType_VDE:
++						mCbAdapterName->insertItem(0, alternativeName());
++            mCbAdapterName->setEditable (true);
++            mCbAdapterName->setCompleter (0);
++            break;
++						/* /ENABLE VDE */
+         default:
+             break;
+     }
+@@ -430,6 +454,20 @@
+                 mHoiName = newName;
+             break;
+         }
++				/* ENABLE VDE */
++        case KNetworkAttachmentType_VDE:
++        {
++            QString newName ((mCbAdapterName->itemData (mCbAdapterName->currentIndex()).toString() ==
++                              QString (emptyItemCode) &&
++                              mCbAdapterName->currentText() ==
++                              mCbAdapterName->itemText (mCbAdapterName->currentIndex())) ||
++                              mCbAdapterName->currentText().isEmpty() ?
++                              QString::null : mCbAdapterName->currentText());
++            if (mVDEName != newName)
++                mVDEName = newName;
++            break;
++        }
++				/* /ENABLE VDE */
+         default:
+             break;
+     }
+@@ -546,6 +584,14 @@
+         KNetworkAttachmentType_HostOnly);
+     mCbAttachmentType->setItemData (4,
+         mCbAttachmentType->itemText (4), Qt::ToolTipRole);
++		/* ENABLE VDE */
++    mCbAttachmentType->insertItem (5,
++        vboxGlobal().toString (KNetworkAttachmentType_VDE));
++    mCbAttachmentType->setItemData (5,
++        KNetworkAttachmentType_VDE);
++    mCbAttachmentType->setItemData (5,
++        mCbAttachmentType->itemText (5), Qt::ToolTipRole);
++		/* /ENABLE VDE */
+ 
+     /* Set the old value */
+     mCbAttachmentType->setCurrentIndex (currentAttachment);
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.h VirtualBox-3.1.6_OSE_VDE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.h
+--- VirtualBox-3.1.6_OSE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.h	2010-03-25 20:56:16.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.h	2010-04-04 10:18:34.000000000 +0200
+@@ -76,6 +76,9 @@
+     QString mBrgName;
+     QString mIntName;
+     QString mHoiName;
++		/* ENABLE VDE */
++    QString mVDEName;
++		/* /ENABLE VDE */
+ 
+     bool mPolished;
+     bool mDisableStaticControls;
+@@ -92,6 +95,7 @@
+     QStringList brgList (bool aRefresh = false);
+     QStringList intList (bool aRefresh = false);
+     QStringList hoiList (bool aRefresh = false);
++    QStringList vdeList (bool aRefresh = false);
+ 
+ protected:
+ 
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.ui VirtualBox-3.1.6_OSE_VDE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.ui
+--- VirtualBox-3.1.6_OSE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.ui	2010-03-25 20:56:16.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Frontends/VirtualBox/src/settings/vm/VBoxVMSettingsNetwork.ui	2010-04-04 10:18:34.000000000 +0200
+@@ -110,7 +110,7 @@
+          </sizepolicy>
+         </property>
+         <property name="whatsThis" >
+-         <string>Selects the name of the network adapter for &lt;b&gt;Bridged Adapter&lt;/b&gt; or &lt;b&gt;Host-only Adapter&lt;/b&gt; attachments and the name of the network &lt;b&gt;Internal Network&lt;/b&gt; attachments.</string>
++         <string>Selects the name of the network adapter for &lt;b&gt;Bridged Adapter&lt;/b&gt; or &lt;b&gt;Host-only Adapter&lt;/b&gt; attachments and the name of the network &lt;b&gt;Internal Network&lt;/b&gt; or the switch for &lt;b&gt;VDE&lt;/b&gt; attachments.</string>
+         </property>
+        </widget>
+       </item>
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Main/cbinding/VBoxCAPI_v3_0.h VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/cbinding/VBoxCAPI_v3_0.h
+--- VirtualBox-3.1.6_OSE/src/VBox/Main/cbinding/VBoxCAPI_v3_0.h	2010-03-25 20:56:39.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/cbinding/VBoxCAPI_v3_0.h	2010-04-04 10:18:33.000000000 +0200
+@@ -1657,6 +1657,7 @@
+     NetworkAttachmentType_Bridged = 2,
+     NetworkAttachmentType_Internal = 3,
+     NetworkAttachmentType_HostOnly = 4
++    NetworkAttachmentType_VDE = 5
+ };
+ /* End of enum NetworkAttachmentType Declaration */
+ 
+@@ -4500,6 +4501,11 @@
+     nsresult (*GetNATNetwork)(INetworkAdapter *pThis, PRUnichar * *NATNetwork);
+     nsresult (*SetNATNetwork)(INetworkAdapter *pThis, PRUnichar * NATNetwork);
+ 
++		/* ENABLE VDE */
++    nsresult (*GetVDENetwork)(INetworkAdapter *pThis, PRUnichar * *NATNetwork);
++    nsresult (*SetVDENetwork)(INetworkAdapter *pThis, PRUnichar * NATNetwork);
++		/* /ENABLE VDE */
++
+     nsresult (*GetCableConnected)(INetworkAdapter *pThis, PRBool *cableConnected);
+     nsresult (*SetCableConnected)(INetworkAdapter *pThis, PRBool cableConnected);
+ 
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Main/ConsoleImpl2.cpp VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/ConsoleImpl2.cpp
+--- VirtualBox-3.1.6_OSE/src/VBox/Main/ConsoleImpl2.cpp	2010-03-25 20:56:37.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/ConsoleImpl2.cpp	2010-04-04 10:18:32.000000000 +0200
+@@ -2798,6 +2798,29 @@
+             break;
+         }
+ 
++				/* ENABLE VDE */
++        case NetworkAttachmentType_VDE:
++        {
++            hrc = aNetworkAdapter->COMGETTER(VDENetwork)(&str);    H();
++#if 0
++						if (str) {
++							Utf8Str strUtf8 = str;
++							LogRel(("VDE Network %s\n",(char *)strUtf8.raw()));
++						}
++#endif
++						rc = CFGMR3InsertNode(pInst, "LUN#0", &pLunL0); RC_CHECK();
++						rc = CFGMR3InsertString(pLunL0, "Driver", "VDE");    RC_CHECK();
++						rc = CFGMR3InsertNode(pLunL0, "Config", &pCfg);         RC_CHECK();
++            if (str && *str) {
++                rc = CFGMR3InsertStringW(pCfg, "Network", str);         RC_CHECK();
++								networkName = str;
++						}
++						rc = CFGMR3InsertInteger(pCfg, "TrunkType", kIntNetTrunkType_WhateverNone); RC_CHECK();
++						STR_FREE();
++            break;
++				}
++				/* /ENABLE VDE */
++
+         default:
+             AssertMsgFailed(("should not get here!\n"));
+             break;
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Main/idl/VirtualBox.xidl VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/idl/VirtualBox.xidl
+--- VirtualBox-3.1.6_OSE/src/VBox/Main/idl/VirtualBox.xidl	2010-03-25 20:56:40.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/idl/VirtualBox.xidl	2010-04-04 10:18:33.000000000 +0200
+@@ -11240,6 +11240,9 @@
+     <const name="Bridged"               value="2"/>
+     <const name="Internal"              value="3"/>
+     <const name="HostOnly"              value="4"/>
++		<!-- ENABLE VDE -->
++    <const name="VDE"                   value="5"/>
++		<!-- /ENABLE VDE -->
+   </enum>
+ 
+   <enum
+@@ -11342,6 +11345,14 @@
+       </desc>
+     </attribute>
+ 
++		<!-- ENABLE VDE -->
++    <attribute name="VDENetwork" type="wstring">
++      <desc>
++        Name of the VDE switch the VM is attached to.
++      </desc>
++    </attribute>
++		<!-- /ENABLE VDE -->
++
+     <attribute name="cableConnected" type="boolean">
+       <desc>
+         Flag whether the adapter reports the cable as connected or not.
+@@ -11393,6 +11404,14 @@
+       </desc>
+     </method>
+ 
++		<!-- ENABLE VDE -->
++    <method name="attachToVDE">
++      <desc>
++        Attach the network adapter to a VDE network.
++      </desc>
++    </method>
++		<!-- /ENABLE VDE -->
++
+     <method name="detach">
+       <desc>
+         Detach the network adapter
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Main/include/NetworkAdapterImpl.h VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/include/NetworkAdapterImpl.h
+--- VirtualBox-3.1.6_OSE/src/VBox/Main/include/NetworkAdapterImpl.h	2010-03-25 20:56:41.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/include/NetworkAdapterImpl.h	2010-04-04 10:18:33.000000000 +0200
+@@ -49,6 +49,9 @@
+                  mCableConnected(TRUE), mLineSpeed(0), mTraceEnabled(FALSE),
+                  mHostInterface("") /* cannot be null */,
+                  mNATNetwork("") /* cannot be null */
++								 /* ENABLE VDE */
++                 , mVDENetwork("") /* can be null */
++								 /* /ENABLE VDE */
+         {}
+ 
+         bool operator== (const Data &that) const
+@@ -63,6 +66,9 @@
+                     mTraceEnabled == that.mTraceEnabled &&
+                     mHostInterface == that.mHostInterface &&
+                     mInternalNetwork == that.mInternalNetwork &&
++								 /* ENABLE VDE */
++										mVDENetwork == that.mVDENetwork &&
++								 /* /ENABLE VDE */
+                     mNATNetwork == that.mNATNetwork);
+         }
+ 
+@@ -78,6 +84,9 @@
+         Bstr mHostInterface;
+         Bstr mInternalNetwork;
+         Bstr mNATNetwork;
++				/* ENABLE VDE */
++				Bstr mVDENetwork;
++				/* /ENABLE VDE */
+     };
+ 
+     VIRTUALBOXBASE_ADD_ERRORINFO_SUPPORT (NetworkAdapter)
+@@ -118,6 +127,10 @@
+     STDMETHOD(COMSETTER(InternalNetwork)) (IN_BSTR aInternalNetwork);
+     STDMETHOD(COMGETTER(NATNetwork)) (BSTR *aNATNetwork);
+     STDMETHOD(COMSETTER(NATNetwork)) (IN_BSTR aNATNetwork);
++		/* ENABLE VDE */
++    STDMETHOD(COMGETTER(VDENetwork)) (BSTR *aVDENetwork);
++    STDMETHOD(COMSETTER(VDENetwork)) (IN_BSTR aVDENetwork);
++		/* /ENABLE VDE */
+     STDMETHOD(COMGETTER(CableConnected)) (BOOL *aConnected);
+     STDMETHOD(COMSETTER(CableConnected)) (BOOL aConnected);
+     STDMETHOD(COMGETTER(TraceEnabled)) (BOOL *aEnabled);
+@@ -132,6 +145,9 @@
+     STDMETHOD(AttachToBridgedInterface)();
+     STDMETHOD(AttachToInternalNetwork)();
+     STDMETHOD(AttachToHostOnlyInterface)();
++		/* ENABLE VDE */
++    STDMETHOD(AttachToVDE)();
++		/* /ENABLE VDE */
+     STDMETHOD(Detach)();
+ 
+     // public methods only for internal purposes
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Main/NetworkAdapterImpl.cpp VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/NetworkAdapterImpl.cpp
+--- VirtualBox-3.1.6_OSE/src/VBox/Main/NetworkAdapterImpl.cpp	2010-03-25 20:56:38.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/NetworkAdapterImpl.cpp	2010-04-04 10:18:33.000000000 +0200
+@@ -532,6 +532,52 @@
+     return S_OK;
+ }
+ 
++/* ENABLE VDE */
++STDMETHODIMP NetworkAdapter::COMGETTER(VDENetwork) (BSTR *aVDENetwork)
++{
++    CheckComArgOutPointerValid(aVDENetwork);
++
++    AutoCaller autoCaller(this);
++    CheckComRCReturnRC(autoCaller.rc());
++
++    AutoReadLock alock(this);
++
++    mData->mVDENetwork.cloneTo(aVDENetwork);
++
++    return S_OK;
++}
++
++STDMETHODIMP NetworkAdapter::COMSETTER(VDENetwork) (IN_BSTR aVDENetwork)
++{
++    Bstr bstrEmpty("");
++    if (!aVDENetwork)
++        aVDENetwork = bstrEmpty;
++
++    AutoCaller autoCaller(this);
++    CheckComRCReturnRC(autoCaller.rc());
++
++    /* the machine needs to be mutable */
++    Machine::AutoMutableStateDependency adep (mParent);
++    CheckComRCReturnRC(adep.rc());
++
++    AutoWriteLock alock(this);
++
++    if (mData->mVDENetwork != aVDENetwork)
++    {
++        mData.backup();
++        mData->mVDENetwork = aVDENetwork;
++
++        /* leave the lock before informing callbacks */
++        alock.unlock();
++
++        mParent->onNetworkAdapterChange (this, FALSE);
++    }
++
++    return S_OK;
++}
++
++/* /ENABLE VDE */
++
+ STDMETHODIMP NetworkAdapter::COMGETTER(CableConnected) (BOOL *aConnected)
+ {
+     CheckComArgOutPointerValid(aConnected);
+@@ -864,6 +910,51 @@
+     return S_OK;
+ }
+ 
++/* ENABLE VDE */
++STDMETHODIMP NetworkAdapter::AttachToVDE()
++{
++	AutoCaller autoCaller(this);
++	CheckComRCReturnRC(autoCaller.rc());
++
++	/* the machine needs to be mutable */
++	Machine::AutoMutableStateDependency adep (mParent);
++	CheckComRCReturnRC(adep.rc());
++
++	AutoWriteLock alock(this);
++
++	/* don't do anything if we're already host interface attached */
++	if (mData->mAttachmentType != NetworkAttachmentType_VDE)
++	{
++		mData.backup();
++
++		/* first detach the current attachment */
++		// Commented this for now as it reset the parameter mData->mHostInterface
++		// which is essential while changing the Attachment dynamically.
++		//detach();
++
++		mData->mAttachmentType = NetworkAttachmentType_VDE;
++
++		/* leave the lock before informing callbacks */
++		alock.unlock();
++
++		HRESULT rc = mParent->onNetworkAdapterChange (this, TRUE);
++		if (FAILED (rc))
++		{
++			/* If changing the attachment failed then we can't assume
++			 * that the previous attachment will attach correctly
++			 * and thus return error along with dettaching all
++			 * attachments.
++			 */
++			Detach();
++			return rc;
++		}
++	}
++
++	return S_OK;
++}
++
++/* /ENABLE VDE */
++
+ STDMETHODIMP NetworkAdapter::Detach()
+ {
+     AutoCaller autoCaller(this);
+@@ -966,6 +1057,15 @@
+             CheckComRCReturnRC(rc);
+         break;
+ 
++				/* ENABLE VDE */
++        case NetworkAttachmentType_VDE:
++				    mData->mVDENetwork = data.strName;
++				    rc = AttachToVDE();
++						CheckComRCReturnRC(rc);
++				break;
++				/* ENABLE VDE */
++
++
+         case NetworkAttachmentType_Null:
+             rc = Detach();
+             CheckComRCReturnRC(rc);
+@@ -1024,6 +1124,10 @@
+         case NetworkAttachmentType_HostOnly:
+             data.strName = mData->mHostInterface;
+         break;
++
++        case NetworkAttachmentType_VDE:
++            data.strName = mData->mVDENetwork;
++        break;
+     }
+ 
+     return S_OK;
+diff -Naur VirtualBox-3.1.6_OSE/src/VBox/Main/xml/Settings.cpp VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/xml/Settings.cpp
+--- VirtualBox-3.1.6_OSE/src/VBox/Main/xml/Settings.cpp	2010-03-25 20:56:45.000000000 +0100
++++ VirtualBox-3.1.6_OSE_VDE/src/VBox/Main/xml/Settings.cpp	2010-04-04 10:18:33.000000000 +0200
+@@ -1371,6 +1371,13 @@
+             if (!pelmAdapterChild->getAttributeValue("name", nic.strName))    // required network name
+                 throw ConfigFileError(this, pelmAdapterChild, N_("Required HostOnlyInterface/@name element is missing"));
+         }
++				/* ENABLE VDE */
++        else if ((pelmAdapterChild = pelmAdapter->findChildElement("VDE")))
++        {
++            nic.mode = NetworkAttachmentType_VDE;
++            pelmAdapterChild->getAttributeValue("network", nic.strName);    // optional network name
++				}
++				/* /ENABLE VDE */
+         // else: default is NetworkAttachmentType_Null
+ 
+         ll.push_back(nic);
+@@ -2701,6 +2708,13 @@
+                 pelmAdapter->createChild("HostOnlyInterface")->setAttribute("name", nic.strName);
+             break;
+ 
++						/* ENABLE VDE */
++						case NetworkAttachmentType_VDE:
++                pelmNAT = pelmAdapter->createChild("VDE");
++								if (nic.strName.length())
++									pelmNAT->setAttribute("network", nic.strName);
++						/* /ENABLE VDE */
++
+             default: /*case NetworkAttachmentType_Null:*/
+             break;
+         }

@@ -1,0 +1,76 @@
+.TH VDE_OVER_NS 1 "May 2, 2007" "Virtual Distributed Ethernet"
+.SH NAME
+vde_over_ns \- Steganographic cable over NS protocol for Virtual Distributed Ethernet
+.SH SYNOPSIS
+.B vde_over_ns
+[\fB\-D\fR]
+[\fB\-c\fI server_address\fR]
+[\fB\-s\fI vde_plug\fR]
+[\fB\-i\fI ip.to.bi.nd\fR]
+\fIdomain.name
+
+.br
+.SH DESCRIPTION
+A
+\fBvde_over_ns\fP 
+allows to connect two remote vde_switches through steganographic NS query/response datagrams.
+e.g.:
+
+.B
+dpipe vde_plug /tmp/s1 = vde_over_ns tun.mydomain.vde 
+
+binds to udp port 53 and listen for incoming steganographic NS queries (server mode).
+All the traffic to/from stdout/stdin is redirected to the client via ns responses.
+
+creates a wire between two vde_switches (with sockets /tmp/s1 and /tmp/s2
+respectively). This cable looses 10% of the packets in each direction.
+
+The same vde_over_dns server can be created using:
+
+.B
+vde_over_ns -s /tmp/s1 tun.mydomain.vde
+
+The syntax is almost identical for the client mode, except that
+to have a vde_over_ns client connect to that server, the \fB -c \fIserver\fR 
+option must be specified.
+
+.SH OPTIONS
+.TP
+.B \-s "\fIvdeplug\fP"
+If specified, the vde_over_ns will connect to the local vde socket \fIvdeplug\fP
+instead pf stdin/stdout, using the libvdeplug library.
+.TP
+.B \-D 
+Detach console and send the process to background.
+.TP
+.B \-b "\fIip.to.bind\fP"
+The NS server will bind only to the specified ip, instead of any ip. 
+Only valid in server mode (without -c)
+.TP
+.B \-c "\fIserver_addr\fP"
+If specified, client mode is enabled. Vde_over_ns will try to send NS requests to \fIserver_addr\fP. If not specified, server mode is enabled by default.
+
+.SH NOTICE
+Virtual Distributed Ethernet is not related in any way with
+www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
+i.e. the German "Association for Electrical, Electronic & Information
+Technologies").
+
+.SH SEE ALSO
+\fBvde_switch\fP(1),
+\fBvdeq\fP(1).
+\fBdpipe\fP(1).
+\fBunixterm\fP(1).
+.br
+.SH AUTHORS
+VDE_OVER_NS is a tool by Daniele Lacamera <root@danielinux.net> 
+
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
+
+based on nstx, a steganographic ns client/server software by:
+
+	Florian Heinz <sky@sysv.de>
+
+	Julien Oster <frodo@sysv.de>
+
+
