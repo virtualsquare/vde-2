@@ -41,7 +41,7 @@ release_checksums: dist
 	/usr/bin/test -s $(cksum_file) || exit 1
 
 release_steps:
-	@/usr/bin/test -s release_ready || { \
+	@/usr/bin/test -f release_ready || { \
 	  echo "File release_ready not found, complete these steps first:"; \
 	  echo "- check any outstanding bug on sf.net"; \
 	  echo "- check any outstanding bug on bugs.debian.org"; \
