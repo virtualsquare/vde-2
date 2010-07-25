@@ -50,10 +50,8 @@ release_steps:
 	  echo "Once you're done you can 'touch release_ready' to proceed"; exit 1; }
 
 release_tag:
-# tag the release
-	svn ls $(tag_url) 1>/dev/null && { \
-	  echo "release $(PACKAGE_VERSION) already tagged, stopping"; exit 1; }
-	svn copy $(trunk_url) $(tag_url)
+# check if release tag exists, othewise tag the release
+	svn ls $(tag_url) 1>/dev/null || svn copy $(trunk_url) $(tag_url)
 
 release: release_steps release_tag release_checksums
 	reldir=`mktemp -d -t vde.XXXXXX`/$(PACKAGE_VERSION); \
