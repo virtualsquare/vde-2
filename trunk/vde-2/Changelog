@@ -1,3 +1,6 @@
+VDE 2.3.1, 2010-07-25
+	* [vde_switch] Fix control socket path resolution regression.
+
 VDE 2.3.0, 2010-05-29
 	* Remove some hardcoded paths and use SYSCONFDIR/LOCALSTATEDIR instead.
 	* [vde_switch] Fix multiple vlan tagging when packetfilter is used.
