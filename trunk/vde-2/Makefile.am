@@ -46,6 +46,7 @@ release_steps:
 	  echo "- check any outstanding bug on sf.net"; \
 	  echo "- check any outstanding bug on bugs.debian.org"; \
 	  echo "- update the changelog"; \
+	  echo "- increase version number in configure.ac"; \
 	  echo "Once you're done you can 'touch release_ready' to proceed"; exit 1; }
 
 release_tag:
