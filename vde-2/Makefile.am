@@ -51,13 +51,15 @@ release_steps:
 
 release_tag:
 # check if release tag exists, othewise tag the release
-	svn ls $(tag_url) 1>/dev/null || svn copy $(trunk_url) $(tag_url)
+	svn ls $(tag_url) 1>/dev/null || svn copy -m "Tag release $(PACKAGE_VERSION)" $(trunk_url) $(tag_url)
 
 release: release_steps release_tag release_checksums
 	reldir=`mktemp -d -t vde.XXXXXX`/$(PACKAGE_VERSION); \
 	mkdir -p $$reldir; \
 	cp -v $(DIST_ARCHIVES) $(cksum_file) $$reldir; \
+	rm -f release_ready
+	echo "***"
 	echo "*** release ready at $$reldir, manual steps left:"; \
+	echo "***"
 	echo "gpg -o $$reldir/$(cksum_file).asc --clearsign $$reldir/$(cksum_file)"; \
 	echo "rsync -e ssh -vaz $$reldir <SF_USERNAME>,vde@frs.sourceforge.net:/home/frs/project/v/vd/vde/vde2/"
-	rm -f release_ready
