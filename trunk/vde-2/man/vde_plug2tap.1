@@ -11,6 +11,13 @@ is a plug to be connected into a VDE switch.
 All the data that is catched by the plug is sent to the tap interface 
 .I tap_name 
 and everything from that interface is injected in the switch.
+.br
+Example:
+.in +2
+.B vde_plug2tap tap4
+.in -2
+.br
+connects the default switch (/var/run/vde.ctl) to the tap4 interface.
 
 .SH OPTIONS
 .TP
@@ -35,7 +42,16 @@ octal chmod like permissions for the comm sockets
 .TP
 \fB\-s\fP, \fB\-\-sock\fP=\fIsocket\fP
 specify the UNIX socket to be used by local programs for joining the VDE.
-The default value is "/tmp/vde.ctl".
+The default value is "/var/run/vde.ctl".
+When '-' is used in place of the VDE switch directory, \fBvde_plug2tap\fP
+works as a plug (see vde_plug(1)).
+The command:
+.br
+.in +2
+.B dpipe vde_plug = ssh remote.machine.org vde_plug2tap -s - tapx
+.in -2
+.br
+connects the default local switch to a remote tapx interface.
 .TP
 \fB\-d\fP, \fB\-\-daemon\fP
 start vde_plug2tap as a background process
