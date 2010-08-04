@@ -1,5 +1,7 @@
 /* Copyright 2006 Renzo Davoli 
  * from vde_plug Davoli Gardenghi
+ * Modified 2010 Renzo Davoli, vdestream added
+ * Licensed under the GPLv2
  */
 
 #include <stdio.h>
@@ -50,6 +52,7 @@
 #endif
 
 VDECONN *conn;
+VDESTREAM *vdestream;
 
 char *prog;
 int logok;
@@ -78,7 +81,10 @@ static void cleanup(void)
 		printlog(LOG_WARNING,"Couldn't remove pidfile '%s': %s", pidfile, strerror(errno));
 	}
 
-	vde_close(conn);
+	if (vdestream != NULL)
+		vdestream_close(vdestream);
+	if (conn != NULL)
+		vde_close(conn);
 }
 
 static void sig_handler(int sig)
@@ -127,8 +133,6 @@ static void setsighandlers()
 					signals[i].ignore ? SIG_IGN : sig_handler) < 0)
 			perror("Setting handler");
 }
-
-struct pollfd pollv[]={{0,POLLIN|POLLHUP},{0,POLLIN|POLLHUP},{0,POLLIN|POLLHUP}};
 
 static void usage(void) {
 	fprintf(stderr, "Usage: %s [OPTION]... tap_name\n\n", prog);
@@ -227,6 +231,12 @@ static void save_pidfile()
 	fclose(f);
 }
 
+static ssize_t vde_plug2tap_recv(void *opaque, void *buf, size_t count)
+{
+	int *tapfdp=opaque;
+	return write(*tapfdp,buf,count);
+}
+
 int main(int argc, char **argv)
 {
 	static char *sockname=NULL;
@@ -237,6 +247,11 @@ int main(int argc, char **argv)
 	register ssize_t nx;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 	int c;
+	static struct pollfd pollv[]={{0,POLLIN|POLLHUP},
+		{0,POLLIN|POLLHUP},
+		{0,POLLIN|POLLHUP}};
+	int npollv;
+
 	prog=argv[0];
 	while (1) {
 		int option_index = 0;
@@ -324,18 +339,27 @@ int main(int argc, char **argv)
 	tapfd=open_tap(tapname);
 	if(tapfd<0)
 		exit(1);
-	conn=vde_open(sockname,"vde_plug:",&open_args);
-	if (conn == NULL)
-		exit(1);
-
 	pollv[0].fd=tapfd;
-	pollv[1].fd=vde_datafd(conn);
-	pollv[2].fd=vde_ctlfd(conn);
+
+	if (sockname==NULL || strcmp(sockname,"-") != 0) {
+		conn=vde_open(sockname,"vde_plug:",&open_args);
+		if (conn == NULL)
+			exit(1);
+		pollv[1].fd=vde_datafd(conn);
+		pollv[2].fd=vde_ctlfd(conn);
+		npollv=3;
+	} else {
+		vdestream=vdestream_open(&tapfd,STDOUT_FILENO,vde_plug2tap_recv,NULL);
+		if (vdestream == NULL)
+			exit(1);
+		pollv[1].fd=STDIN_FILENO;
+		npollv=2;
+	}
 
 	for(;;) {
 		result=poll(pollv,3,-1);
 		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
-				pollv[2].revents & POLLIN) 
+				(npollv > 2 && pollv[2].revents & POLLIN)) 
 			break;
 		if (pollv[0].revents & POLLIN) {
 			nx=read(tapfd,bufin,sizeof(bufin));
@@ -344,13 +368,23 @@ int main(int argc, char **argv)
 			//fprintf(stderr,"%s: RECV %d %x %x \n",prog,nx,bufin[0],bufin[1]);
 			if (nx<=0)
 				break;
-			vde_send(conn,bufin,nx,0);
+			if (conn != NULL)
+				vde_send(conn,bufin,nx,0);
+			else
+				vdestream_send(vdestream, bufin, nx);
 		}
 		if (pollv[1].revents & POLLIN) {
-			nx=vde_recv(conn,bufin,sizeof(bufin),0);
-			if (nx<=0)
-				break;
-			write(tapfd,bufin,nx);
+			if (conn != NULL) {
+				nx=vde_recv(conn,bufin,sizeof(bufin),0);
+				if (nx<=0)
+					break;
+				write(tapfd,bufin,nx);
+			} else {
+				nx=read(STDIN_FILENO,bufin,sizeof(bufin));
+				if (nx<=0)
+					break;
+				vdestream_recv(vdestream,bufin,nx);
+			}
 			//fprintf(stderr,"%s: SENT %d %x %x \n",prog,nx,bufin[0],bufin[1]);
 		}
 

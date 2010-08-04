@@ -58,8 +58,10 @@
 #define LIBVDEPLUG_INTERFACE_VERSION 1
 
 struct vdeconn;
-
 typedef struct vdeconn VDECONN;
+
+struct vdestream;
+typedef struct vdestream VDESTREAM;
 
 /* Open a VDE connection.
  * vde_open_options:
@@ -89,12 +91,27 @@ struct vdepluglib {
 	int (* vde_datafd)(VDECONN *conn);
 	int (* vde_ctlfd)(VDECONN *conn);
 	int (* vde_close)(VDECONN *conn);
+	VDESTREAM * (* vdestream_open)(void *opaque, int fdout,
+			ssize_t (* frecv)(void *opaque, void *buf, size_t count),
+			void (* ferr)(void *opaque, int type, char *format, ...)
+			);
+	ssize_t (* vdestream_send)(VDESTREAM *vdestream, const void *buf, size_t len);
+	void (* vdestream_recv)(VDESTREAM *vdestream, unsigned char *buf, size_t len);
+	void (* vdestream_close)(VDESTREAM *vdestream);
 };
 
 typedef VDECONN * (* VDE_OPEN_REAL_T)(const char *vde_switch,char *descr,int interface_version, struct vde_open_args *open_args);
 typedef size_t (* VDE_RECV_T)(VDECONN *conn,void *buf,size_t len,int flags);
 typedef size_t (* VDE_SEND_T)(VDECONN *conn,const void *buf,size_t len,int flags);
 typedef int (* VDE_INT_FUN)(VDECONN *conn);
+typedef VDESTREAM * (* VDESTREAM_OPEN_T)(void *opaque, int fdout,
+			ssize_t (* frecv)(void *opaque, void *buf, size_t count),
+			void (* ferr)(void *opaque, int type, char *format, ...)
+			);              
+typedef ssize_t (* VDESTREAM_SEND_T)(VDESTREAM *vdestream, const void *buf, size_t len);
+typedef void (* VDESTREAM_RECV_T)(VDESTREAM *vdestream, unsigned char *buf, size_t len);
+typedef void (* VDESTREAM_CLOSE_T)(VDESTREAM *vdestream);
+
 #define libvdeplug_dynopen(x) ({ \
 	(x).dl_handle=dlopen("libvdeplug.so",RTLD_NOW); \
 	if ((x).dl_handle) { \
@@ -104,11 +121,19 @@ typedef int (* VDE_INT_FUN)(VDECONN *conn);
 		(x).vde_datafd=(VDE_INT_FUN) dlsym((x).dl_handle,"vde_datafd"); \
 		(x).vde_ctlfd=(VDE_INT_FUN) dlsym((x).dl_handle,"vde_ctlfd"); \
 		(x).vde_close=(VDE_INT_FUN) dlsym((x).dl_handle,"vde_close"); \
+		(x).vdestream_open=(VDESTREAM_OPEN_T) dlsym((x).dl_handle,"vdestream_open"); \
+		(x).vdestream_send=(VDESTREAM_SEND_T) dlsym((x).dl_handle,"vdestream_send"); \
+		(x).vdestream_recv=(VDESTREAM_RECV_T) dlsym((x).dl_handle,"vdestream_recv"); \
+		(x).vdestream_close=(VDESTREAM_CLOSE_T) dlsym((x).dl_handle,"vdestream_close"); \
 		} else { \
 		(x).vde_open_real=NULL; \
 		(x).vde_send= NULL; \
 		(x).vde_recv= NULL; \
 		(x).vde_datafd= (x).vde_ctlfd= (x).vde_close= NULL; \
+		(x).vdestream_open= NULL; \
+		(x).vdestream_send= NULL; \
+		(x).vdestream_recv= NULL; \
+		(x).vdestream_close= NULL; \
 		}\
 		})
 
