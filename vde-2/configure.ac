@@ -23,6 +23,10 @@ AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([crypto], [EVP_EncryptInit],
 		[add_cryptcab_support=yes],
 		[add_cryptcab_support=no ; warn_cryptcab=yes])
+
+PYTHONINCLUDEDIR=`python -c "from distutils.sysconfig import get_python_inc; print get_python_inc();"`
+AC_CHECK_HEADERS([$PYTHONINCLUDEDIR/Python.h], [add_python_support=yes],
+		[add_python_support=no; warn_python=no])
 AC_CHECK_LIB([pcap], [pcap_open_dead],
 		[add_pcap=yes],
 		[add_pcap=no ; warn_pcap=yes])
@@ -177,6 +181,7 @@ AC_ARG_ENABLE([kernel-switch],
 	fi])
 
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
+AM_CONDITIONAL(ENABLE_PYTHON, test "$add_python_support" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
 AM_CONDITIONAL(CAN_MAKE_VDETUNCTL, test "$can_make_vdetunctl" = yes)
@@ -223,6 +228,12 @@ else
 	echo " - VDE CryptCab............ disabled"
 fi
 
+if test x$add_python_support = "xyes" ; then
+	echo " + Python Libraries........ enabled"
+else
+	echo " - Python Libraries........ disabled"
+fi
+
 if test x$warn_tuntap = "xyes" ; then
 	echo " - TAP support............. disabled"
 else
@@ -260,6 +271,14 @@ if ! test x$add_cryptcab_support = "xyes" ; then
 		AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
 not installed on your system, or because openssl/blowfish.h could not be
 found. Please install them if you want CryptCab to be compiled and installed.])
+	fi
+fi
+
+if ! test x$add_python_support = "xyes" ; then
+	if test x$warn_python = "xyes" ; then
+		AC_MSG_WARN([Python libraries support has been disabled because python is
+not installed on your system, or because it could not be
+found. Please install it if you want Python libraries to be compiled and installed.])
 	fi
 fi
 
