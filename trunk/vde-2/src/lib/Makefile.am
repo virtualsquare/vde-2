@@ -27,6 +27,10 @@ libvdeplug_la_LDFLAGS = $(AM_LDFLAGS) -version-number 3:0:1 -export-dynamic
 libvdehist_la_LIBADD = $(LIBADD)
 libvdehist_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
 
+if ENABLE_PYTHON
+  SUBDIRS = python
+endif
+
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = vdesnmp.pc vdemgmt.pc vdeplug.pc vdehist.pc
 
