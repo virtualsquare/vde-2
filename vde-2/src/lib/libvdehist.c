@@ -142,7 +142,6 @@ static int tabexpand(char *linebuf,int bufindex,int maxlength)
 #define CC_HEADER 0
 #define CC_BODY 1
 #define CC_TERM 2
-#define MAX_KEYWORDS 128
 
 static int qstrcmp(const void *a,const void *b)
 {
@@ -177,14 +176,18 @@ static char *vdehist_readln(int vdefd,char *linebuf,int size,struct vh_readln *v
 	return linebuf;
 }
 
+/* create the commandlist (from the output of the help command) */
 static void vdehist_create_commandlist(int vdefd)
 {
 	char linebuf[BUFSIZE];
-	char *localclist[MAX_KEYWORDS];
-	int nkeywords=0;
-	int i,j;
 	struct vh_readln readlnbuf={0,0};
-	if (vdefd >= 0) {
+	char *buf;
+	size_t bufsize;
+	char *lastcommand=NULL;
+	/* use a memstream to create the array.
+		 add (char *) elements by fwrite */
+	FILE *ms=open_memstream(&buf,&bufsize);
+	if (ms && vdefd >= 0) {
 		int status=CC_HEADER;
 		vdehist_vdewrite(vdefd,"help\n",5);
 		while (status != CC_TERM && vdehist_readln(vdefd,linebuf,BUFSIZE,&readlnbuf) != NULL) {
@@ -199,34 +202,26 @@ static void vdehist_create_commandlist(int vdefd)
 					while (*s!=' ' && *s != 0)
 						s++;
 					*s=0; /* take the first token */
-					localclist[nkeywords]=strdup(linebuf);
-					if (nkeywords<MAX_KEYWORDS) nkeywords++;
+					/* test for menu header */
+					if (lastcommand) {
+						if (strncmp(lastcommand,linebuf,strlen(lastcommand)) == 0 &&
+								linebuf[strlen(lastcommand)] == '/')
+							free(lastcommand);
+						else
+							fwrite(&lastcommand, sizeof(char *), 1, ms);
+					}
+					lastcommand=strdup(linebuf);
 				}
 			}
 		}
-		while (vdehist_readln(vdefd,linebuf,BUFSIZE,&readlnbuf) != NULL) 
-			;
-		qsort(localclist,nkeywords,sizeof(char *),qstrcmp);
-		for (i=j=0; i<nkeywords; i++)
-			if (i<nkeywords-1 &&
-					strncmp(localclist[i],localclist[i+1],strlen(localclist[i]))==0 &&
-					localclist[i+1][strlen(localclist[i])] == '/') {
-				free(localclist[i]); /*avoid menu*/
-			} else {
-				localclist[j]=localclist[i];
-				j++;
-			}
-		nkeywords=j;
+		if (lastcommand) 
+			fwrite(&lastcommand, sizeof(char *), 1, ms);
+		lastcommand = NULL;
+		fwrite(&lastcommand, sizeof(char *), 1, ms);
+		fclose(ms);
+		commandlist=(char **)buf;
+		qsort(commandlist,(bufsize / sizeof(char *))-1,sizeof(char *),qstrcmp);
 	}
-	nkeywords++;
-	commandlist=malloc(nkeywords*sizeof(char *));
-	if (commandlist) {
-		for (i=0;i<nkeywords;i++)
-			commandlist[i]=localclist[i];
-		commandlist[i]=NULL;
-	}
-	//fprintf(stderr,"%d\n",nkeywords);
-	//fprintf(stderr,"%s %s\n",commandlist[0],commandlist[1]);
 }
 
 static void erase_line(struct vdehiststat *st,int prompt_too)
