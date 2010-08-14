@@ -5,7 +5,8 @@
  LibVdePlug/python wrapper
  Copyright  2010 Daniele Lacamera
 
- Released under the terms of GNU GPL v.2
+ Released under the terms of GNU LGPL v. 2.1
+ (see COPYING.libvdeplug in the main project directory)
 
 '''
 
