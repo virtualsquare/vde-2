@@ -1,6 +1,7 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include \
               -DSYSCONFDIR="\"$(sysconfdir)\"" -DLOCALSTATEDIR="\"$(localstatedir)\""
 LIBADD = $(top_builddir)/src/common/libvdecommon.la
+SUBDIRS =
 
 if ENABLE_PROFILE
   AM_CFLAGS = -pg --coverage
@@ -28,7 +29,7 @@ libvdehist_la_LIBADD = $(LIBADD)
 libvdehist_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
 
 if ENABLE_PYTHON
-  SUBDIRS = python
+SUBDIRS += python
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig
