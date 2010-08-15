@@ -24,12 +24,14 @@ AC_CHECK_LIB([crypto], [EVP_EncryptInit],
 		[add_cryptcab_support=yes],
 		[add_cryptcab_support=no ; warn_cryptcab=yes])
 
-PYTHONINCLUDEDIR=`python -c "from distutils.sysconfig import get_python_inc; print get_python_inc();"`
+AM_PATH_PYTHON([2.5], [add_python_support=yes], [add_python_support=warn])
+PYTHONINCLUDEDIR=`python2.5 -c "from distutils.sysconfig import get_python_inc; print get_python_inc();"`
 AC_CHECK_HEADERS([$PYTHONINCLUDEDIR/Python.h], [add_python_support=yes],
 		[add_python_support=no; warn_python=no])
 AC_CHECK_LIB([pcap], [pcap_open_dead],
 		[add_pcap=yes],
 		[add_pcap=no ; warn_pcap=yes])
+AC_SUBST(PYTHONINCLUDEDIR)
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -205,6 +207,7 @@ AC_CONFIG_FILES(
 		[src/lib/vdemgmt.pc]
 		[src/lib/vdeplug.pc]
 		[src/lib/vdehist.pc]
+		[src/lib/python/Makefile]
 		[src/vde_switch/Makefile]
 		[src/kvde_switch/Makefile]
 		[src/vde_over_ns/Makefile]
