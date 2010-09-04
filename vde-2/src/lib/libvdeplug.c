@@ -508,11 +508,13 @@ void vdestream_recv(VDESTREAM *vdestream, unsigned char *buf, size_t len)
 			vdestream->rnx=0;
 		}
 	}
-	while (len > 0) {
+	while (len > 1) {
 		vdestream->rnx=(buf[0]<<8)+buf[1];
 		len-=2;
 		//fprintf(stderr,"%s %d: packet %d size %d %x %x\n",myname,getpid(),vdestream->rnx,len,buf[0],buf[1]);
 		buf+=2;
+		if (vdestream->rnx == 0)
+			continue;
 		if (vdestream->rnx > MAXPACKET) {
 			if (vdestream->ferr != NULL)
 				vdestream->ferr(vdestream->opaque,PACKET_LENGTH_ERROR,
