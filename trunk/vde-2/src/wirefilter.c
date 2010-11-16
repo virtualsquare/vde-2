@@ -387,14 +387,17 @@ unsigned long long maxwhen;
 
 #define PQCHUNK 100
 
-static int nextms()
+static unsigned long long nextms()
 {
 	if (npq>0) {
-		long long deltat;
+		unsigned long long now=0;
 		struct timeval v;
 		gettimeofday(&v,NULL);
-		deltat=pqh[1]->when-(v.tv_sec*1000000+v.tv_usec);
-		return (deltat>0)?(int)(deltat/1000):0;
+		now = (unsigned long long) v.tv_sec*1000+v.tv_usec/1000;
+		if (pqh[1]->when > now)
+			return  pqh[1]->when - now;
+		else
+			return 0; 
 	}
 	return -1;
 }
@@ -445,7 +448,7 @@ static void packet_dequeue()
 {
 	struct timeval v;
 	gettimeofday(&v,NULL);
-	unsigned long long now=v.tv_sec*1000000+v.tv_usec;
+	unsigned long long now=(unsigned long long)v.tv_sec*1000+v.tv_usec/1000; 
 	while (npq>0 && pqh[1]->when <= now) {
 		struct packpq *old=pqh[npq--];
 		int k=1;
@@ -486,7 +489,7 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 		exit (1);
 	}
 	gettimeofday(&v,NULL);
-	new->when=v.tv_sec * 1000000 + v.tv_usec + delms * 1000;
+	new->when= ((unsigned long long)v.tv_sec * 1000 + v.tv_usec/1000) + delms; 
 	if (new->when > maxwhen) maxwhen=new->when;
 	if (!nofifo && new->when < maxwhen) new->when=maxwhen;
 	new->dir=dir;
@@ -1596,7 +1599,7 @@ int main(int argc,char *argv[])
 
 	initrand();
 	while(1) {
-		int delay=nextms();
+		unsigned long long delay=nextms();
 		int markovdelay=markovms();
 		if (markovdelay >= 0 &&
 				(markovdelay < delay || delay < 0)) delay=markovdelay;
