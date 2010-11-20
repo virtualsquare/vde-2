@@ -1,6 +1,7 @@
 /*
  * libvdeplug - A library to connect to a VDE Switch.
  * Copyright (C) 2006 Renzo Davoli, University of Bologna
+ * (c) 2010 Renzo Davoli - stream + point2point
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by
@@ -94,10 +95,12 @@ struct vdeconn {
 	int fdctl;
 	int fddata;
 	struct sockaddr_un inpath;
+	struct sockaddr_un *outpath;
 };
 
 #define SWITCH_MAGIC 0xfeedface
 #define MAXDESCR 128
+#define VDEFLAG_P2P_SOCKET 1
 
 enum request_type { REQ_NEW_CONTROL, REQ_NEW_PORT0 };
 
@@ -122,6 +125,7 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	char *group=NULL;
 	mode_t mode=0700;
 	int sockno=0;
+	int flags=0;
 	int res;
 	char *std_sockname=NULL;
 	char *real_sockname=NULL;
@@ -132,6 +136,8 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			port=open_args->port;
 			group=open_args->group;
 			mode=open_args->mode;
+			if (port == -1)
+				flags |= VDEFLAG_P2P_SOCKET;
 		}
 		else {
 			errno=EINVAL;
@@ -184,7 +190,9 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			*split=0;
 			split++;
 			port=atoi(split);
-			if (port == 0)
+			if (*split==']')
+				flags |= VDEFLAG_P2P_SOCKET;
+			else if (port == 0)
 				req->type = REQ_NEW_PORT0;
 			if (*given_sockname==0)
 				given_sockname = NULL;
@@ -195,7 +203,8 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	 * switch (we don't know its cwd) for the data socket. Appending
 	 * given_sockname to getcwd() would be enough, but we could end up with a
 	 * name longer than PATH_MAX that couldn't be used as sun_path. */
-	if (given_sockname && vde_realpath(given_sockname, real_sockname) == NULL)
+	if (given_sockname && !(flags & VDEFLAG_P2P_SOCKET) &&
+			vde_realpath(given_sockname, real_sockname) == NULL)
 		goto abort;
 
 #ifdef USE_IPN
@@ -208,7 +217,8 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		sockun.sun_family = AF_IPN;
 	}
 #endif
-	if((conn->fddata = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_ANY)) >= 0) {
+	if((flags & VDEFLAG_P2P_SOCKET) == 0 &&
+			(conn->fddata = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_ANY)) >= 0) {
 		/* IPN_STOLEN service exists */
 		sockun->sun_family = AF_IPN_STOLEN;
 		if (port != 0 || req->type == REQ_NEW_PORT0)
@@ -245,6 +255,55 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			close(conn->fddata);
 	}
 #endif
+	/* define a female socket for point2point connection */
+	if (flags & VDEFLAG_P2P_SOCKET) {
+		struct stat sockstat;
+		if(given_sockname == NULL) {
+			errno = EINVAL;
+			goto abort;
+		}
+		strcpy(sockname,given_sockname); /* XXX canonicalize should be better */
+		if((conn->fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
+			goto abort;
+		sockun->sun_family = AF_UNIX;
+		memset(sockun->sun_path,0,sizeof(sockun->sun_path));
+		snprintf(sockun->sun_path, sizeof(sockun->sun_path)-1, "%s", sockname);
+		/* the socket already exists */
+		if(stat(sockun->sun_path,&sockstat) == 0) {
+			if (S_ISSOCK(sockstat.st_mode)) {
+				/* the socket is already in use */
+				res = connect(conn->fddata, (struct sockaddr *) sockun, sizeof(*sockun));
+				if (res >= 0) {
+					errno = EADDRINUSE;
+					goto abort;
+				}
+				if (errno == ECONNREFUSED)
+					unlink(sockun->sun_path);
+			}
+		}
+		res = bind(conn->fddata, (struct sockaddr *) sockun, sizeof(*sockun));
+		if (res < 0)
+			goto abort;
+		memcpy(&(conn->inpath),sockun,sizeof(conn->inpath));
+		conn->outpath = calloc(1,sizeof(struct sockaddr_un));
+		if (conn->outpath==NULL)
+			goto abort;
+		conn->outpath->sun_family = AF_UNIX;
+		snprintf(conn->outpath->sun_path, sizeof(sockun->sun_path), "%s+", sockname);
+		if (!conn->outpath)
+			goto abort;
+		if (group) {
+			struct group *gs;
+			gid_t gid;
+			if ((gs=getgrnam(group)) == NULL)
+				gid=atoi(group);
+			else
+				gid=gs->gr_gid;
+			chown(conn->inpath.sun_path,-1,gid);
+		} 
+		chmod(conn->inpath.sun_path,mode);
+		goto cleanup;
+	}
 	if((conn->fdctl = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
 		goto abort;
 	if((conn->fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
@@ -276,8 +335,46 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		}
 	}
 
-	if (res != 0)
-		goto abort;
+	if (res != 0) {
+		struct stat sockstat;
+		/* define a male plug for point2point connection */
+		if (!given_sockname)
+			goto abort;
+		snprintf(sockun->sun_path, sizeof(sockun->sun_path), "%s", sockname);
+		res = connect(conn->fddata, (struct sockaddr *) sockun, sizeof(*sockun));
+		if (res < 0)
+			goto abort;
+		snprintf(sockun->sun_path, sizeof(sockun->sun_path), "%s+", sockname);
+		if(stat(sockun->sun_path,&sockstat) == 0) {
+			if (S_ISSOCK(sockstat.st_mode)) {
+				/* the socket is already in use */
+				res = connect(conn->fddata, (struct sockaddr *) sockun, sizeof(*sockun));
+				if (res >= 0) {
+					errno = EADDRINUSE;
+					goto abort;
+				}
+				if (errno == ECONNREFUSED)
+					unlink(sockun->sun_path);
+			}
+		}
+		res = bind(conn->fddata, (struct sockaddr *) sockun, sizeof(*sockun));
+		if (res < 0)
+			goto abort;
+		memcpy(&(conn->inpath),sockun,sizeof(conn->inpath));
+		if (group) { 
+			struct group *gs;
+			gid_t gid;
+			if ((gs=getgrnam(group)) == NULL)
+				gid=atoi(group);
+			else
+				gid=gs->gr_gid;
+			chown(conn->inpath.sun_path,-1,gid);
+		} 
+		chmod(conn->inpath.sun_path,mode);
+		close(conn->fdctl);
+		conn->fdctl=-1;
+		goto cleanup;
+	}
 
 	req->magic=SWITCH_MAGIC;
 	req->version=3;
@@ -376,6 +473,8 @@ abort:
 				close(conn->fddata);
 			if (*(conn->inpath.sun_path))
 				unlink(conn->inpath.sun_path);
+			if (conn->outpath != NULL)
+				free(conn->outpath);
 			free(conn);
 		}
 		conn = NULL;
@@ -402,9 +501,13 @@ ssize_t vde_recv(VDECONN *conn,void *buf,size_t len,int flags)
 
 ssize_t vde_send(VDECONN *conn,const void *buf,size_t len,int flags)
 {
-	if (__builtin_expect(conn!=0,1)) 
-		return send(conn->fddata,buf,len,0);
-	else {
+	if (__builtin_expect(conn!=0,1)) {
+		if (__builtin_expect(conn->outpath == NULL,1))
+			return send(conn->fddata,buf,len,0);
+		else 
+			return sendto(conn->fddata,buf,len,0,
+				(struct sockaddr *)conn->outpath,sizeof(conn->inpath));
+	} else {
 		errno=EBADF;
 		return -1;
 	}
@@ -435,6 +538,8 @@ int vde_close(VDECONN *conn)
 	if (__builtin_expect(conn!=0,1)) {
 		if (*(conn->inpath.sun_path))
 			unlink(conn->inpath.sun_path);
+		if (conn->outpath != NULL)
+			free(conn->outpath);
 		close(conn->fddata);
 		close(conn->fdctl);
 		free(conn);
