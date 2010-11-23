@@ -77,7 +77,7 @@ struct wirevalue {
 #define DDUP 3
 #define BAND 4
 #define SPEED 5
-#define CAPACITY 6
+#define CHANBUFSIZE 6
 #define NOISE 7
 #define MTU 8
 #define NUMVALUES 9
@@ -483,15 +483,6 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 {
 	struct timeval v;
 
-	/* CAPACITY */
-	/* when bandwidth is limited, packets exceeding capacity are discarded */
-	if (max_wirevalue(markov_current,CAPACITY,dir) > 0) {
-		double capval=compute_wirevalue(CAPACITY,dir);
-		if ((delay_bufsize[dir]+size) > capval)
-			return;
-	}
-	/* */
-
 	struct packpq *new=malloc(sizeof(struct packpq));
 	if (new==NULL) {
 		printlog(LOG_WARNING,"malloc elem %s",strerror(errno));
@@ -590,6 +581,14 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 	}
 	while (times>0) {
 		int banddelay=0;
+
+		/* CHANBUFSIZE */
+		/* when bandwidth is limited, packets exceeding channel bufsize are discarded */
+		if (max_wirevalue(markov_current,CHANBUFSIZE,dir) > 0) {
+			double capval=compute_wirevalue(CHANBUFSIZE,dir);
+			if ((delay_bufsize[dir]+size) > capval)
+				return;
+		}
 
 		/* SPEED */
 		/* speed limit, if packets arrive too fast, delay the sender */
@@ -1004,9 +1003,9 @@ static int setspeed(int fd,char *s)
 	return read_wirevalue(s,SPEED);
 }
 
-static int setcapacity(int fd,char *s)
+static int setchanbufsize(int fd,char *s)
 {
-	return read_wirevalue(s,CAPACITY);
+	return read_wirevalue(s,CHANBUFSIZE);
 }
 
 static int setfifo(int fd,char *s)
@@ -1139,7 +1138,7 @@ static int help(int fd,char *s)
 	printoutc(fd, "speed        set interface speed bytes/sec");
 	printoutc(fd, "noise        set noise factor bits/Mbyte");
 	printoutc(fd, "mtu          set channel MTU (bytes)");
-	printoutc(fd, "capacity     set channel capacity (bytes)");
+	printoutc(fd, "chanbufsize  set channel buffer size (bytes)");
 	printoutc(fd, "fifo         set channel fifoness");
 	printoutc(fd, "shutdown     shut the channel down");
 	printoutc(fd, "logout       log out from this mgmt session");
@@ -1198,8 +1197,8 @@ static int showinfo(int fd,char *s)
 				min_wirevalue(node,MTU,LR),
 				min_wirevalue(node,MTU,RL));
 		printoutc(fd, "Cap.   L->R %g+%g%c   R->L %g+%g%c",
-				WIREVALUE_FIELDS(node,CAPACITY,LR),
-				WIREVALUE_FIELDS(node,CAPACITY,RL));
+				WIREVALUE_FIELDS(node,CHANBUFSIZE,LR),
+				WIREVALUE_FIELDS(node,CHANBUFSIZE,RL));
 		printoutc(fd, "Current Delay Queue size:   L->R %d      R->L %d   ",delay_bufsize[LR],delay_bufsize[RL]);
 	} else {
 		printoutc(fd, "Loss   %g+%g%c",
@@ -1218,7 +1217,7 @@ static int showinfo(int fd,char *s)
 			WIREVALUE_FIELDS(node,NOISE,0));
 		printoutc(fd, "MTU    %g", min_wirevalue(node,MTU,0));
 		printoutc(fd, "Cap.   %g+%g%c",
-			WIREVALUE_FIELDS(node,CAPACITY,0));
+			WIREVALUE_FIELDS(node,CHANBUFSIZE,0));
 		printoutc(fd, "Current Delay Queue size:   %d",delay_bufsize[0]);
 	}
 	printoutc(fd,"Fifoness %s",(nofifo == 0)?"TRUE":"FALSE");
@@ -1268,7 +1267,8 @@ static struct comlist {
 	{"bandwidth",setband, 0},
 	{"band",setband, 0},
 	{"speed",setspeed, 0},
-	{"capacity",setcapacity, 0},
+	{"chanbufsize",setchanbufsize, 0},
+	{"capacity",setchanbufsize, 0},
 	{"noise",setnoise, 0},
 	{"mtu",setmtu, 0},
 	{"fifo",setfifo, 0},
@@ -1400,7 +1400,7 @@ void usage(void)
 			"\t--dup|-D dup_percentage\n"
 			"\t--band|-b bandwidth(bytes/s)\n"
 			"\t--speed|-s interface_speed(bytes/s)\n"
-			"\t--capacity|-c delay_channel_capacity\n"
+			"\t--chanbufsize|-c channel_bufsize\n"
 			"\t--noise|-n noise_bits/megabye\n"
 			"\t--mtu|-m mtu_size\n"
 			"\t--nofifo|-N\n"
@@ -1431,6 +1431,7 @@ int main(int argc,char *argv[])
 		{"dup",1 , 0, 'D'},
 		{"band",1 , 0, 'b'},
 		{"speed",1 , 0, 's'},
+		{"chanbufsize",1 , 0, 'c'},
 		{"capacity",1 , 0, 'c'},
 		{"noise",1 , 0, 'n'},
 		{"mtu",1 , 0, 'm'},
@@ -1487,7 +1488,7 @@ int main(int argc,char *argv[])
 				read_wirevalue(optarg,SPEED);
 				break;
 			case 'c':
-				read_wirevalue(optarg,CAPACITY);
+				read_wirevalue(optarg,CHANBUFSIZE);
 				break;
 			case 'M':
 				mgmt=strdup(optarg);

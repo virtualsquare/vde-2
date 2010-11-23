@@ -11,7 +11,7 @@ wirefilter \- Wire packet filter for Virtual Distributed Ethernet
 [\fB\-D\fI dup\fR]
 [\fB\-b\fI bandwidth\fR]
 [\fB\-s\fI interface_speed\fR]
-[\fB\-c\fI channel_capacity\fR]
+[\fB\-c\fI channel_bufsize\fR]
 [\fB\-n\fI noise_factor\fR]
 [\fB\-m\fI mtu_size\fR]
 [\fB\-M\fI mgmt socket\fR]
@@ -89,8 +89,8 @@ use (uniform or normal).
 Interface speed in Bytes/sec. It has the same syntax of -b. Input is blocked for
 the tramission time of the packet, thus the sender is prevented from sending too fast.
 .TP
-.B \-c "\fIcapacity\fP"
-Channel capacity (in Bytes): maximum size of the packet queue. Exceeding packets 
+.B \-c "\fIchannel_bufsize\fP"
+Channel buffer size (in Bytes): maximum size of the packet queue. Exceeding packets 
 are discarded. 
 .TP
 .B \-n "\fInoise factor\fP"
