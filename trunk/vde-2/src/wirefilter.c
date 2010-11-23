@@ -375,15 +375,17 @@ static int read_wirevalue(char *s, int tag)
 
 struct packpq {
 	unsigned long long when;
+	unsigned int counter;
 	int dir;
 	unsigned char *buf;
 	int size;
 };
 
 struct packpq **pqh;
-struct packpq sentinel={0,0,NULL,0};
+struct packpq sentinel={0,0,0,NULL,0};
 int npq,maxpq;
 unsigned long long maxwhen;
+unsigned int counter;
 
 #define PQCHUNK 100
 
@@ -459,12 +461,19 @@ static void packet_dequeue()
 		while (k<= npq>>1)
 		{
 			int j= k<<1;
-			if (j<npq && pqh[j]->when > pqh[j+1]->when) j++;
-			if (old->when <= pqh[j]->when) {
+			if (j<npq && 
+					(pqh[j]->when > pqh[j+1]->when ||
+					 (pqh[j]->when == pqh[j+1]->when && 
+						pqh[j]->counter > pqh[j+1]->counter)
+					)
+				 ) j++;
+			if (old->when < pqh[j]->when || 
+					(old->when == pqh[j]->when &&
+					 old->counter < pqh[j]->counter)
+				 ) 
 				break;
-			} else {
+			else 
 				pqh[k]=pqh[j];k=j;
-			}
 		}
 		pqh[k]=old;
 	}
@@ -490,8 +499,15 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 	}
 	gettimeofday(&v,NULL);
 	new->when= ((unsigned long long)v.tv_sec * 1000 + v.tv_usec/1000) + delms; 
-	if (new->when > maxwhen) maxwhen=new->when;
-	if (!nofifo && new->when < maxwhen) new->when=maxwhen;
+	if (new->when > maxwhen) {
+		maxwhen=new->when;
+		counter=0;
+	}
+	if (!nofifo && new->when <= maxwhen) {
+		new->when=maxwhen;
+		counter++;
+	}
+	new->counter=counter;
 	new->dir=dir;
 	new->buf=malloc(size);
 	if (new->buf==NULL) {
@@ -517,7 +533,8 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 		}
 	}
 	{int k=++npq;
-		while (new->when < pqh[k>>1]->when) {
+		while (new->when < pqh[k>>1]->when ||
+				(new->when == pqh[k>>1]->when && new->counter < pqh[k>>1]->counter)) {
 			pqh[k]=pqh[k>>1];
 			k >>= 1;
 		}
