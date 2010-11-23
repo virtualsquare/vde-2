@@ -480,8 +480,9 @@ static void packet_dequeue()
 					 old->counter < pqh[j]->counter)
 				 ) 
 				break;
-			else 
+			else {
 				pqh[k]=pqh[j];k=j;
+			}
 		}
 		pqh[k]=old;
 	}
