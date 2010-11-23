@@ -153,7 +153,7 @@ struct fsttagbpdu {
 
 static struct fstbpdu outpacket = {
 	.header.dest=BPDUADDR,
-	.header.proto={0x00,0x39}, /* 802.3 packet length */
+	.header.proto={0x00,0x27}, /* 802.3 packet length */
 	.llc={0x42,0x42,0x3},
 	.stp_protocol={0,0},
 	.stp_version=2,
@@ -163,7 +163,7 @@ static struct fstbpdu outpacket = {
 static struct fsttagbpdu outtagpacket = {
 	.header.dest=BPDUADDR,
 	.header.proto={0x81,0x00},
-	.tag_proto={0x00,0x39},
+	.tag_proto={0x00,0x27},
 	.llc={0x42,0x42,0x3},
 	.stp_protocol={0,0},
 	.stp_version=2,
