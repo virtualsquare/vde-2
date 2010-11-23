@@ -445,12 +445,16 @@ int writepacket(int dir,const unsigned char *buf,int size)
 /* packet queues are priority queues implemented on a heap.
  * enqueue time = dequeue time = O(log n) max&mean
  */
+/* the delay is evaluated in milliseconds, several packets can be
+	 scheduled at the same "when" time. Counter preserve the fifoness. */
 
 static void packet_dequeue()
 {
 	struct timeval v;
 	gettimeofday(&v,NULL);
 	unsigned long long now=(unsigned long long)v.tv_sec*1000+v.tv_usec/1000; 
+	/* the next packet (min time, min counter) is in the root of
+		 the packetqueue heap */
 	while (npq>0 && pqh[1]->when <= now) {
 		struct packpq *old=pqh[npq--];
 		int k=1;
@@ -458,15 +462,19 @@ static void packet_dequeue()
 		writepacket(pqh[1]->dir,pqh[1]->buf,pqh[1]->size);
 		free(pqh[1]->buf);
 		free(pqh[1]);
+		/* rebuild the heap */
 		while (k<= npq>>1)
 		{
 			int j= k<<1;
+			/* choose the min between pqh[2k] and pqh[2k+1] */
 			if (j<npq && 
 					(pqh[j]->when > pqh[j+1]->when ||
 					 (pqh[j]->when == pqh[j+1]->when && 
 						pqh[j]->counter > pqh[j+1]->counter)
 					)
 				 ) j++;
+			/* if old must be put here, okay else move the min up and
+				 continue the rebuilding phase */
 			if (old->when < pqh[j]->when || 
 					(old->when == pqh[j]->when &&
 					 old->counter < pqh[j]->counter)
@@ -523,7 +531,9 @@ static void packet_enqueue(int dir,const unsigned char *buf,int size,int delms)
 			exit (1);
 		}
 	}
-	{int k=++npq;
+	{
+		int k=++npq;
+		/* add the new element to the heap */
 		while (new->when < pqh[k>>1]->when ||
 				(new->when == pqh[k>>1]->when && new->counter < pqh[k>>1]->counter)) {
 			pqh[k]=pqh[k>>1];
