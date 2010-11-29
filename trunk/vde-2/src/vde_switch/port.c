@@ -1200,7 +1200,7 @@ uid_t port_user(int port)
 	if (port<0 || port>=numports)
 		return -1;
 	else
-		return portv[port]->user;
+		return portv[port]->curuser;
 }
 
 static struct comlist cl[]={

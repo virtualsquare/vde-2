@@ -2,6 +2,7 @@
 #define _VDEPLUGIN_H
 #include <stdarg.h>
 #include <stdio.h>
+#include <time.h>
 
 /* command type constants */
 /* doit signature:
@@ -112,7 +113,13 @@ void deldbgcl(int ncl,struct dbgcl *cl);
 #endif
 
 void printoutc(FILE *f, const char *format, ...);
+void printlog(int priority, const char *format, ...);
 
 uid_t port_user(int port);
+time_t qtime(); // returns global time (faster than time())
+void qtime_csenter();
+void qtime_csexit();
+unsigned int qtimer_add(time_t period,int times,void (*call)(),void *arg);
+void qtimer_del(unsigned int n);
 
 #endif
