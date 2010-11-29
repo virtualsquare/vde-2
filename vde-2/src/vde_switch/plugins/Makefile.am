@@ -13,10 +13,13 @@ endif
 #	cd "$(DESTDIR)/$(moddir)" && rm -f $(mod_LTLIBRARIES)
 
 
-mod_LTLIBRARIES = dump.la
+mod_LTLIBRARIES = dump.la iplog.la
 
 dump_la_SOURCES = dump.c
 dump_la_LIBADD = $(top_builddir)/src/common/libvdecommon.la
+
+iplog_la_SOURCES = iplog.c
+iplog_la_LIBADD = $(top_builddir)/src/common/libvdecommon.la
 
 if ENABLE_PCAP
   mod_LTLIBRARIES += pdump.la
