@@ -113,5 +113,6 @@ void deldbgcl(int ncl,struct dbgcl *cl);
 
 void printoutc(FILE *f, const char *format, ...);
 
+uid_t port_user(int port);
 
 #endif

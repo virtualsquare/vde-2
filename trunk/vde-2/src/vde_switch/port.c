@@ -1195,6 +1195,13 @@ static int setmacaddr(char *strmac)
 }
 #endif
 
+uid_t port_user(int port)
+{
+	if (port<0 || port>=numports)
+		return -1;
+	else
+		return portv[port]->user;
+}
 
 static struct comlist cl[]={
 	{"port","============","PORT STATUS MENU",NULL,NOARG},
