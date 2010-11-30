@@ -59,6 +59,7 @@ static struct dbgcl dl[]= {
 };
 #define D_LOGIP_NEWIP (dl)
 
+/* lists of ip ranges to log */
 struct ip4logaddr {
 	struct ip4logaddr *next;
 	uint32_t addr;
@@ -74,6 +75,7 @@ struct ip6logaddr {
 struct ip4logaddr *ip4loghead;
 struct ip6logaddr *ip6loghead;
 
+/* packet header structure layer 2 and 3*/
 #define ETH_ALEN 6
 struct header {
 	unsigned char dest[ETH_ALEN];
@@ -99,11 +101,36 @@ union body {
 	} vlan;
 };
 
+/* vde plugin data */
 struct plugin vde_plugin_data={
 	.name="iplog",
 	.help="log ip/port/user assignment",
 };
 
+/* translate ipv4 ipv6 addresses into strings for logging */
+static inline int ip42string(uint32_t *addr, char *hostname, unsigned int len)
+{
+	struct sockaddr_in ip4addr;
+	ip4addr.sin_family=AF_INET;
+	ip4addr.sin_port=0;
+	ip4addr.sin_addr.s_addr = *addr;
+	return getnameinfo((struct sockaddr *)&ip4addr,sizeof(ip4addr),
+			hostname,len,NULL,0,NI_NUMERICHOST);
+}
+
+static inline int ip62string(uint32_t *addr, char *hostname, unsigned int len)
+{
+	struct sockaddr_in6 ip6addr;
+	ip6addr.sin6_family=AF_INET6;
+	ip6addr.sin6_port=0;
+	ip6addr.sin6_flowinfo=0;
+	ip6addr.sin6_scope_id=0;
+	memcpy(&ip6addr.sin6_addr.s6_addr,addr,16);
+	return getnameinfo((struct sockaddr *)&ip6addr,sizeof(ip6addr),
+			hostname,len,NULL,0,NI_NUMERICHOST);
+}
+
+/* hash table of recently seen ip addresses, collision lists are double linked */
 #define IP_HASH_SIZE 1024
 
 struct ip_hash_entry {
@@ -129,28 +156,8 @@ static inline int ip_hash(int len,unsigned char *addr)
 				37*addr[12]+41*addr[13]+43*addr[14]+47*addr[15]) % IP_HASH_SIZE);
 }
 
-static inline int ip42string(uint32_t *addr, char *hostname, unsigned int len)
-{
-	struct sockaddr_in ip4addr;
-	ip4addr.sin_family=AF_INET;
-	ip4addr.sin_port=0;
-	ip4addr.sin_addr.s_addr = *addr;
-	return getnameinfo((struct sockaddr *)&ip4addr,sizeof(ip4addr),
-			hostname,len,NULL,0,NI_NUMERICHOST);
-}
-
-static inline int ip62string(uint32_t *addr, char *hostname, unsigned int len)
-{
-	struct sockaddr_in6 ip6addr;
-	ip6addr.sin6_family=AF_INET6;
-	ip6addr.sin6_port=0;
-	ip6addr.sin6_flowinfo=0;
-	ip6addr.sin6_scope_id=0;
-	memcpy(&ip6addr.sin6_addr.s6_addr,addr,16);
-	return getnameinfo((struct sockaddr *)&ip6addr,sizeof(ip6addr),
-			hostname,len,NULL,0,NI_NUMERICHOST);
-}
-
+/* search ip address into the hash tacle and add it if it does not exist.
+	 log each new item added */
 static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port)
 {
 	struct ip_hash_entry *e;
@@ -202,6 +209,7 @@ static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port
 	}
 }
 
+/* pass through the hash table and execute function f for each element */
 static void ip_for_all_hash(void (*f)(struct ip_hash_entry *, void *), void *arg)
 {
 	int i;
@@ -215,6 +223,7 @@ static void ip_for_all_hash(void (*f)(struct ip_hash_entry *, void *), void *arg
 	}
 }
 
+/* delete a hash table entry */
 static inline void delete_hash_entry(struct ip_hash_entry *old) 
 {
 	*((old)->prev)=(old)->next; 
@@ -245,6 +254,7 @@ static void ip_hash_gc(void *arg)
 	ip_for_all_hash(ip_gc, &t);
 }
 
+/* delete all ip address on a specific port (when the port is closed) */
 static void port_gc(struct ip_hash_entry *e, void *arg)
 {
 	int *port=arg;
@@ -252,6 +262,7 @@ static void port_gc(struct ip_hash_entry *e, void *arg)
 		delete_hash_entry(e);
 }
 
+/* upcall from vde: new incomping packet */
 #define UINT32(X) (((uint32_t *)&(X)))
 static int iplog_pktin(struct dbgcl *event,void *arg,va_list v)
 {
@@ -271,6 +282,7 @@ static int iplog_pktin(struct dbgcl *event,void *arg,va_list v)
 			pb->v4.version == 0x45) {
 		/*v4 */
 		struct ip4logaddr *ip4scan;
+		/* is the packet in one of the logged ranges? */
 		for (ip4scan=ip4loghead; ip4scan!=NULL; ip4scan=ip4scan->next) {
 			/*printf("%x %x %x\n",UINT32(pb->v4.ip4src[0]) , ip4scan->mask ,
 				ip4scan->addr);*/
@@ -286,6 +298,7 @@ static int iplog_pktin(struct dbgcl *event,void *arg,va_list v)
 			pb->v4.version == 0x60) {
 		/*v6 */
 		struct ip6logaddr *ip6scan;
+		/* is the packet in one of the logged ranges? */
 		for (ip6scan=ip6loghead; ip6scan!=NULL; ip6scan=ip6scan->next) {
 			/*printf("%x %x %x:",UINT32(pb->v6.ip6src[0]) , ip6scan->mask[0] , ip6scan->addr[0]);
 				printf("%x %x %x:",UINT32(pb->v6.ip6src[4]) , ip6scan->mask[1] , ip6scan->addr[1]);
@@ -308,6 +321,7 @@ static int iplog_pktin(struct dbgcl *event,void *arg,va_list v)
 	return 0;
 }
 
+/* upcall from vde: a port has been closed */
 static int iplog_port_minus(struct dbgcl *event,void *arg,va_list v)
 {
 	int port=va_arg(v,int);
@@ -315,6 +329,7 @@ static int iplog_port_minus(struct dbgcl *event,void *arg,va_list v)
 	return 0;
 }
 
+/*user interface: chowinfo */
 static int ipshowinfo(FILE *fd)
 {
 	printoutc(fd,"iplog: ip/port/user loggin plugin");
@@ -325,9 +340,12 @@ static int ipshowinfo(FILE *fd)
 			printoutc(fd,"log on syslog");
 	} else
 		printoutc(fd,"log on file %s",logfile);
+	printoutc(fd,"GC interval %d secs",ip_gc_interval);
+	printoutc(fd,"GC expire %d secs",ip_gc_expire);
 	return 0;
 }
 
+/* close the old log file */
 static void closelogfile(void)
 {
 	if (logfilefd >= 0)
@@ -336,6 +354,7 @@ static void closelogfile(void)
 		free(logfile);
 }
 
+/* change the log file */
 static int iplogfile(char *arg)
 {
 	if (*arg) {
@@ -360,6 +379,7 @@ static int iplogfile(char *arg)
 		return EINVAL;
 }
 
+/* add a v4 range (recursive) */
 static int iplog4radd(struct ip4logaddr **ph, uint32_t addr, uint32_t mask)
 {
 	if (*ph == NULL) {
@@ -380,6 +400,7 @@ static int iplog4radd(struct ip4logaddr **ph, uint32_t addr, uint32_t mask)
 	}
 }
 
+/* add a v6 range (recursive) */
 static int iplog6radd(struct ip6logaddr **ph, uint32_t addr[4], uint32_t mask[4])
 {
 	if (*ph == NULL) {
@@ -401,6 +422,7 @@ static int iplog6radd(struct ip6logaddr **ph, uint32_t addr[4], uint32_t mask[4]
 	}
 }
 
+/* delete a v4 range (recursive) */
 static int iplog4rdel(struct ip4logaddr **ph, uint32_t addr, uint32_t mask)
 {
 	if (*ph == NULL) {
@@ -416,6 +438,7 @@ static int iplog4rdel(struct ip4logaddr **ph, uint32_t addr, uint32_t mask)
 	}
 }
 
+/* delete a v6 range (recursive) */
 static int iplog6rdel(struct ip6logaddr **ph, uint32_t addr[4], uint32_t mask[4])
 {
 	if (*ph == NULL) {
@@ -432,6 +455,7 @@ static int iplog6rdel(struct ip6logaddr **ph, uint32_t addr[4], uint32_t mask[4]
 	}
 }
 
+/* create a mask from the number of bits */
 static void n2mask(int len,int n, uint32_t *out)
 {
 	char m[len];
@@ -449,6 +473,7 @@ static void n2mask(int len,int n, uint32_t *out)
 		out[i]=*(((uint32_t *)m)+i);
 }
 
+/* cumpute the number of bits from a mask */
 static int mask2n(int len, void *addr)
 {
 	char *m=addr;
@@ -465,6 +490,7 @@ static int mask2n(int len, void *addr)
 	return n;
 }
 
+/* convert an ipv4 or ipv6 address into addr/mask */
 static int char2addr_mask(char *arg, uint32_t *addr, uint32_t *mask)
 {
 	struct addrinfo *ai;
@@ -502,6 +528,7 @@ static int char2addr_mask(char *arg, uint32_t *addr, uint32_t *mask)
 	}
 }
 
+/* user interface: add an ipv4 or ipv6 range */
 static int iplogadd(char *arg)
 {
 	uint32_t addr[4],mask[4];
@@ -514,6 +541,7 @@ static int iplogadd(char *arg)
 		return EINVAL;
 }
 
+/* user interface: delete an ipv4 or ipv6 range */
 static int iplogdel(char *arg)
 {
 	uint32_t addr[4],mask[4];
@@ -526,6 +554,7 @@ static int iplogdel(char *arg)
 		return EINVAL;
 }
 
+/* list the ipv4 ranges */
 static void iplog4rlist(struct ip4logaddr *ph, FILE *fd)
 {
 	if (ph != NULL) {
@@ -536,6 +565,7 @@ static void iplog4rlist(struct ip4logaddr *ph, FILE *fd)
 	}
 }
 
+/* list the ipv6 ranges */
 static void iplog6rlist(struct ip6logaddr *ph, FILE *fd)
 {
 	if (ph != NULL) {
@@ -546,6 +576,7 @@ static void iplog6rlist(struct ip6logaddr *ph, FILE *fd)
 	}
 }
 
+/* user interfaces list the ip ranges (v4 and v6)*/
 static int iploglist(FILE *fd)
 {
 	iplog4rlist(ip4loghead,fd);
@@ -553,6 +584,7 @@ static int iploglist(FILE *fd)
 	return 0;
 }
 
+/* user interfaces set the garbage collection interval*/
 int iplog_set_gc_interval(int p)
 {
 	qtimer_del(ip_gc_timerno);
@@ -561,12 +593,14 @@ int iplog_set_gc_interval(int p)
 	return 0;
 }
 
+/* user interfaces set the expire interval*/
 int iplog_set_gc_expire(int e)
 {
 	ip_gc_expire=e;
 	return 0;
 }
 
+/* print an item of the recent ip hash table */
 static void iplog_iplist_item(struct ip_hash_entry *e, void *arg)
 {
 	FILE *fd=arg;
@@ -583,12 +617,14 @@ static void iplog_iplist_item(struct ip_hash_entry *e, void *arg)
 	}
 }
 
+/* user interface: list all the ip addresses in the hash table */
 static int iplog_iplist(FILE *fd)
 {
 	ip_for_all_hash(iplog_iplist_item, fd);
 	return 0;
 }
 
+/* user interface: list the ip addresses on a specific port */
 struct ipport_data {
 	FILE *fd;
 	int port;
@@ -608,6 +644,7 @@ static int iplog_ipport(FILE *fd,int port)
 	return 0;
 }
 
+/* user interface: list the ip addresses of a specific user */
 struct ipuser_data {
 	FILE *fd;
 	uid_t user;
@@ -637,6 +674,7 @@ static int iplog_ipuser(FILE *fd,char *user)
 	return 0;
 }
 
+/* user interface: search an ip address in the hash table */
 static void iplog_ipsearch_item(int len,unsigned char *addr, FILE *fd)
 {
 	struct ip_hash_entry *e;
@@ -667,6 +705,7 @@ static int iplog_ipsearch(FILE *fd,char *addr)
 	return rv;
 }
 
+/* command list */
 static struct comlist cl[]={
 	{"iplog","============","IP/Mac/User Logging",NULL,NOARG},
 	{"iplog/showinfo","","Show info on logging",ipshowinfo,NOARG|WITHFILE},
@@ -686,7 +725,6 @@ static struct comlist cl[]={
 	__attribute__ ((constructor))
 init (void)
 {
-	fprintf(stderr,"iplog init\n");
 	iph=calloc(IP_HASH_SIZE,sizeof(struct ip_hash_entry *));
 	ADDCL(cl);
 	ADDDBGCL(dl);
@@ -701,7 +739,7 @@ init (void)
 fini (void)
 {
 	time_t t = qtime();
-	fprintf(stderr,"iplog fini\n");
+	eventdel(iplog_port_minus, "port/-", NULL);
 	eventdel(iplog_pktin, "packet/in", NULL);
 	qtimer_del(ip_gc_timerno);
 	DELCL(cl);
