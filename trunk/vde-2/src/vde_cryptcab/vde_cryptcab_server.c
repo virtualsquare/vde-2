@@ -358,7 +358,6 @@ static int recv_datagram_srv(struct datagram *pkt, int nfd)
 		i++;	  
 		if(i>numberofpeers()) {
 			i=1;
-			return 0;
 		}
 
 		if (pfd[i].revents&POLLNVAL || pfd[i].revents&POLLHUP){
