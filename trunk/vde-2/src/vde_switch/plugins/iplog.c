@@ -183,12 +183,14 @@ static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port
 	} 
 	now=qtime();
 	e->last_seen = now;
-	if(e->port != port) {
+	if(e->port != port || e->vlan != vlan) {
 		e->port=port;
+		e->vlan = vlan;
 		char hostname[100];
 		char msg[256];
 		char lf[]="\n";
-		struct iovec iov[]={{msg,0},{lf,1}};
+		char stime[26];
+		struct iovec iov[]={{stime+4,16},{msg,0},{lf,1}};
 
 		if ((len==4 && ip42string((uint32_t *)addr,hostname,sizeof(hostname))==0) ||
 				(len==16 && ip62string((uint32_t *)addr,hostname,sizeof(hostname))==0)) {
@@ -198,11 +200,13 @@ static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port
 				username="(none)";
 			else
 				username=pwd->pw_name;
-			iov[0].iov_len=snprintf(msg,sizeof(msg),"ipv%d %s port=%d user=%s",
-					(len==4)?4:6, hostname, port, username);
-			if (logfilefd >= 0)
-				writev(logfilefd,iov,2);
-			else if (logfilefd != -1) 
+			iov[1].iov_len=snprintf(msg,sizeof(msg),"ipv%d %s port=%d vlan=%d user=%s",
+					(len==4)?4:6, hostname, port, vlan, username);
+			if (logfilefd >= 0) {
+				time_t ntime=time(&ntime);
+				ctime_r(&ntime,stime);
+				writev(logfilefd,iov,3);
+			} else if (logfilefd != -1) 
 				syslog(LOG_INFO, msg);
 			DBGOUT(D_LOGIP_NEWIP,"%s",msg);
 		}
@@ -252,14 +256,6 @@ static void ip_hash_gc(void *arg)
 {
 	time_t t = qtime() - ip_gc_expire;
 	ip_for_all_hash(ip_gc, &t);
-}
-
-/* delete all ip address on a specific port (when the port is closed) */
-static void port_gc(struct ip_hash_entry *e, void *arg)
-{
-	int *port=arg;
-	if(*port == e->port)
-		delete_hash_entry(e);
 }
 
 /* upcall from vde: new incomping packet */
@@ -321,6 +317,14 @@ static int iplog_pktin(struct dbgcl *event,void *arg,va_list v)
 	return 0;
 }
 
+/* delete all ip address on a specific port (when the port is closed) */
+static void port_gc(struct ip_hash_entry *e, void *arg)
+{
+	int *port=arg;
+	if(*port == e->port)
+		delete_hash_entry(e);
+}
+
 /* upcall from vde: a port has been closed */
 static int iplog_port_minus(struct dbgcl *event,void *arg,va_list v)
 {
@@ -329,7 +333,7 @@ static int iplog_port_minus(struct dbgcl *event,void *arg,va_list v)
 	return 0;
 }
 
-/*user interface: chowinfo */
+/*user interface: showinfo */
 static int ipshowinfo(FILE *fd)
 {
 	printoutc(fd,"iplog: ip/port/user loggin plugin");
@@ -473,7 +477,7 @@ static void n2mask(int len,int n, uint32_t *out)
 		out[i]=*(((uint32_t *)m)+i);
 }
 
-/* cumpute the number of bits from a mask */
+/* compute the number of bits from a mask */
 static int mask2n(int len, void *addr)
 {
 	char *m=addr;
@@ -700,7 +704,7 @@ static int iplog_ipsearch(FILE *fd,char *addr)
 		struct sockaddr_in6 *ip6addr=(struct sockaddr_in6 *) ai->ai_addr;
 		iplog_ipsearch_item(16, ip6addr->sin6_addr.s6_addr , fd);
 	} else 
-		return rv=EINVAL;
+		rv=EINVAL;
 	freeaddrinfo(ai);
 	return rv;
 }
