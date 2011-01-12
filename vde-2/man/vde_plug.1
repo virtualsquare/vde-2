@@ -87,7 +87,11 @@ octal chmod like permissions for the comm sockets
 .B -sock "\fIsocketdir\fP"
 ) specify the directory which contains the UNIX socket to be used by local programs for joining the VDE.
 The default value is "/tmp/vde.ctl", which corresponds to the socket
-"/tmp/vde.ctl/ctl".
+"/tmp/vde.ctl/ctl" (or /var/run/vde.ctl when the vde_switch runs as a 
+shared daemon).
+It is possible for users to redefine their default switch as ".vde-2/stdsock"
+in their home directory. If exist, this directory (or symbolic link to
+the actual directory) is used as the default value for the user.
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
