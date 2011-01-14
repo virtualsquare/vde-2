@@ -18,6 +18,8 @@ AC_PROG_LN_S
 AC_PROG_LIBTOOL
 AM_PROG_CC_C_O
 
+AC_DEFINE_UNQUOTED(MODULES_EXT, "$shrext_cmds", [Extension of shared objects])
+
 # Checks for libraries.
 AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([crypto], [EVP_EncryptInit],
