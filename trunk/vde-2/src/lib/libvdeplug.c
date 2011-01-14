@@ -130,6 +130,8 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	char *std_sockname=NULL;
 	char *real_sockname=NULL;
 	char *sockname=NULL;
+	char *ssh_client = getenv("SSH_CLIENT");
+	int descrlen;
 
 	if (open_args != NULL) {
 		if (interface_version == 1) {
@@ -243,9 +245,16 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		/* If one of the connect succeeded, we're done */
 		if (res == 0)
 		{
-			snprintf(req->description,MAXDESCR,"%s user=%s PID=%d %s",
+			int descrlen=snprintf(req->description,MAXDESCR,"%s user=%s PID=%d",
 					descr,(callerpwd != NULL)?callerpwd->pw_name:"??",
-					pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"");
+					pid);
+			if (ssh_client) {
+				char *endofip=strchr(ssh_client,' ');
+				if (endofip) *endofip=0;
+				snprintf(req->description+descrlen,MAXDESCR-descrlen,
+						" SSH=%s", ssh_client);
+				if (endofip) *endofip=' ';
+			}
 			setsockopt(conn->fddata,0,IPN_SO_DESCR,req->description,
 					strlen(req->description+1));
 			*(conn->inpath.sun_path)=0; /*null string, do not delete "return path"*/
@@ -446,9 +455,22 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	}
 	chmod(conn->inpath.sun_path,mode);
 
-	snprintf(req->description,MAXDESCR,"%s user=%s PID=%d %s SOCK=%s",
+#ifdef DESCR_INCLUDE_SOCK
+	descrlen=snprintf(req->description,MAXDESCR,"%s user=%s PID=%d SOCK=%s",
 			descr,(callerpwd != NULL)?callerpwd->pw_name:"??",
-			pid,getenv("SSH_CLIENT")?getenv("SSH_CLIENT"):"",req->sock.sun_path);
+			pid,req->sock.sun_path);
+#else
+	descrlen=snprintf(req->description,MAXDESCR,"%s user=%s PID=%d",
+			descr,(callerpwd != NULL)?callerpwd->pw_name:"??", pid);
+#endif
+
+	if (ssh_client) {
+		char *endofip=strchr(ssh_client,' ');
+		if (endofip) *endofip=0;
+		snprintf(req->description+descrlen,MAXDESCR-descrlen," SSH=%s", ssh_client);
+		if (endofip) *endofip=' ';
+	}
+
 
 	if (send(conn->fdctl,req,sizeof(*req)-MAXDESCR+strlen(req->description),0)<0) 
 		goto abort;

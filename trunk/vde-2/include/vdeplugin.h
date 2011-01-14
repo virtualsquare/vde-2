@@ -116,6 +116,8 @@ void printoutc(FILE *f, const char *format, ...);
 void printlog(int priority, const char *format, ...);
 
 uid_t port_user(int port);
+char *port_descr(int portno, int epn);
+
 time_t qtime(); // returns global time (faster than time())
 void qtime_csenter();
 void qtime_csexit();

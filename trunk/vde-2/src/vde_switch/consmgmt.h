@@ -33,6 +33,7 @@ typedef int (*intfun)();
 #ifdef DEBUGOPT
 #define D_PACKET 01000
 #define D_MGMT 02000
+#define D_SIG 03000
 #define D_IN 01
 #define D_OUT 02
 #define D_PLUS 01
@@ -44,6 +45,7 @@ typedef int (*intfun)();
 #define D_PORT 020
 #define D_EP 030
 #define D_FSTP 040
+#define D_HUP 01
 struct dbgcl {
 	char *path; /* debug path for add/del */
 	char *help; /* help string. just event mgmt when NULL */

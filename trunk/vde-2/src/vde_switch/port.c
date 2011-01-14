@@ -1197,10 +1197,29 @@ static int setmacaddr(char *strmac)
 
 uid_t port_user(int port)
 {
-	if (port<0 || port>=numports)
+	if (port<0 || port>=numports || portv[port]==NULL)
 		return -1;
 	else
 		return portv[port]->curuser;
+}
+
+char *port_descr(int portno, int epn) {
+	if (portno<0 || portno>=numports)
+		return NULL;
+	else {
+		struct port *port=portv[portno];
+		if (port == NULL)
+			return NULL;
+		else {
+			struct endpoint *ep;
+			for (ep=port->ep;ep!=NULL && epn>0;ep=ep->next,epn--)
+				;
+			if (ep)
+				return ep->descr;
+			else
+				return NULL;
+		}
+	}
 }
 
 static struct comlist cl[]={

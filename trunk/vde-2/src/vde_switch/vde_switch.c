@@ -535,10 +535,10 @@ static void start_modules(void);
 int main(int argc, char **argv)
 {
 	set_switchmac();
+	setsighandlers();
 	start_modules();
 	parse_args(argc,argv);
 	atexit(cleanup);
-	setsighandlers();
 	hash_init(hash_size);
 #ifdef FSTP
 	fst_init(numports);
