@@ -804,11 +804,76 @@ static int pluginlist(FILE *f,char *arg)
 	return rv;
 }
 
+/* This will be prefixed with getent("$HOME") */
+#define USER_PLUGINS_DIR "/.vde2/plugins"
+
+#ifndef MAX
+# define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+/*
+ * Try to dlopen a plugin trying different names and locations:
+ * (code from view-os by Gardenghi)
+ * 
+ * 1) dlopen(modname)
+ * 2) dlopen(modname.so)
+ * 3) dlopen(user_umview_plugin_directory/modname)
+ * 4) dlopen(user_umview_plugin_directory/modname.so)
+ * 5) dlopen(global_umview_plugin_directory/modname)
+ * 6) dlopen(global_umview_plugin_directory/modname.so)
+ *
+ */
+
+#define TRY_DLOPEN(fmt...) \
+{ \
+	snprintf(testpath, tplen, fmt); \
+	if ((handle = dlopen(testpath, flag))) \
+	{ \
+		free(testpath); \
+		return handle; \
+	} \
+}
+
+void *plugin_dlopen(const char *modname, int flag)
+{
+	void *handle;
+	char *testpath;
+	int tplen;
+	char *homedir = getenv("HOME");
+
+	if (!modname)
+		return NULL;
+
+	if ((handle = dlopen(modname, flag)))
+		return handle;
+
+	/* If there is no home directory, use CWD */
+	if (!homedir)
+		homedir = ".";
+
+	tplen = strlen(modname) +
+		strlen(MODULES_EXT) + 2 + // + 1 is for a '/' and + 1 for \0
+		MAX(strlen(PLUGINS_DIR),
+				strlen(homedir) + strlen(USER_PLUGINS_DIR));
+
+	  testpath = malloc(tplen);
+
+		TRY_DLOPEN("%s%s", modname, MODULES_EXT);
+		TRY_DLOPEN("%s%s/%s", homedir, USER_PLUGINS_DIR, modname);
+		TRY_DLOPEN("%s%s/%s%s", homedir, USER_PLUGINS_DIR, modname, MODULES_EXT);
+		TRY_DLOPEN("%s%s", PLUGINS_DIR, modname);
+		TRY_DLOPEN("%s/%s%s", PLUGINS_DIR, modname, MODULES_EXT);
+
+		free(testpath);
+		return NULL;
+}
+
+
+
 static int pluginadd(char *arg) {
 	void *handle;
 	struct plugin *p;
 	int rv=ENOENT;
-	if ((handle=dlopen(arg,RTLD_LAZY)) != NULL) {
+	if ((handle=plugin_dlopen(arg,RTLD_LAZY)) != NULL) {
 		if ((p=(struct plugin *) dlsym(handle,"vde_plugin_data")) != NULL) {
 			if (p->handle != NULL) { /* this dyn library is already loaded*/
 				dlclose(handle);
