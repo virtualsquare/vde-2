@@ -187,7 +187,7 @@ static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port
 		e->port=port;
 		e->vlan = vlan;
 		char hostname[100];
-		char msg[256];
+		char msg[1024];
 		char lf[]="\n";
 		char stime[26];
 		struct iovec iov[]={{stime+4,16},{msg,0},{lf,1}};
@@ -196,12 +196,19 @@ static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port
 				(len==16 && ip62string((uint32_t *)addr,hostname,sizeof(hostname))==0)) {
 			struct passwd *pwd;
 			char *username;
+			int epn;
+			char *descr;
 			if ((pwd=getpwuid(port_user(port))) == NULL)
 				username="(none)";
 			else
 				username=pwd->pw_name;
 			iov[1].iov_len=snprintf(msg,sizeof(msg),"ipv%d %s port=%d vlan=%d user=%s",
 					(len==4)?4:6, hostname, port, vlan, username);
+			for (epn=0; (descr=port_descr(port,epn)) != NULL; epn++) {
+				int len=iov[1].iov_len;
+				int descrlen=snprintf(msg+len,sizeof(msg)-len," \"%s\"",descr);
+				iov[1].iov_len+=descrlen;
+			}
 			if (logfilefd >= 0) {
 				time_t ntime=time(&ntime);
 				ctime_r(&ntime,stime);
@@ -725,6 +732,25 @@ static struct comlist cl[]={
 	{"iplog/ipsearch","ipaddr","search an IP address",iplog_ipsearch,STRARG|WITHFILE},
 };
 
+static int iplog_hup(struct dbgcl *event,void *arg,va_list v)
+{
+	if (logfilefd >= 0) {
+		char stime[26];
+		char lf[]="\n";
+		char *prehup="SIGHUP: closing file";
+		char *posthup="SIGHUP: opening file";
+		struct iovec preiov[]={{stime+4,16},{prehup,strlen(prehup)},{lf,1}};
+		struct iovec postiov[]={{stime+4,16},{posthup,strlen(posthup)},{lf,1}};
+		time_t ntime=time(&ntime);
+		ctime_r(&ntime,stime);
+		writev(logfilefd,preiov,3);
+		close(logfilefd);
+		logfilefd=open(logfile,O_CREAT|O_WRONLY|O_APPEND,0600);
+		writev(logfilefd,postiov,3);
+	}
+	return 0;
+}
+
 	static void
 	__attribute__ ((constructor))
 init (void)
@@ -733,9 +759,9 @@ init (void)
 	ADDCL(cl);
 	ADDDBGCL(dl);
 	ip_gc_timerno=qtimer_add(ip_gc_interval,0,ip_hash_gc,NULL);
+	eventadd(iplog_hup, "sig/hup", NULL);
 	eventadd(iplog_pktin, "packet/in", NULL);
 	eventadd(iplog_port_minus, "port/-", NULL);
-	/* XXX add event port/minux  */
 }
 
 	static void
@@ -743,8 +769,10 @@ init (void)
 fini (void)
 {
 	time_t t = qtime();
+	closelogfile();
 	eventdel(iplog_port_minus, "port/-", NULL);
 	eventdel(iplog_pktin, "packet/in", NULL);
+	eventdel(iplog_hup, "sig/hup", NULL);
 	qtimer_del(ip_gc_timerno);
 	DELCL(cl);
 	DELDBGCL(dl);

@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <syslog.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <grp.h>
 #include <libgen.h>
 #include <sys/types.h>
@@ -64,9 +65,11 @@ static struct dbgcl *dbgclh=NULL;
 static struct dbgcl **dbgclt=&dbgclh;
 #define MGMTPORTNEW (dl) 
 #define MGMTPORTDEL (dl+1) 
+#define MGMTSIGHUP (dl+2) 
 static struct dbgcl dl[]= {
 	{"mgmt/+",NULL,D_MGMT|D_PLUS},
-	{"mgmt/-",NULL,D_MGMT|D_MINUS}
+	{"mgmt/-",NULL,D_MGMT|D_MINUS},
+	{"sig/hup",NULL,D_SIG|D_HUP}
 };
 #endif
 #ifdef VDEPLUGIN
@@ -140,7 +143,7 @@ void addplugin(struct plugin *cl)
 
 void delplugin(struct plugin *cl)
 {
-	register struct plugin **p=&pluginh;
+	register struct plugin **p=plugint=&pluginh;
 	while (*p != NULL) {
 		if (*p == cl)
 			*p=cl->next;
@@ -861,6 +864,11 @@ static struct comlist cl[]={
 #endif
 };
 
+static void sighupmgmt(int signo)
+{
+	EVENTOUT(MGMTSIGHUP, signo);
+}
+
 void start_consmgmt(void)
 {
 	swmi.swmname="console-mgmt";
@@ -876,4 +884,7 @@ void start_consmgmt(void)
 	ADDDBGCL(dl);
 #endif
 	add_swm(&swmi);
+#ifdef DEBUGOPT
+	signal(SIGHUP,sighupmgmt);
+#endif
 }
