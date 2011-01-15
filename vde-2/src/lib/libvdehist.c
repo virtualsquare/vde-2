@@ -323,6 +323,8 @@ void vdehist_mgmt_to_term(struct vdehiststat *st)
 			n=vdehist_vderead(st->mgmtfd,buf,BUFSIZE);
 		}
 	}
+	if (commandlist == NULL && st->mgmtfd >= 0) 
+		vdehist_create_commandlist(st->mgmtfd);
 	/* redraw the input line */
 	redraw_line(st,1);
 }
@@ -349,6 +351,12 @@ static int hist_sendcmd(struct vdehiststat *st)
 		}
 		vdehist_termwrite(st->termfd,"\r\n",2);
 		vdehist_termwrite(st->termfd,prompt,strlen(prompt));
+	}
+	if (commandlist != NULL &&
+			(strncmp(cmd,"plugin/add",10) == 0 ||
+			 strncmp(cmd,"plugin/del",10) == 0)) {
+		free(commandlist);
+		commandlist=NULL;
 	}
 	return 0;
 }
