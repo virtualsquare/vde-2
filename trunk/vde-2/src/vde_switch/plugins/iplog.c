@@ -343,7 +343,7 @@ static int iplog_port_minus(struct dbgcl *event,void *arg,va_list v)
 /*user interface: showinfo */
 static int ipshowinfo(FILE *fd)
 {
-	printoutc(fd,"iplog: ip/port/user loggin plugin");
+	printoutc(fd,"iplog: ip/port/user logging plugin");
 	if (logfilefd<0) {
 		if (logfilefd == -1) 
 			printoutc(fd,"log disabled");
