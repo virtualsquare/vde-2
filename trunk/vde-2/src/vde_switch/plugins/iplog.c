@@ -19,10 +19,6 @@
  *
  */
 
-/* XXX missing:
-	 search ip
- */
-
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -139,6 +135,7 @@ struct ip_hash_entry {
 	time_t last_seen;
 	int port;
 	short vlan;
+	unsigned char srcmac[ETH_ALEN];
 	short len;
 	unsigned char ipaddr[4];
 };
@@ -158,7 +155,7 @@ static inline int ip_hash(int len,unsigned char *addr)
 
 /* search ip address into the hash tacle and add it if it does not exist.
 	 log each new item added */
-static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port)
+static void ip_find_in_hash_update(int len, unsigned char *addr, unsigned char *srcmac, int vlan, int port)
 {
 	struct ip_hash_entry *e;
 	int k = ip_hash(len, addr);
@@ -183,9 +180,10 @@ static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port
 	} 
 	now=qtime();
 	e->last_seen = now;
-	if(e->port != port || e->vlan != vlan) {
+	if(e->port != port || e->vlan != vlan || memcmp(e->srcmac,srcmac,ETH_ALEN)!=0) {
 		e->port=port;
 		e->vlan = vlan;
+		memcpy(e->srcmac,srcmac,ETH_ALEN);
 		char hostname[100];
 		char msg[1024];
 		char lf[]="\n";
@@ -202,8 +200,10 @@ static void ip_find_in_hash_update(int len,unsigned char *addr,int vlan,int port
 				username="(none)";
 			else
 				username=pwd->pw_name;
-			iov[1].iov_len=snprintf(msg,sizeof(msg),"ipv%d %s port=%d vlan=%d user=%s",
-					(len==4)?4:6, hostname, port, vlan, username);
+			iov[1].iov_len=snprintf(msg,sizeof(msg),"ipv%d %s mac=%02x:%02x:%02x:%02x:%02x:%02x port=%d vlan=%d user=%s",
+					(len==4)?4:6, hostname, 
+					srcmac[0], srcmac[1], srcmac[2], srcmac[3], srcmac[4], srcmac[5],
+					port, vlan, username);
 			for (epn=0; (descr=port_descr(port,epn)) != NULL; epn++) {
 				int len=iov[1].iov_len;
 				int descrlen=snprintf(msg+len,sizeof(msg)-len," \"%s\"",descr);
@@ -292,7 +292,7 @@ static int iplog_pktin(struct dbgcl *event,void *arg,va_list v)
 			uint32_t *addr=UINT32(pb->v4.ip4src[0]);
 			if ((addr[0] & ip4scan->mask) ==
 					ip4scan->addr) {
-				ip_find_in_hash_update(4,pb->v4.ip4src,vlan,port);
+				ip_find_in_hash_update(4,pb->v4.ip4src,ph->src,vlan,port);
 				break;
 			}
 		}
@@ -316,7 +316,7 @@ static int iplog_pktin(struct dbgcl *event,void *arg,va_list v)
 					((addr[3] & ip6scan->mask[3]) == ip6scan->addr[3])
 				 )
 			{
-				ip_find_in_hash_update(16,pb->v6.ip6src,vlan,port);
+				ip_find_in_hash_update(16,pb->v6.ip6src,ph->src,vlan,port);
 				break;
 			}
 		}
@@ -386,8 +386,11 @@ static int iplogfile(char *arg)
 			} else 
 				return ENOENT;
 		}
-	} else
-		return EINVAL;
+	} else {
+		closelogfile();
+		logfilefd=-1;
+		return 0;
+	}
 }
 
 /* add a v4 range (recursive) */
