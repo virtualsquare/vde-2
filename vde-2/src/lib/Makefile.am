@@ -16,7 +16,7 @@ lib_LTLIBRARIES = \
 
 # read before touching http://www.gnu.org/software/libtool/manual/libtool.html#Updating-version-info
 
-libvdesnmp_la_LIBADD = $(LIBADD)
+libvdesnmp_la_LIBADD = $(LIBADD) libvdemgmt.la
 libvdesnmp_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
 
 libvdemgmt_la_LIBADD = $(LIBADD)
@@ -29,7 +29,7 @@ libvdehist_la_LIBADD = $(LIBADD)
 libvdehist_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
 
 if ENABLE_PYTHON
-SUBDIRS += python
+SUBDIRS += . python
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig

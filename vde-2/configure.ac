@@ -28,12 +28,14 @@ AC_CHECK_LIB([crypto], [EVP_EncryptInit],
 
 AM_PATH_PYTHON([2.5], [add_python_support=yes], [add_python_support=warn])
 PYTHONINCLUDEDIR=`python2.5 -c "from distutils.sysconfig import get_python_inc; print get_python_inc();"`
+PYTHON_LIBS=`python2.5-config --libs`
 AC_CHECK_HEADERS([$PYTHONINCLUDEDIR/Python.h], [add_python_support=yes],
 		[add_python_support=no; warn_python=no])
 AC_CHECK_LIB([pcap], [pcap_open_dead],
 		[add_pcap=yes],
 		[add_pcap=no ; warn_pcap=yes])
 AC_SUBST(PYTHONINCLUDEDIR)
+AC_SUBST(PYTHON_LIBS)
 
 # Checks for header files.
 AC_HEADER_STDC
