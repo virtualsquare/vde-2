@@ -36,8 +36,14 @@
 #define DRV_NAME  "ipn"
 #define DRV_VERSION "0.3.1"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+#define IPN_PRE2624
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 #define IPN_PRE2629
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#define IPN_PRE2637
 #endif
 
 static const struct ethtool_ops ipn_ethtool_ops;
@@ -93,11 +99,18 @@ drop:
 	return 0;
 }
 
+#ifdef IPN_PRE2637
 /* receive from a GRAB via interface hook */
 struct sk_buff *ipn_handle_hook(struct ipn_node *ipn_node, struct sk_buff *skb)
+#else
+static struct sk_buff *ipn_handle_frame(struct sk_buff *skb)
+#endif
 {
 	char *data=(skb->data)-(skb->mac_len);
 	int len=skb->len+skb->mac_len;
+#ifndef IPN_PRE2637
+	struct ipn_node *ipn_node=ipn_netdev2node(skb->dev);
+#endif
 
 	if (ipn_node &&
 			((ipn_node->flags & IPN_NODEFLAG_DEVMASK) == IPN_NODEFLAG_GRAB) &&
@@ -161,6 +174,7 @@ struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *e
 			random_ether_addr(dev->dev_addr);
 			break;
 		case IPN_NODEFLAG_GRAB:
+#ifdef IPN_PRE2637
 #ifdef IPN_STEALING
 			/* only if bridge is not working */
 			if (ipn_handle_frame_hook != (void *) ipn_handle_hook) {
@@ -168,7 +182,8 @@ struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *e
 				return NULL;
 			}
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+#endif
+#ifdef IPN_PRE2624
 			dev=dev_get_by_name(name);
 #else
 			dev=dev_get_by_name(net,name);
@@ -176,8 +191,13 @@ struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *e
 			if (dev) {
 				if (dev->flags & IFF_LOOPBACK)
 					*err= -EINVAL;
+#ifdef IPN_PRE2637
 				else if (rcu_dereference(dev->ipn_port) != NULL)
 					*err= -EBUSY;
+#else
+				else if (rcu_dereference(dev->rx_handler) != NULL)
+					*err= -EBUSY;
+#endif
 				if (*err)
 					dev=NULL;
 			}
@@ -195,12 +215,19 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 				struct ipntap *ipntap=netdev_priv(ipn_node->netdev);
 				ipntap->ipn_node=ipn_node;
 				rtnl_lock();
-				if ((rv=register_netdevice(ipn_node->netdev)) == 0)
+				if ((rv=register_netdevice(ipn_node->netdev)) == 0) {
+#ifdef IPN_PRE2637
 					rcu_assign_pointer(ipn_node->netdev->ipn_port,
 #ifdef IPN_STEALING
 							(void *)
 #endif
 							ipn_node);
+#else
+					netdev_rx_handler_register(ipn_node->netdev,
+							ipn_handle_frame,
+							ipn_node);
+#endif
+				}
 				rtnl_unlock();
 				if (rv) {/* error! */
 					ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
@@ -210,11 +237,17 @@ int ipn_netdev_activate(struct ipn_node *ipn_node)
 			break;
 		case IPN_NODEFLAG_GRAB:
 			rtnl_lock();
+#ifdef IPN_PRE2637
 			rcu_assign_pointer(ipn_node->netdev->ipn_port,
 #ifdef IPN_STEALING
 					(void *)
 #endif
 					ipn_node);
+#else
+			netdev_rx_handler_register(ipn_node->netdev,
+					ipn_handle_frame,
+					ipn_node);
+#endif
 			dev_set_promiscuity(ipn_node->netdev,1);
 			rtnl_unlock();
 			rv=0;
@@ -229,7 +262,11 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 		case IPN_NODEFLAG_TAP:
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
 			rtnl_lock();
+#ifdef IPN_PRE2637
 			rcu_assign_pointer(ipn_node->netdev->ipn_port, NULL);
+#else
+			netdev_rx_handler_unregister(ipn_node->netdev);
+#endif
 			unregister_netdevice(ipn_node->netdev);
 			rtnl_unlock();
 			free_netdev(ipn_node->netdev);
@@ -237,7 +274,11 @@ void ipn_netdev_close(struct ipn_node *ipn_node)
 		case IPN_NODEFLAG_GRAB:
 			ipn_node->flags &= ~IPN_NODEFLAG_DEVMASK;
 			rtnl_lock();
+#ifdef IPN_PRE2637
 			rcu_assign_pointer(ipn_node->netdev->ipn_port, NULL);
+#else
+			netdev_rx_handler_unregister(ipn_node->netdev);
+#endif
 			dev_set_promiscuity(ipn_node->netdev,-1);
 			rtnl_unlock();
 			break;
@@ -313,6 +354,7 @@ static const struct ethtool_ops ipn_ethtool_ops = {
 
 int ipn_netdev_init(void)
 {
+#ifdef IPN_PRE2637
 #ifdef IPN_STEALING
 	if (ipn_handle_frame_hook != NULL) 
 		printk (KERN_WARNING "IPN interface GRAB disabled (stealing mode) if bridge is loaded\n");
@@ -323,15 +365,18 @@ int ipn_netdev_init(void)
 			(void *)
 #endif
 			ipn_handle_hook;
+#endif
 
 	return 0;
 }
 
 void ipn_netdev_fini(void)
 {
+#ifdef IPN_PRE2637
 #ifdef IPN_STEALING
 	/* only if bridge is not working */
 	if (ipn_handle_frame_hook == (void *) ipn_handle_hook)
 #endif
 		ipn_handle_frame_hook=NULL;
+#endif
 }

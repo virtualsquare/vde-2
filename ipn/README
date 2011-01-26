@@ -169,6 +169,12 @@ I can write the patch (it needs just tens of minutes of cut&paste).
 We are studying some way to register/deregister grabbing services,
 I feel this would be the cleanest way. 
 
++-----
+|Note (2011 January): This issue seems to have been solved in 2.6.37
+| the new interface netdev_rx_handler_{register,unregister} can
+| be effectively used for ipn.
++-----
+
 WHERE?
 ------
 There is an experimental version in the VDE svn tree.

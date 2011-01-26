@@ -30,12 +30,15 @@
 #include <linux/mount.h>
 #include <linux/etherdevice.h>
 #include <linux/if_bridge.h>
+#include <linux/version.h>
 #include <net/sock.h>
 /*#include <net/af_ipn.h>*/
 #include "af_ipn.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 #ifdef IPN_STEALING
 #define ipn_port br_port
+#endif
 #endif
 
 struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *err);
@@ -47,7 +50,11 @@ void ipn_netdev_fini(void);
 
 static inline struct ipn_node *ipn_netdev2node(struct net_device *dev)
 {
-	return (struct ipn_node *)rcu_dereference(dev->ipn_port);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+	return (struct ipn_node *) rcu_dereference(dev->ipn_port);
+#else
+	return (struct ipn_node *) rcu_dereference(dev->rx_handler_data);
+#endif
 }
 
 static inline void ipn_netdevsync(void)
