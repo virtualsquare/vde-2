@@ -28,9 +28,13 @@
 #include <linux/device.h>
 #include <linux/cdev.h>
 #include <linux/string.h>
+#include <linux/version.h>
 #include "af_ipn.h"
 #include "ipn_chrdev.h"
 #include "ipn_msgbuf.h"
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#define IPN_PRE2637
+#endif
 
 #define IPN_CHRDEV_PERSISTENT 1
 /* struct ipn_chrdev: 
@@ -113,7 +117,11 @@ static unsigned int ipn_chrdev_poll(struct  file *filp, poll_table *wait)
 	return ipn_node_poll(ipn_node,filp,wait);
 }
 
+#ifdef IPN_PRE2637
 static int ipn_chrdev_ioctl(struct inode *ino, struct  file *filp, unsigned int cmd, unsigned long arg)
+#else
+static long ipn_chrdev_ioctl(struct  file *filp, unsigned int cmd, unsigned long arg)
+#endif
 {
 	struct ipn_node *ipn_node=filp->private_data;
 	return ipn_node_ioctl(ipn_node,cmd,arg);
@@ -126,7 +134,11 @@ struct file_operations ipn_chrdev_fops = {
 	.read  = ipn_chrdev_read,
 	.release = ipn_chrdev_release,
 	.poll = ipn_chrdev_poll,
+#ifdef IPN_PRE2637
 	.ioctl = ipn_chrdev_ioctl
+#else
+	.unlocked_ioctl = ipn_chrdev_ioctl
+#endif
 };
 
 /* init a struct ipn_chrdev and add the cdev */

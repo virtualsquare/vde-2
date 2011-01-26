@@ -1,12 +1,15 @@
 #ifndef __LINUX_NET_AFIPN_H
 #define __LINUX_NET_AFIPN_H
 #include <linux/socket.h>
+#include <linux/version.h>
 
 #ifdef IPN_STEALING
 /* AF_NETBEUI seems to be unused */
 #define AF_IPN AF_NETBEUI
 #define PF_IPN AF_IPN
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 #define ipn_handle_frame_hook br_handle_frame_hook
+#endif
 #else
 #ifndef AF_IPN
 /* waiting for the official assigment of our AF */

@@ -47,6 +47,9 @@ MODULE_DESCRIPTION("IPN Kernel Module");
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
 #define IPN_PRE2632
 #endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#define IPN_PRE2637
+#endif
 
 /*extension of RCV_SHUTDOWN defined in include/net/sock.h
  * when the bit is set recv fails */
@@ -59,7 +62,11 @@ MODULE_DESCRIPTION("IPN Kernel Module");
 
 /* Global MUTEX: this is locked to add/delete/modify networks
  * this is *not* locked just to send/receive msgs */
+#ifdef IPN_PRE2637
 static DECLARE_MUTEX(ipn_glob_mutex);
+#else
+static DEFINE_SEMAPHORE(ipn_glob_mutex);
+#endif
 /* Network table and hash */
 struct hlist_head ipn_network_table[IPN_HASH_SIZE + 1];
 /* slab(s) for fast data structure allocation */
@@ -690,7 +697,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		ipnn->dentry=nd.dentry;
 		ipnn->mnt=nd.mnt;
 #endif
-		init_MUTEX(&ipnn->ipnn_mutex);
+		sema_init(&ipnn->ipnn_mutex,1);
 		ipnn->sunaddr_len=addr_len;
 		ipnn->protocol=ipn_node->protocol;
 		if (ipnn->protocol < 0) ipnn->protocol = 0;
