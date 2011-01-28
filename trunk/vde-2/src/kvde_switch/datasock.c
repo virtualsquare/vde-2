@@ -105,12 +105,13 @@ static void addextinterface(char type,char *name)
 	}
 }
 
-static void runextinterfaces(int kvdefd)
+static void runextinterfaces(struct sockaddr_un *sun)
 {
 	struct extinterface *iface,*oldiface;
 	struct ifreq ifr;
 	for (iface=extifhead;iface != NULL;iface=oldiface)
 	{
+		int kvdefd;
 		memset(&ifr, 0, sizeof(ifr));
 		strncpy(ifr.ifr_name,iface->name,IFNAMSIZ);
 		if (iface->type == 't')
@@ -118,6 +119,18 @@ static void runextinterfaces(int kvdefd)
 		else
 			ifr.ifr_flags=IPN_NODEFLAG_GRAB;
 		//  printf("ioctl\n");
+		kvdefd = socket(AF_IPN,SOCK_RAW,IPN_VDESWITCH);
+		if (kvdefd < 0) {
+			kvdefd = socket(AF_IPN_STOLEN,SOCK_RAW,IPN_VDESWITCH);
+			if (kvdefd < 0) {
+				printlog(LOG_ERR,"kvde_switch grab/tap error socket");
+				exit(-1);
+			}
+		}
+		if(bind(kvdefd, (struct sockaddr *) sun, sizeof(*sun)) < 0) {
+			printlog(LOG_ERR,"cannot bind socket grab/tap");
+			exit(-1);
+		}
 		if (ioctl(kvdefd, IPN_CONN_NETDEV, (void *) &ifr) < 0) {
 			printlog(LOG_ERR, "%s interface %s error: %s", iface->name,
 					(iface->type == 't')?"tap":"grab",strerror(errno));
@@ -201,7 +214,7 @@ static void init(void)
 		printlog(LOG_ERR, "chown: %s", strerror(errno));
 		exit(1);
 	}
-	runextinterfaces(kvdefd);
+	runextinterfaces(&sun);
 	add_fd(kvdefd,ctl_type,-1);
 }
 
