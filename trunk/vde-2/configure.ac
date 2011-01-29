@@ -25,17 +25,9 @@ AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([crypto], [EVP_EncryptInit],
 		[add_cryptcab_support=yes],
 		[add_cryptcab_support=no ; warn_cryptcab=yes])
-
-AM_PATH_PYTHON([2.5], [add_python_support=yes], [add_python_support=warn])
-PYTHONINCLUDEDIR=`python2.5 -c "from distutils.sysconfig import get_python_inc; print get_python_inc();"`
-PYTHON_LIBS=`python2.5-config --libs`
-AC_CHECK_HEADERS([$PYTHONINCLUDEDIR/Python.h], [add_python_support=yes],
-		[add_python_support=no; warn_python=no])
 AC_CHECK_LIB([pcap], [pcap_open_dead],
 		[add_pcap=yes],
 		[add_pcap=no ; warn_pcap=yes])
-AC_SUBST(PYTHONINCLUDEDIR)
-AC_SUBST(PYTHON_LIBS)
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -186,8 +178,36 @@ AC_ARG_ENABLE([kernel-switch],
 		AC_DEFINE([USE_IPN], 1, [If defined, enable support for IPN socket])
 	fi])
 
+# python bindings
+AC_ARG_ENABLE([python],
+    AS_HELP_STRING([--disable-python],
+                   [Disable python bindings]),
+    [enable_python=$enableval],
+    [enable_python=yes]
+)
+
+if test x"$enable_python" = x"yes"; then
+    # check python
+    AM_PATH_PYTHON([2.5])
+    AC_PATH_PROG(PYTHON_CONFIG, python$PYTHON_VERSION-config)
+    if test x"$PYTHON_CONFIG" = x""; then
+        AC_PATH_PROG(PYTHON_CONFIG, python-config)
+    fi
+    if test x"$PYTHON_CONFIG" = x""; then
+        # not found, give up
+        enable_python=no
+    else
+        PYTHON_CFLAGS=`$PYTHON_CONFIG --includes`
+        PYTHON_LIBS=`$PYTHON_CONFIG --libs`
+        PYTHON_INCLUDES="$PYTHON_CFLAGS"
+    fi
+    AC_SUBST(PYTHON_CFLAGS)
+    AC_SUBST(PYTHON_INCLUDES)
+    AC_SUBST(PYTHON_LIBS)
+fi
+
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
-AM_CONDITIONAL(ENABLE_PYTHON, test "$add_python_support" = yes)
+AM_CONDITIONAL(ENABLE_PYTHON, test "$enable_python" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
 AM_CONDITIONAL(CAN_MAKE_VDETUNCTL, test "$can_make_vdetunctl" = yes)
@@ -235,7 +255,7 @@ else
 	echo " - VDE CryptCab............ disabled"
 fi
 
-if test x$add_python_support = "xyes" ; then
+if test x$enable_python = "xyes" ; then
 	echo " + Python Libraries........ enabled"
 else
 	echo " - Python Libraries........ disabled"
@@ -281,12 +301,10 @@ found. Please install them if you want CryptCab to be compiled and installed.])
 	fi
 fi
 
-if ! test x$add_python_support = "xyes" ; then
-	if test x$warn_python = "xyes" ; then
+if ! test x$enable_python = "xyes" ; then
 		AC_MSG_WARN([Python libraries support has been disabled because python is
 not installed on your system, or because it could not be
 found. Please install it if you want Python libraries to be compiled and installed.])
-	fi
 fi
 
 if ! test x$add_pcap = "xyes" ; then
