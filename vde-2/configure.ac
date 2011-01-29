@@ -206,6 +206,7 @@ if test x"$enable_python" = x"yes"; then
     AC_SUBST(PYTHON_LIBS)
 fi
 
+
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
 AM_CONDITIONAL(ENABLE_PYTHON, test "$enable_python" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
@@ -245,78 +246,83 @@ AC_CONFIG_FILES(
 AC_OUTPUT
 
 
-echo
-echo
-echo "Configure results:"
-echo
+AS_ECHO
+AS_ECHO
+AS_ECHO "Configure results:"
+AS_ECHO
 if test x$add_cryptcab_support = "xyes" ; then
-	echo " + VDE CryptCab............ enabled"
+	AS_ECHO " + VDE CryptCab............ enabled"
 else
-	echo " - VDE CryptCab............ disabled"
+	AS_ECHO " - VDE CryptCab............ disabled"
 fi
 
 if test x$enable_python = "xyes" ; then
-	echo " + Python Libraries........ enabled"
+	AS_ECHO " + Python Libraries........ enabled"
 else
-	echo " - Python Libraries........ disabled"
+	AS_ECHO " - Python Libraries........ disabled"
 fi
 
 if test x$warn_tuntap = "xyes" ; then
-	echo " - TAP support............. disabled"
+	AS_ECHO " - TAP support............. disabled"
 else
-	echo " + TAP support............. enabled"
+	AS_ECHO " + TAP support............. enabled"
 fi
 
 if test x$add_pcap = "xyes" ; then
-	echo " + pcap support............ enabled"
+	AS_ECHO " + pcap support............ enabled"
 else
-	echo " - pcap support............ disabled"
+	AS_ECHO " - pcap support............ disabled"
 fi
 
 if test x$enable_experimental = "xyes" ; then
-	echo " + Experimental features... enabled"
+	AS_ECHO " + Experimental features... enabled"
 else
-	echo " - Experimental features... disabled"
+	AS_ECHO " - Experimental features... disabled"
 fi
 
 if test x$enable_profile = "xyes" ; then
-	echo " + Profiling options....... enabled"
+	AS_ECHO " + Profiling options....... enabled"
 else
-	echo " - Profiling options....... disabled"
+	AS_ECHO " - Profiling options....... disabled"
 fi
 
 if test x$enable_kernel_switch = "xyes" ; then
-	echo " + Kernel switch........... enabled"
+	AS_ECHO " + Kernel switch........... enabled"
 else
-	echo " - Kernel switch........... disabled"
+	AS_ECHO " - Kernel switch........... disabled"
 fi
 
-echo
-echo
+AS_ECHO
+AS_ECHO
 if ! test x$add_cryptcab_support = "xyes" ; then
 	if test x$warn_cryptcab = "xyes" ; then
 		AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
 not installed on your system, or because openssl/blowfish.h could not be
 found. Please install them if you want CryptCab to be compiled and installed.])
+    AS_ECHO
 	fi
 fi
 
 if ! test x$enable_python = "xyes" ; then
 		AC_MSG_WARN([Python libraries support has been disabled because python is
 not installed on your system, or because it could not be
-found. Please install it if you want Python libraries to be compiled and installed.])
+found. Please install it if you want Python libraries to be compiled and
+installed.])
+    AS_ECHO
 fi
 
 if ! test x$add_pcap = "xyes" ; then
 	if test x$warn_pcap = "xyes" ; then
-		AC_MSG_WARN([VDE vde_pcapplug and packet dump plugin have been disabled because
-libpcap is not installed on your system, or because it's too old.
-Please install it if you want vde_pcapplug and pdump to be compiled and installed.])
+    AC_MSG_WARN([VDE vde_pcapplug and packet dump plugin have been disabled
+because libpcap is not installed on your system, or because it is too old.
+Please install it if you want vde_pcapplug and pdump to be compiled and
+installed.])
+    AS_ECHO
 	fi
 fi
 
-echo
-echo "Type 'make' to compile $PACKAGE $VERSION,"
-echo "or type 'make V=1' for verbose compiling"
-echo "and then type 'make install' to install it into $prefix"
-echo
+AS_ECHO
+AS_ECHO "Type 'make' to compile $PACKAGE $VERSION,"
+AS_ECHO "or type 'make V=1' for verbose compiling"
+AS_ECHO "and then type 'make install' to install it into $prefix"
+AS_ECHO
