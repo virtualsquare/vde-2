@@ -118,7 +118,7 @@ struct {
 	bitarray bctag;
 	bitarray bcuntag;
 	bitarray notlearning;
-} vlant[NUMOFVLAN];
+} vlant[NUMOFVLAN+1];
 bitarray validvlan;
 
 #define IS_BROADCAST(addr) ((addr[0] & 1) == 1)
