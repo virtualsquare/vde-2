@@ -858,7 +858,10 @@ static void sig_handler(int sig)
 	/*fprintf(stderr,"Caught signal %d, cleaning up and exiting", sig);*/
 	cleanup();
 	signal(sig, SIG_DFL);
-	kill(getpid(), sig);
+	if (sig == SIGTERM)
+		_exit(0);
+	else
+		kill(getpid(), sig);
 } 
 
 static void setsighandlers()
