@@ -1453,7 +1453,8 @@ int main(int argc,char *argv[])
 		{"daemon",0 , 0, DAEMONIZEARG},
 		{"pidfile", 1, 0, PIDFILEARG},
 		{"blink",1,0,LOGSOCKETARG},
-		{"blinkid",1,0,LOGIDARG}
+		{"blinkid",1,0,LOGIDARG},
+		{0,0,0,0}
 	};
 	progname=basename(argv[0]);
 	markov_resize(1);
@@ -1463,7 +1464,7 @@ int main(int argc,char *argv[])
 
 	while(1) {
 		int c;
-		c = GETOPT_LONG (argc, argv, "hnl:d:M:D:m:b:s:c:v:L:f:",
+		c = GETOPT_LONG (argc, argv, "hl:n:d:M:D:m:b:s:c:v:L:f:",
 				long_options, &option_index);
 		if (c<0)
 			break;

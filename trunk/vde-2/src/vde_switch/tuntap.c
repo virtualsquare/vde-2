@@ -60,7 +60,8 @@ static int send_tap(int fd, int ctl_fd, void *packet, int len, void *unused, int
 	if(n){
 		int rv=errno;
 #ifndef VDE_PQ
-		if(errno != EAGAIN) printlog(LOG_WARNING,"send_tap port %d: %s",port,strerror(errno));
+		if(errno != EAGAIN && errno != EWOULDBLOCK) 
+			printlog(LOG_WARNING,"send_tap port %d: %s",port,strerror(errno));
 #endif
 		if (n > len)
 			return -rv;
@@ -82,10 +83,12 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 	int len=read(fd, &(packet.p), sizeof(struct packet));
 
 	if(len < 0){
-		if(errno != EAGAIN) printlog(LOG_WARNING,"Reading tap data: %s",strerror(errno));
+		if(errno != EAGAIN && errno != EWOULDBLOCK) 
+			printlog(LOG_WARNING,"Reading tap data: %s",strerror(errno));
 	}
 	else if(len == 0) {
-		if(errno != EAGAIN) printlog(LOG_WARNING,"EOF tap data port: %s",strerror(errno));
+		if(errno != EAGAIN && errno != EWOULDBLOCK) 
+			printlog(LOG_WARNING,"EOF tap data port: %s",strerror(errno));
 		/* close tap! */
 	} else if (len >= ETH_HEADER_SIZE)
 		handle_in_packet(*arg, &(packet.p), len);
