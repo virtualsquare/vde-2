@@ -89,7 +89,7 @@ unsigned int qtimer_add(time_t period,int times,void (*call)(),void *arg)
 		qth[n]->qt_arg=arg;
 		qth[n]->qt_times=(times==0)?-1:times;
 		qtime_csexit();
-    return qth[n]->qt_n;
+		return qth[n]->qt_n;
 	} else
 		return -1;
 }
@@ -139,15 +139,17 @@ void qtimer_init()
 	struct itimerval it;
 	struct sigaction sa;
 
-  sa.sa_handler = sig_alarm;
-  sa.sa_flags = SA_RESTART;
-  if(sigaction(SIGALRM, &sa, NULL) < 0){
+	sa.sa_handler = sig_alarm;
+	sa.sa_flags = SA_RESTART;
+	sigemptyset(&sa.sa_mask);
+
+	if(sigaction(SIGALRM, &sa, NULL) < 0){
 	  printlog(LOG_WARNING,"Setting handler for SIGALRM %s", strerror(errno));
 	    return;
-  }
- 
+	}
+
 	sigemptyset(&ss_alarm);
-	sigaddset(&ss_alarm,SIGALRM);
+	sigaddset(&ss_alarm, SIGALRM);
 
 	it.it_value.tv_sec = 1;
 	it.it_value.tv_usec = 0 ;
