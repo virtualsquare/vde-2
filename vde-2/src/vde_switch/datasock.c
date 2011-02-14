@@ -92,7 +92,7 @@ static int send_datasock(int fd, int ctl_fd, void *packet, int len, void *data, 
 	if(n){
 		int rv=errno;
 #ifndef VDE_PQ
-		if(errno != EAGAIN) printlog(LOG_WARNING,"send_sockaddr port %d: %s",port,strerror(errno));
+		if(errno != EAGAIN && errno != EWOULDBLOCK) printlog(LOG_WARNING,"send_sockaddr port %d: %s",port,strerror(errno));
 #endif
 		if (n>len)
 			return -rv;
@@ -228,7 +228,7 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 
 		len=recvfrom(fd, &(packet.p), sizeof(struct packet),0, &sock, &socklen);
 		if(len < 0){
-			if (errno == EAGAIN) return;
+			if (errno == EAGAIN || errno == EWOULDBLOCK) return;
 			printlog(LOG_WARNING,"Reading  data: %s",strerror(errno));
 		}
 		else if(len == 0) 
@@ -243,7 +243,7 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 
 		len = read(fd, reqbuf, REQBUFLEN);
 		if (len < 0) {
-			if(errno != EAGAIN){
+			if(errno != EAGAIN && errno != EWOULDBLOCK){
 				printlog(LOG_WARNING,"Reading request %s", strerror(errno));
 				remove_fd(fd); 
 			}
