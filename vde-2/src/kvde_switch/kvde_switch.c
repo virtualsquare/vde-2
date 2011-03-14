@@ -27,11 +27,6 @@
 #include "../vde_switch/switch.h"
 #include "consmgmt.h"
 #include "datasock.h"
-#undef VDE_PQ
-#undef OPTPOLL
-#ifdef VDE_PQ
-#include <packetq.h>
-#endif
 
 time_t starting_time;
 static struct swmodule *swmh;
@@ -203,11 +198,7 @@ static void main_loop()
 	time_t now;
 	register int n,i;
 	while(1) {
-#ifdef VDE_PQ
-		n=poll(fds,nfds,packetq_timeout);
-#else
 		n=poll(fds,nfds,-1);
-#endif
 		now=time(NULL);
 		if(n < 0){ 
 			if(errno != EINTR)
@@ -223,25 +214,7 @@ static void main_loop()
 						break; /* PERFORMANCE it is faster returning to poll */
 				}	
 /* optimization: most used descriptors migrate to the head of the poll array */
-#ifdef OPTPOLL
-				else
-				{
-					if (i < nfds && i > 0 && i != nprio) {
-						register int i_1=i-1;
-						if (fdpp[i]->timestamp > fdpp[i_1]->timestamp) {
-							struct pollfd tfds;
-							struct pollplus *tfdpp;
-							tfds=fds[i];fds[i]=fds[i_1];fds[i_1]=tfds;
-							tfdpp=fdpp[i];fdpp[i]=fdpp[i_1];fdpp[i_1]=tfdpp;
-						}
-					}
-				}
-#endif
 			}
-#ifdef VDE_PQ
-			if (packetq_timeout > 0)
-				packetq_try();
-#endif
 		}
 	}
 }
