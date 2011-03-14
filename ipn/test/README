@@ -1,5 +1,0 @@
-
-compile these tests in this way:
-
-cc -I.. -o test test.c
-
