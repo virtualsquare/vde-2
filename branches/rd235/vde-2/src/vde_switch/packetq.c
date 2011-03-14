@@ -1,7 +1,8 @@
 /*
  * packetq - packet queue management. try to send packets several times before discarding.
- * Copyright 2005 Renzo Davoli
+ * Copyright 2005,...,2011 Renzo Davoli
  * Licensed under the GPLv2
+ * 2011 Thanks to Simone Abbakus for the idea of dynamic delay
  */
 
 #include <stdlib.h>
@@ -20,14 +21,37 @@
 
 #include "consmgmt.h"
 
-#ifdef VDE_PQ
-#include "packetq.h"
-
-int packetq_timeout= -1;
-static int countq;
-#define TIMEOUT 5
 #define TIMES 10
 #define MAXQLEN 4192
+
+#ifdef VDE_PQ
+#include "packetq.h"
+#include <time.h>
+
+#ifdef VDE_PQ_PPOLL
+
+#ifdef CLOCK_MONOTONIC_RAW
+#define CLOCK_TYPE CLOCK_MONOTONIC_RAW
+#else
+#define CLOCK_TYPE CLOCK_MONOTONIC
+#endif
+struct timespec *packetq_timeout;
+static struct timespec packetq_timeout_value;
+#ifdef VDE_PQ_DYNAMIC
+#define TIMEOUT_MAX 10000000 //Upper bound 10ms
+#define TIMEOUT_MIN  1000000 //Lower bound  1ms
+#define TIMEOUT_MEAN ((TIMEOUT_MAX + TIMEOUT_MIN) / 2)
+#define TIMEOUT_STEP ((TIMEOUT_MAX - TIMEOUT_MIN) / MAXQLEN)
+#else
+#define TIMEOUT_NS 5000000
+#endif
+#else
+
+int packetq_timeout= -1;
+#define TIMEOUT 5
+#endif
+
+static int countq;
 
 struct packetqq {
 	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
@@ -43,7 +67,11 @@ struct packetqq {
 
 static struct packetqq *pqh=NULL;
 static struct packetqq *pqt=NULL;
+#ifdef VDE_PQ_PPOLL
+static struct timespec last_try;
+#else
 static struct timeval last_try;
+#endif
 
 void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port),
 		int fd, int fd_ctl, void *packet, int len, void *data, int port)
@@ -64,8 +92,18 @@ void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *
 			new->times=TIMES;
 			new->next=NULL;
 			if (pqh==NULL) {
+#ifdef VDE_PQ_PPOLL
+				clock_gettime(CLOCK_TYPE,&last_try);
+#ifdef VDE_PQ_DYNAMIC
+				packetq_timeout_value.tv_nsec=TIMEOUT_MEAN;
+#else
+				packetq_timeout_value.tv_nsec=TIMEOUT_NS;
+#endif
+				packetq_timeout=&packetq_timeout_value;
+#else
 				gettimeofday(&last_try,NULL);
 				packetq_timeout=TIMEOUT;
+#endif
 				pqh=pqt=new;
 			} else {
 				pqt->next=new;
@@ -104,6 +142,27 @@ static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t,f
 void packetq_try(void)
 {
 	if (pqh != NULL) {
+#ifdef VDE_PQ_PPOLL
+		struct timespec this_try;
+		long remaining_nsecs;
+		clock_gettime(CLOCK_TYPE,&this_try);
+		/* TIMEOUT should never exceed 2.1 secs! */
+		remaining_nsecs = packetq_timeout_value.tv_nsec - ((this_try.tv_sec-last_try.tv_sec) * 1000000000 + (this_try.tv_nsec-last_try.tv_nsec));
+		if (remaining_nsecs <= 0) {
+			fd_set fds;
+			FD_ZERO(&fds);
+			pqh=packetq_scantry(pqh,&pqt,&fds); 
+			if (pqh != NULL) {
+				clock_gettime(CLOCK_TYPE,&last_try);
+#ifdef VDE_PQ_DYNAMIC
+				packetq_timeout_value.tv_nsec = TIMEOUT_MAX - TIMEOUT_STEP * countq;
+#else
+				packetq_timeout_value.tv_nsec = TIMEOUT_NS;
+#endif
+			} else
+				packetq_timeout = NULL;
+		}
+#else
 		struct timeval this_try;
 		gettimeofday(&this_try,NULL);
 		packetq_timeout=TIMEOUT - ((this_try.tv_sec-last_try.tv_sec) * 1000 + 
@@ -118,6 +177,7 @@ void packetq_try(void)
 			} else
 				packetq_timeout = -1;
 		}
+#endif
 	}
 }
 
@@ -143,7 +203,11 @@ void packetq_delfd(int fd)
 {
 	pqh=packetq_scandelfd(fd,pqh,&pqt);
 	if (pqh == NULL)
+#ifdef VDE_PQ_PPOLL
+		packetq_timeout = NULL;
+#else
 		packetq_timeout = -1;
+#endif
 }
 
 int packetq_count()

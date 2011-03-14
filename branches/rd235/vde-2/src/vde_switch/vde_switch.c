@@ -5,8 +5,8 @@
  * Modified by Ludovico Gardenghi 2005
  */
 
-#include <unistd.h>
 #define _GNU_SOURCE
+#include <unistd.h>
 #include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,6 +34,7 @@
 
 #ifdef VDE_PQ
 #include "packetq.h"
+#include <poll.h>
 #endif
 
 static struct swmodule *swmh;
@@ -207,7 +208,11 @@ static void main_loop()
 	register int n,i;
 	while(1) {
 #ifdef VDE_PQ
+#ifdef VDE_PQ_PPOLL
+		n=ppoll(fds,nfds,packetq_timeout,NULL);
+#else
 		n=poll(fds,nfds,packetq_timeout);
+#endif
 #else
 		n=poll(fds,nfds,-1);
 #endif

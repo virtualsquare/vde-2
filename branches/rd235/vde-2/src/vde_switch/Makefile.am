@@ -22,7 +22,7 @@ vde_switch_SOURCES = \
 	tuntap.c \
 	tuntap.h
 
-vde_switch_LDADD = $(top_builddir)/src/common/libvdecommon.la
+vde_switch_LDADD = $(top_builddir)/src/common/libvdecommon.la -lrt
 
 AM_CPPFLAGS = -I$(top_srcdir)/include
 AM_CFLAGS = -Wall

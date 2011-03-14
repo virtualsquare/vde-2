@@ -23,5 +23,7 @@
  * (expecially with Darwin and other BSDs)
  */
 #define VDE_PQ
+#define VDE_PQ_PPOLL
+#define VDE_PQ_DYNAMIC
 
 #endif
