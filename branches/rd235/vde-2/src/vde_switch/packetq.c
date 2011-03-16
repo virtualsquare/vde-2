@@ -161,7 +161,8 @@ void packetq_try(void)
 #endif
 			} else
 				packetq_timeout = NULL;
-		}
+		} else
+			packetq_timeout_value.tv_nsec = remaining_nsecs;
 #else
 		struct timeval this_try;
 		gettimeofday(&this_try,NULL);
