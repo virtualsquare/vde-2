@@ -83,12 +83,11 @@ union request {
 	struct request_v3 v3;
 };
 
-static int send_datasock(int fd, int ctl_fd, void *packet, int len, void *data, int port)
+static int send_datasock(int fd_ctl, int fd_data, void *packet, int len, int port)
 {
 	int n;
-	struct sockaddr *dst=(struct sockaddr *)data;
 
-	n = len - sendto(fd, packet, len, 0, dst, sizeof(struct sockaddr_un));
+	n = len - send(fd_data, packet, len, 0);
 	if(n){
 		int rv=errno;
 #ifndef VDE_PQ
@@ -102,85 +101,23 @@ static int send_datasock(int fd, int ctl_fd, void *packet, int len, void *data, 
 	return 0;
 }
 
-static void closeport(int fd, int portno)
-{
-	if (fd>0) 
-		remove_fd(fd);
-}
-
-static int newport(int fd, int portno, uid_t user)
-{
-	int data_fd;
-	struct sockaddr_un sun;
-#ifdef VDE_DARWIN
-	int sockbufsize = DATA_BUF_SIZE;
-	int optsize = sizeof(sockbufsize);
-#endif
-	
-	if((data_fd = socket(PF_UNIX, SOCK_DGRAM, 0)) < 0){
-		printlog(LOG_ERR,"socket: %s",strerror(errno));
-		return -1;
-	}
-	if(fcntl(data_fd, F_SETFL, O_NONBLOCK) < 0){
-		printlog(LOG_ERR,"Setting O_NONBLOCK on data fd %s",strerror(errno));
-		return -1;
-	}
-
-#ifdef VDE_DARWIN
-	if(setsockopt(data_fd, SOL_SOCKET, SO_SNDBUF, &sockbufsize, optsize) < 0)
-		printlog(LOG_WARNING, "Warning: setting send buffer size on data fd %d to %d failed, expect packet loss: %s",
-				data_fd, sockbufsize, strerror(errno));
-	if(setsockopt(data_fd, SOL_SOCKET, SO_RCVBUF, &sockbufsize, optsize) < 0)
-		printlog(LOG_WARNING, "Warning: setting send buffer size on data fd %d to %d failed, expect packet loss: %s",
-				data_fd, sockbufsize, strerror(errno));
-#endif
-	
-	sun.sun_family = AF_UNIX;
-	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/%03d",ctl_socket,portno);
-	if ((unlink(sun.sun_path) < 0 && errno != ENOENT) ||
-			bind(data_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-		printlog(LOG_ERR,"Binding to data socket %s",strerror(errno));
-		close_ep(portno-1,fd);
-		return -1;
-	}
-	if (geteuid() != 0)
-		user = -1;
-	if (user != -1)
-		chmod(sun.sun_path,mode & 0700);
-	else
-		chmod(sun.sun_path,mode);
-	if(chown(sun.sun_path,user,grp_owner) < 0) {
-		printlog(LOG_ERR, "chown: %s", strerror(errno));
-		unlink(sun.sun_path);
-		close_ep(portno-1,fd);
-		return -1;
-	}
-
-	add_fd(data_fd,data_type,portno);
-
-	return data_fd;
-}
-
-static void *memdup(void *src,int size)
-{
-	void *dst=malloc(size);
-	if (dst != NULL) 
-		memcpy(dst,src,size);
-	return dst;
-}
-
 #define GETFILEOWNER(PATH) ({\
 		struct stat s; \
 		(stat((PATH),&s)?-1:s.st_uid); \
 		})
 
-static int new_port_v1_v3(int fd, int type_port,
+static int new_port_v1_v3(int fd_ctl, int type_port,
 		struct sockaddr_un *sun_out)
 {
-	int n, port;
+	int n, portno;
 	enum request_type type = type_port & 0xff;
 	int port_request=type_port >> 8;
 	uid_t user=-1;
+	int fd_data;
+#ifdef VDE_DARWIN
+	int sockbufsize = DATA_BUF_SIZE;
+	int optsize = sizeof(sockbufsize);
+#endif
 	struct sockaddr_un sun_in;
 	switch(type){
 		case REQ_NEW_PORT0:
@@ -189,31 +126,81 @@ static int new_port_v1_v3(int fd, int type_port,
 		case REQ_NEW_CONTROL:
 			if (sun_out->sun_path[0] != 0) { //not for unnamed sockets
 				if (access(sun_out->sun_path,R_OK | W_OK) != 0) { //socket error
-					remove_fd(fd);
+					remove_fd(fd_ctl);
 					return -1;
 				}
 				user=GETFILEOWNER(sun_out->sun_path);
 			}
-			port = setup_ep(port_request, fd, memdup(sun_out,sizeof(struct sockaddr_un)), user, &modfun); 
-			if(port<0) {
-				remove_fd(fd); 
+
+			if((fd_data = socket(PF_UNIX, SOCK_DGRAM, 0)) < 0){
+				printlog(LOG_ERR,"socket: %s",strerror(errno));
+				remove_fd(fd_ctl);
+				return -1;
+			}
+			if(fcntl(fd_data, F_SETFL, O_NONBLOCK) < 0){
+				printlog(LOG_ERR,"Setting O_NONBLOCK on data fd %s",strerror(errno));
+				close(fd_data);
+				remove_fd(fd_ctl);
+				return -1;
+			}
+
+#ifdef VDE_DARWIN
+			if(setsockopt(fd_data, SOL_SOCKET, SO_SNDBUF, &sockbufsize, optsize) < 0)
+				printlog(LOG_WARNING, "Warning: setting send buffer size on data fd %d to %d failed, expect packet loss: %s",
+						fd_data, sockbufsize, strerror(errno));
+			if(setsockopt(fd_data, SOL_SOCKET, SO_RCVBUF, &sockbufsize, optsize) < 0)
+				printlog(LOG_WARNING, "Warning: setting send buffer size on data fd %d to %d failed, expect packet loss: %s",
+						fd_data, sockbufsize, strerror(errno));
+#endif
+
+			if (connect(fd_data, (struct sockaddr *) sun_out, sizeof(struct sockaddr_un)) < 0) {
+				printlog(LOG_ERR,"Connecting to client data socket %s",strerror(errno));
+				close(fd_data);
+				remove_fd(fd_ctl);
+				return -1;
+			}
+
+			portno = setup_ep(port_request, fd_ctl, fd_data, user, &modfun); 
+			add_fd(fd_data,data_type,portno);
+			if(portno<0) {
+				close_ep(portno,fd_ctl);
 				return -1;
 			}
 			sun_in.sun_family = AF_UNIX;
-			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d",ctl_socket,port);
-			n = write(fd, &sun_in, sizeof(sun_in));
+			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d.%d",ctl_socket,portno,fd_data);
+
+			if ((unlink(sun_in.sun_path) < 0 && errno != ENOENT) ||
+					bind(fd_data, (struct sockaddr *) &sun_in, sizeof(struct sockaddr_un)) < 0){
+				printlog(LOG_ERR,"Binding to data socket %s",strerror(errno));
+				close_ep(portno,fd_ctl);
+				return -1;
+			}
+			if (geteuid() != 0)
+				user = -1;
+			if (user != -1)
+				chmod(sun_in.sun_path,mode & 0700);
+			else
+				chmod(sun_in.sun_path,mode);
+			if(chown(sun_in.sun_path,user,grp_owner) < 0) {
+				printlog(LOG_ERR, "chown: %s", strerror(errno));
+				unlink(sun_in.sun_path);
+				close_ep(portno,fd_ctl);
+				return -1;
+			}
+
+			n = write(fd_ctl, &sun_in, sizeof(sun_in));
 			if(n != sizeof(sun_in)){
 				printlog(LOG_WARNING,"Sending data socket name %s",strerror(errno));
-				close_ep(port,fd);
+				close_ep(portno,fd_ctl);
 				return -1;
 			}
 			if (type==REQ_NEW_PORT0)
 				setmgmtperm(sun_in.sun_path);
-			return port;
+			return portno;
 			break;
 		default:
 			printlog(LOG_WARNING,"Bad request type : %d", type);
-			remove_fd(fd); 
+			remove_fd(fd_ctl); 
 			return -1;
 	}
 }
@@ -222,11 +209,9 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 {
 	if (type == data_type) {
 		struct bipacket packet;
-		struct sockaddr sock;
 		int len;
-		socklen_t socklen = sizeof(sock);
 
-		len=recvfrom(fd, &(packet.p), sizeof(struct packet),0, &sock, &socklen);
+		len=recv(fd, &(packet.p), sizeof(struct packet),0);
 		if(len < 0){
 			if (errno == EAGAIN || errno == EWOULDBLOCK) return;
 			printlog(LOG_WARNING,"Reading  data: %s",strerror(errno));
@@ -292,11 +277,12 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 			printlog(LOG_WARNING,"accept %s",strerror(errno));
 			return;
 		}
-		if(fcntl(new, F_SETFL, O_NONBLOCK) < 0){
+		/*
+			if(fcntl(new, F_SETFL, O_NONBLOCK) < 0){
 			printlog(LOG_WARNING,"fcntl - setting O_NONBLOCK %s",strerror(errno));
 			close(new);
 			return;
-		}
+		}*/
 
 		add_fd(new,wd_type,-1);
 	}
@@ -327,7 +313,7 @@ static void cleanup(unsigned char type,int fd,int arg)
 		else printlog(LOG_WARNING,"Cleanup not removing files");
 	} else {
 		if (type == data_type && arg>=0) {
-			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d",ctl_socket,arg);
+			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d.%d",ctl_socket,arg,fd);
 			unlink(clun.sun_path);
 		}
 		close(fd);
@@ -499,10 +485,10 @@ static struct comlist cl[]={
 	{"ds/showinfo","","show ds info",showinfo,NOARG|WITHFILE},
 };
 
-static void delep (int fd, void* data, void *descr)
+static void delep (int fd_ctl, int fd_data, void *descr)
 {
-	if (fd>=0) remove_fd(fd);
-	if (data) free(data);
+	if (fd_data>=0) remove_fd(fd_data);
+	if (fd_ctl>=0) remove_fd(fd_ctl);
 	if (descr) free(descr);
 }
 
@@ -517,9 +503,7 @@ void start_datasock(void)
 	swmi.handle_input=handle_input;
 	swmi.cleanup=cleanup;
 	modfun.sender=send_datasock;
-	modfun.newport=newport;
 	modfun.delep=delep;
-	modfun.delport=closeport;
 	ADDCL(cl);
 	add_swm(&swmi);
 }

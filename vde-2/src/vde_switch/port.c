@@ -80,7 +80,7 @@ static struct dbgcl dl[]= {
 struct endpoint {
 	int port;
 	int fd_ctl;
-	void *data;
+	int fd_data;
 	char *descr;
 	struct endpoint *next;
 };
@@ -88,11 +88,10 @@ struct endpoint {
 #define NOTINPOOL 0x8000
 
 struct port {
-	int fd_data;
 	struct endpoint *ep;
 	int flag;
 	/* sender is already inside ms, but it needs one more memaccess */
-	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
+	int (*sender)(int fd_ctl, int fd_data, void *packet, int len, int port);
 	struct mod_support *ms;
 	int vlanuntag;
 	uid_t user;
@@ -148,7 +147,6 @@ static int alloc_port(unsigned int portno)
 				EVENTOUT(DBGPORTNEW,i);
 
 				portv[i]=port;
-				port->fd_data=-1;
 				port->ep=NULL;
 				port->user=port->group=port->curuser=-1;
 #ifdef FSTP
@@ -185,29 +183,6 @@ static void free_port(unsigned int portno)
 }
 
 /* 1 if user belongs to the group, 0 otherwise) */
-#if 0
-/* getgrouplist is a nonstandard call */
-static int user_belongs_to_group(uid_t uid, gid_t gid)
-{
-	struct passwd *pw=getpwuid(uid);
-	int found=0;
-	if (pw != NULL) {
-		int gsize=8;
-		int scan;
-		gid_t *grouplist=NULL;
-		do {
-			grouplist=realloc(grouplist, gsize*sizeof(gid_t));
-		} while (grouplist != NULL && getgrouplist(pw->pw_name,pw->pw_gid,grouplist,&gsize) < 0);
-		if (grouplist != NULL) {
-			for (scan=0;scan<gsize && !found;scan++)
-				if (grouplist[scan]==gid)
-					found=1;
-			free(grouplist);
-		}
-	}
-	return found;
-}
-#endif
 static int user_belongs_to_group(uid_t uid, gid_t gid)
 {
 	struct passwd *pw=getpwuid(uid);
@@ -259,8 +234,7 @@ static int checkport_ac(struct port *port, uid_t user)
 /* initialize a port structure with control=fd, given data+data_len and sender
  * function; 
  * and then add it to the g_fdsdata array at index i. */
-int setup_ep(int portno, int fd_ctl,
-		void *data,
+int setup_ep(int portno, int fd_ctl, int fd_data,
 		uid_t user,
 		struct mod_support *modfun)
 {
@@ -269,11 +243,9 @@ int setup_ep(int portno, int fd_ctl,
 
 	if ((portno = alloc_port(portno)) >= 0) {
 		port=portv[portno];	
-		if (port->fd_data < 0 && checkport_ac(port,user)==0) {
-			port->fd_data=modfun->newport(fd_ctl,portno,user);
+		if (port->ep == NULL && checkport_ac(port,user)==0)
 			port->curuser=user;
-		}
-		if (port->fd_data >= 0 && port->curuser == user &&
+		if (port->curuser == user &&
 				(ep=malloc(sizeof(struct endpoint))) != NULL) {
 			DBGOUT(DBGEPNEW,"Port %02d FD %2d", portno,fd_ctl);
 			EVENTOUT(DBGEPNEW,portno,fd_ctl);
@@ -281,7 +253,7 @@ int setup_ep(int portno, int fd_ctl,
 			port->sender=modfun->sender;
 			ep->port=portno;
 			ep->fd_ctl=fd_ctl;
-			ep->data=data;
+			ep->fd_data=fd_data;
 			ep->descr=NULL;
 			if(port->ep == NULL) {/* WAS INACTIVE */
 				register int i;
@@ -308,9 +280,7 @@ int setup_ep(int portno, int fd_ctl,
 			return portno;
 		}
 		else {
-			if (port->fd_data < 0)
-				errno=EPERM;
-			else if (port->curuser != user)
+			if (port->curuser != user)
 				errno=EADDRINUSE;
 			else 
 				errno=ENOMEM;
@@ -347,8 +317,11 @@ static int rec_close_ep(struct endpoint **pep, int fd_ctl)
 			DBGOUT(DBGEPDEL,"Port %02d FD %2d",this->port,fd_ctl);
 			EVENTOUT(DBGEPDEL,this->port,fd_ctl);
 			*pep=this->next;
+#ifdef VDE_PQ
+			packetq_delfd(this->fd_data);
+#endif
 			if (portv[this->port]->ms->delep)
-				portv[this->port]->ms->delep(this->fd_ctl,this->data,this->descr);
+				portv[this->port]->ms->delep(this->fd_ctl,this->fd_data,this->descr);
 			free(this);
 			return 0;
 		} else
@@ -367,12 +340,9 @@ int close_ep(int portno, int fd_ctl)
 				DBGOUT(DBGPORTDEL,"%02d",portno);
 				EVENTOUT(DBGPORTDEL,portno);
 				hash_delete_port(portno);
-#ifdef VDE_PQ
-				packetq_delfd(port->fd_data);
-#endif
-				if (portv[portno]->ms->delport)
+				/*if (portv[portno]->ms->delport)
 					portv[portno]->ms->delport(port->fd_data,portno);
-				port->fd_data=-1;
+				port->fd_data=-1;*/
 				port->ms=NULL;
 				port->sender=NULL;
 				port->curuser=-1;
@@ -423,8 +393,8 @@ int portflag(int op,int f)
 	 struct endpoint *ep; \
 	 SEND_COUNTER_UPD(Port,LEN); \
 	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
-	 if (Port->ms->sender(Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port)) \
-	 packetq_add(Port->ms->sender,Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
+	 if (Port->ms->sender(ep->fd_ctl, ep->fd_data, (PACKET), (LEN), ep->port)) \
+	 packetq_add(Port->ms->sender,ep->fd_ctl, ep->fd_data, (PACKET), (LEN), ep->port); \
 	 } \
 	 })
 #else
@@ -435,7 +405,7 @@ int portflag(int op,int f)
 	 struct endpoint *ep; \
 	 SEND_COUNTER_UPD(Port,LEN); \
 	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
-	 Port->ms->sender(Port->fd_data, ep->fd_ctl, (PACKET), (LEN), ep->data, ep->port); \
+	 Port->ms->sender(ep->fd_ctl, ep->fd_data, (PACKET), (LEN), ep->port); \
 	 } \
 	 })
 #endif

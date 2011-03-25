@@ -54,12 +54,11 @@ int packetq_timeout= -1;
 static int countq;
 
 struct packetqq {
-	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
-	int fd; 
+	int (*sender)(int fd_ctl, int fd_data, void *packet, int len, int port);
 	int fd_ctl; 
+	int fd_data; 
 	void *packet; 
 	int len; 
-	void *data; 
 	int port;
 	int times;
 	struct packetqq *next;
@@ -73,8 +72,8 @@ static struct timespec last_try;
 static struct timeval last_try;
 #endif
 
-void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port),
-		int fd, int fd_ctl, void *packet, int len, void *data, int port)
+void packetq_add(int (*sender)(int fd_ctl, int fd_data, void *packet, int len, int port),
+		int fd_ctl, int fd_data, void *packet, int len, int port)
 {
 	if (countq < MAXQLEN) {
 		struct packetqq *new=malloc(sizeof(struct packetqq));
@@ -82,12 +81,11 @@ void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *
 		if (new != NULL && packetcopy != NULL && len > 0) {
 			countq++;
 			new->sender=sender;
-			new->fd=fd;
 			new->fd_ctl=fd_ctl;
+			new->fd_data=fd_data;
 			memcpy(packetcopy,packet,len);
 			new->packet=packetcopy;
 			new->len=len;
-			new->data=data;
 			new->port=port;
 			new->times=TIMES;
 			new->next=NULL;
@@ -119,9 +117,9 @@ void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *
 static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t,fd_set *fds)
 {
 	if (h != NULL) {
-		int sendrv=!(FD_ISSET(h->fd,fds));
+		int sendrv=!(FD_ISSET(h->fd_data,fds));
 		h->times--;
-		if ((sendrv && (sendrv=h->sender(h->fd,h->fd_ctl,h->packet,h->len,h->data,h->port)) == 0)   /*send OK*/
+		if ((sendrv && (sendrv=h->sender(h->fd_ctl,h->fd_data,h->packet,h->len,h->port)) == 0)   /*send OK*/
 				|| h->times<=0) { /*or max number of attempts reached*/
 			struct packetqq *next;
 			next=h->next;
@@ -130,7 +128,7 @@ static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t,f
 			free(h);
 			return packetq_scantry(next,t,fds);
 		} else {
-			FD_SET(h->fd,fds);
+			FD_SET(h->fd_data,fds);
 			h->next=packetq_scantry(h->next,t,fds);
 			if (h->next == NULL) *t=h;
 			return h;
@@ -182,17 +180,17 @@ void packetq_try(void)
 	}
 }
 
-static struct packetqq *packetq_scandelfd(int fd,struct packetqq *h,struct packetqq **t)
+static struct packetqq *packetq_scandelfd(int fd_data,struct packetqq *h,struct packetqq **t)
 {
 	if (h != NULL) {
-		if (fd == h->fd) {
+		if (fd_data == h->fd_data) {
 			struct packetqq *next=h->next;
 			countq--;
 			free(h->packet);
 			free(h);
-			return packetq_scandelfd(fd,next,t);
+			return packetq_scandelfd(fd_data,next,t);
 		} else {
-			h->next=packetq_scandelfd(fd,h->next,t);
+			h->next=packetq_scandelfd(fd_data,h->next,t);
 			if (h->next == NULL) *t=h;
 			return h;
 		}
@@ -200,9 +198,9 @@ static struct packetqq *packetq_scandelfd(int fd,struct packetqq *h,struct packe
 		return NULL;
 }
 
-void packetq_delfd(int fd)
+void packetq_delfd(int fd_data)
 {
-	pqh=packetq_scandelfd(fd,pqh,&pqt);
+	pqh=packetq_scandelfd(fd_data,pqh,&pqt);
 	if (pqh == NULL)
 #ifdef VDE_PQ_PPOLL
 		packetq_timeout = NULL;
