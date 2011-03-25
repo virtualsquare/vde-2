@@ -37,14 +37,14 @@ struct bipacket {
 
 struct mod_support {
 	char *modname;
-	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
-	int (*newport)(int fd_ctl,int portno,uid_t user);
-	void (*delep)(int fd, void* data, void *descr);
-	void (*delport)(int fd,int portno);
+	int (*sender)(int fd_ctl, int fd_data, void *packet, int len, int port);
+//	int (*newport)(int fd_ctl,int portno,uid_t user);
+	void (*delep)(int fd_ctl, int fd_data, void *descr);
+//	void (*delport)(int fd,int portno);
 };
 
 extern int setup_ep(int portno, int fd_ctl,
-		void *data,
+		int fd_data,
 		uid_t user,
 		struct mod_support *modfun);
 

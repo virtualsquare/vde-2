@@ -15,8 +15,8 @@ extern struct timespec *packetq_timeout;
 extern int packetq_timeout;
 #endif
 
-void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port),
-		int fd, int fd_ctl, void *packet, int len, void *data, int port);
+void packetq_add(int (*sender)(int fd_ctl, int fd_data, void *packet, int len, int port),
+		int fd, int fd_ctl, void *packet, int len, int port);
 
 void packetq_try(void);
 

@@ -52,11 +52,11 @@ struct init_tap {
 
 struct init_tap *hinit_tap=NULL;
 
-static int send_tap(int fd, int ctl_fd, void *packet, int len, void *unused, int port)
+static int send_tap(int fd_ctl, int fd_data, void *packet, int len, int port)
 {
 	int n;
 
-	n = len - write(ctl_fd, packet, len);
+	n = len - write(fd_ctl, packet, len);
 	if(n){
 		int rv=errno;
 #ifndef VDE_PQ
@@ -69,12 +69,6 @@ static int send_tap(int fd, int ctl_fd, void *packet, int len, void *unused, int
 			return n;
 	}
 	return 0;
-}
-
-static void closeport(int fd, int portno)
-{
-	  if (fd>0)
-			    remove_fd(fd);
 }
 
 static void handle_input(unsigned char type,int fd,int revents,int *arg)
@@ -175,6 +169,11 @@ int open_tap(char *dev)
 		close(fd);
 		return(-1);
 	}
+#ifdef VDE_PQ
+	/* tuntap should be "fast", but if there is a packetq we can manage
+		 a tuntap which is "not fast enough" */
+	fcntl(fd, F_SETFL, O_NONBLOCK);
+#endif
 	return(fd);
 }
 #endif
@@ -209,17 +208,12 @@ int open_tap(char *dev)
 }
 #endif
 
-static int newport(int fd, int portno, uid_t user)
-{
-	return fd;
-}
-
 static int newtap(char *dev)
 {
 	int tap_fd;
 	tap_fd = open_tap(dev);
 	if (tap_fd>0) {
-		int portno=setup_ep(0,tap_fd,NULL,-1,&modfun);
+		int portno=setup_ep(0,tap_fd,tap_fd,-1,&modfun);
 		if (portno >= 0) {
 			setup_description(portno,tap_fd,dev);
 			add_fd(tap_fd,tap_type,portno);
@@ -243,8 +237,10 @@ static void init(void)
 	}
 }
 
-static void delep (int fd, void* data, void *descr)
+static void delep (int fd_ctl, int fd_data, void *descr)
 {
+	if (fd_ctl>=0)
+		remove_fd(fd_ctl);
 	if (descr) free(descr);
 }
 
@@ -259,9 +255,7 @@ void start_tuntap(void)
 	swmi.handle_input=handle_input;
 	swmi.cleanup=cleanup;
 	modfun.sender=send_tap;
-	modfun.newport=newport;
 	modfun.delep=delep;
-	modfun.delport=closeport;
 	add_swm(&swmi);
 }
 
