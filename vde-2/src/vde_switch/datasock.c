@@ -205,7 +205,7 @@ static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 	}
 }
 
-static void handle_input(unsigned char type,int fd,int revents,void *arg)
+static void handle_io(unsigned char type,int fd,int revents,void *arg)
 {
 	struct endpoint *ep=arg;
 	if (type == data_type) {
@@ -504,7 +504,7 @@ void start_datasock(void)
 	swmi.usage=usage;
 	swmi.parseopt=parseopt;
 	swmi.init=init;
-	swmi.handle_input=handle_input;
+	swmi.handle_io=handle_io;
 	swmi.cleanup=cleanup;
 	modfun.sender=send_datasock;
 	modfun.delep=delep;

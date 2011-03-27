@@ -36,7 +36,7 @@ struct swmodule {
 	void (*usage)(void); /* usage function: command line opts explanation */
 	int (*parseopt)(int parm,char *optarg); /* parse getopt output */
 	void (*init)(void); /* init */
-	void (*handle_input)(unsigned char type,int fd,int revents,void *private_data); /* handle input */
+	void (*handle_io)(unsigned char type,int fd,int revents,void *private_data); /* handle input */
 	void (*cleanup)(unsigned char type,int fd,void *private_data); /*cleanup for files or final if fd == -1 */
 	struct swmodule *next;
 };

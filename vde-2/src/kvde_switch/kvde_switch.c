@@ -79,7 +79,7 @@ void del_swm(struct swmodule *old)
 /* FD MGMT */
 struct pollplus {
 	unsigned char type;
-	int arg;
+	void *private_data;
 	time_t timestamp;
 };
 
@@ -131,7 +131,7 @@ void del_type(unsigned char type)
 	ntypes--;
 }
 
-void add_fd(int fd,unsigned char type,int arg)
+void add_fd(int fd,unsigned char type,void *private_data)
 {
 	struct pollfd *p;
 	int index;
@@ -162,7 +162,7 @@ void add_fd(int fd,unsigned char type,int arg)
 	p->fd = fd;
 	p->events = POLLIN | POLLHUP;
 	fdpp[index]->type=type;
-	fdpp[index]->arg=arg;
+	fdpp[index]->private_data=private_data;
 	nfds++;
 }
 
@@ -170,7 +170,7 @@ static void file_cleanup(void)
 {
 	register int i;
 	for(i = 0; i < nfds; i++)
-		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->arg);
+		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->private_data);
 }
 
 void remove_fd(int fd)
@@ -184,7 +184,7 @@ void remove_fd(int fd)
 		printlog(LOG_WARNING,"remove_fd : Couldn't find descriptor %d", fd);
 	} else {
 		struct pollplus *old=fdpp[i];
-		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->arg);
+		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->private_data);
 		if (ISPRIO(fdpp[i]->type)) nprio--;
 		memmove(&fds[i], &fds[i + 1], (maxfds - i - 1) * sizeof(struct pollfd));
 		memmove(&fdpp[i], &fdpp[i + 1], (maxfds - i - 1) * sizeof(struct pollplus *));
@@ -209,7 +209,7 @@ static void main_loop()
 					register int prenfds=nfds;
 					n--;
 					fdpp[i]->timestamp=now;
-					TYPE2MGR(fdpp[i]->type)->handle_input(fdpp[i]->type,fds[i].fd,fds[i].revents,&(fdpp[i]->arg));
+					TYPE2MGR(fdpp[i]->type)->handle_io(fdpp[i]->type,fds[i].fd,fds[i].revents,fdpp[i]->private_data);
 					if (nfds!=prenfds) /* the current fd has been deleted */
 						break; /* PERFORMANCE it is faster returning to poll */
 				}	
@@ -375,7 +375,7 @@ static void cleanup(void)
 	file_cleanup();
 	for(swmp=swmh;swmp != NULL;swmp=swmp->next)
 		if (swmp->cleanup != NULL)
-			swmp->cleanup(0,-1,-1);
+			swmp->cleanup(0,-1,NULL);
 }
 
 static void sig_handler(int sig)

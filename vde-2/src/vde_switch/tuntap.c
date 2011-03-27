@@ -71,7 +71,7 @@ static int send_tap(int fd_ctl, int fd_data, void *packet, int len, int port)
 	return 0;
 }
 
-static void handle_input(unsigned char type,int fd,int revents,void *private_data)
+static void handle_io(unsigned char type,int fd,int revents,void *private_data)
 {
 	struct endpoint *ep=private_data;
 	struct bipacket packet;
@@ -252,7 +252,7 @@ void start_tuntap(void)
 	swmi.usage=usage;
 	swmi.parseopt=parseopt;
 	swmi.init=init;
-	swmi.handle_input=handle_input;
+	swmi.handle_io=handle_io;
 	swmi.cleanup=cleanup;
 	modfun.sender=send_tap;
 	modfun.delep=delep;

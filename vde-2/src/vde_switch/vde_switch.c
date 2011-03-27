@@ -278,7 +278,7 @@ static void main_loop()
 					register int prenfds=nfds;
 					n--;
 					fdpp[i]->timestamp=now;
-					TYPE2MGR(fdpp[i]->type)->handle_input(fdpp[i]->type,fds[i].fd,fds[i].revents,fdpp[i]->private_data);
+					TYPE2MGR(fdpp[i]->type)->handle_io(fdpp[i]->type,fds[i].fd,fds[i].revents,fdpp[i]->private_data);
 					if (nfds!=prenfds) /* the current fd has been deleted */
 						break; /* PERFORMANCE it is faster returning to poll */
 				}	
