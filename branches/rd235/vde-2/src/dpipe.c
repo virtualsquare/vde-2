@@ -114,7 +114,7 @@ int recmain(int argc, char *argv[],int olddirchar)
 					close(p1[0]);
 					break;
 				default:
-					fprintf(stderr,"CHECA\n");
+					fprintf(stderr,"Error\n");
 			}
 			execvp(argv1[0],argv1);
 		} else {
@@ -136,7 +136,7 @@ int recmain(int argc, char *argv[],int olddirchar)
 					close(p1[1]);
 					break;
 				default:
-					fprintf(stderr,"CHECA\n");
+					fprintf(stderr,"Error\n");
 			}
 			recmain(argc-split-1,argv2,newdirchar);
 		}
@@ -151,10 +151,71 @@ int main(int argc, char *argv[])
 	char **argv1,**argv2;
 	int p1[2],p2[2];
 	int dirchar=0;
+	int daemonize=0;
+	char *pidfile=NULL;
+	int pgrp;
+	int argflag;
+	int err=0;
 
 	progname=argv[0];
 	argv++;
 	argc--;
+
+	do {
+		argflag=0;
+		if (argv[0] && *argv[0] == '-') {
+			argflag++;
+			argv[0]++;
+			if (*argv[0] == '-') {
+				argv[0]++;
+				if (strcmp(argv[0],"daemon") == 0)
+					daemonize = 1;
+				else if (strcmp(argv[0],"pidfile") == 0) {
+					pidfile = argv[argflag];
+					argflag++;
+				} else {
+					fprintf(stderr,"unknown option --%s\n",argv[0]);
+					err++;
+				}
+			} else {
+				while (*argv[0] != 0) {
+					switch (*argv[0]) {
+						case 0: break;
+						case 'd': daemonize = 1; break;
+						case 'p': pidfile = argv[argflag];
+											argflag++;
+											break;
+						default: fprintf(stderr,"unknown option -%c\n",*argv[0]);
+										 err++;
+					}
+					if (*argv[0] != 0) argv[0]++;
+				}
+			}
+			argv += argflag;
+			argc -= argflag;
+		}
+	} while (argflag);
+
+	if (err)
+		exit(1);
+
+	if (setpgrp() == 0)
+		pgrp = getpgrp();
+	else {
+		fprintf(stderr,"Err: cannot create pgrp\n");
+		exit(1);
+	}
+
+	if (daemonize != 0)
+		daemon(0,0);
+
+	if (pidfile != NULL) {
+		FILE *f=fopen(pidfile, "w");
+		if (f != NULL) {
+			fprintf(f,"-%d\n",pgrp);
+			fclose(f);
+		}
+	}
 
 	alternate_fd();
 	split=splitindex(argc,argv,&dirchar);

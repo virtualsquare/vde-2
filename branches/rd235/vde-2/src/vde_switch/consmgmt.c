@@ -381,7 +381,7 @@ void mgmtnewfd(int new)
 static int debugdel(int fd,char *arg);
 #endif
 static char *EOS="9999 END OF SESSION";
-static void handle_input(unsigned char type,int fd,int revents,void *private_data)
+static void handle_io(unsigned char type,int fd,int revents,void *private_data)
 {
 	char buf[MAXCMD];
 	if (type != mgmt_ctl) {
@@ -942,7 +942,7 @@ void start_consmgmt(void)
 	swmi.usage=usage;
 	swmi.parseopt=parseopt;
 	swmi.init=init;
-	swmi.handle_input=handle_input;
+	swmi.handle_io=handle_io;
 	swmi.cleanup=cleanup;
 	ADDCL(cl);
 #ifdef DEBUGOPT
