@@ -87,14 +87,22 @@ void del_swm(struct swmodule *old)
 /* FD MGMT */
 struct pollplus {
 	unsigned char type;
-	int arg;
+	void *private_data;
 	time_t timestamp;
 };
 
+#define MAXFDS_INITIAL 8
+#define MAXFDS_STEP 16
 static int nfds = 0;
 static int nprio =0;
 static struct pollfd *fds = NULL;
 static struct pollplus **fdpp = NULL;
+
+/* permutation array: it maps each fd to its index in fds/fdpp */
+/* fdpermsize is a multiple of 16 */
+#define FDPERMSIZE_LOGSTEP 4
+static short *fdperm;
+static int fdpermsize=0;
 
 static int maxfds = 0;
 
@@ -139,19 +147,26 @@ void del_type(unsigned char type)
 	ntypes--;
 }
 
-void add_fd(int fd,unsigned char type,int arg)
+void add_fd(int fd,unsigned char type,void *private_data)
 {
 	struct pollfd *p;
 	int index;
-	/* enlarge fds and g_fdsdata array if needed */
+	/* enlarge fds and fdpp array if needed */
 	if(nfds == maxfds){
-		maxfds = maxfds ? 2 * maxfds : 8;
+		maxfds = maxfds ? maxfds + MAXFDS_STEP : MAXFDS_INITIAL;
 		if((fds = realloc(fds, maxfds * sizeof(struct pollfd))) == NULL){
 			printlog(LOG_ERR,"realloc fds %s",strerror(errno));
 			exit(1);
 		}
 		if((fdpp = realloc(fdpp, maxfds * sizeof(struct pollplus *))) == NULL){
 			printlog(LOG_ERR,"realloc pollplus %s",strerror(errno));
+			exit(1);
+		}
+	}
+	if (fd >= fdpermsize) {
+		fdpermsize = ((fd >> FDPERMSIZE_LOGSTEP) + 1) << FDPERMSIZE_LOGSTEP;
+		if((fdperm = realloc(fdperm, fdpermsize * sizeof(short))) == NULL){
+			printlog(LOG_ERR,"realloc fdperm %s",strerror(errno));
 			exit(1);
 		}
 	}
@@ -166,11 +181,12 @@ void add_fd(int fd,unsigned char type,int arg)
 		printlog(LOG_ERR,"realloc pollplus elem %s",strerror(errno));
 		exit(1);
 	}
+	fdperm[fd]=index;
 	p = &fds[index];
 	p->fd = fd;
 	p->events = POLLIN | POLLHUP;
 	fdpp[index]->type=type;
-	fdpp[index]->arg=arg;
+	fdpp[index]->private_data=private_data;
 	nfds++;
 }
 
@@ -178,7 +194,7 @@ static void file_cleanup(void)
 {
 	register int i;
 	for(i = 0; i < nfds; i++)
-		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->arg);
+		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->private_data);
 }
 
 void remove_fd(int fd)
@@ -192,15 +208,51 @@ void remove_fd(int fd)
 		printlog(LOG_WARNING,"remove_fd : Couldn't find descriptor %d", fd);
 	} else {
 		struct pollplus *old=fdpp[i];
-		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->arg);
+		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->private_data);
 		if (ISPRIO(fdpp[i]->type)) nprio--;
-		memmove(&fds[i], &fds[i + 1], (maxfds - i - 1) * sizeof(struct pollfd));
-		memmove(&fdpp[i], &fdpp[i + 1], (maxfds - i - 1) * sizeof(struct pollplus *));
+		memmove(&fds[i], &fds[i + 1], (nfds - i - 1) * sizeof(struct pollfd));
+		memmove(&fdpp[i], &fdpp[i + 1], (nfds - i - 1) * sizeof(struct pollplus *));
+		for(;i<nfds;i++)
+			fdperm[fds[i].fd]=i;
 		free(old);
 		nfds--;
 	}
 }
 
+/* read/update events/private_data */
+void *mainloop_get_private_data(int fd)
+{
+	if (fd >= 0 && fd < fdpermsize)
+		return (fdpp[fdperm[fd]]->private_data);
+	else
+		return NULL;
+}
+
+void mainloop_set_private_data(int fd,void *private_data)
+{
+	if (fd >=0  && fd < fdpermsize)
+		fdpp[fdperm[fd]]->private_data = private_data;
+}
+
+short mainloop_pollmask_get(int fd)
+{
+	return fds[fdperm[fd]].events;
+}
+
+void mainloop_pollmask_add(int fd, short events)
+{
+	fds[fdperm[fd]].events |= events;
+}
+
+void mainloop_pollmask_del(int fd, short events)
+{
+	fds[fdperm[fd]].events &= ~events;
+}
+
+void mainloop_pollmask_set(int fd, short events)
+{
+	fds[fdperm[fd]].events = events;
+}
 
 static void main_loop()
 {
@@ -226,7 +278,7 @@ static void main_loop()
 					register int prenfds=nfds;
 					n--;
 					fdpp[i]->timestamp=now;
-					TYPE2MGR(fdpp[i]->type)->handle_input(fdpp[i]->type,fds[i].fd,fds[i].revents,&(fdpp[i]->arg));
+					TYPE2MGR(fdpp[i]->type)->handle_input(fdpp[i]->type,fds[i].fd,fds[i].revents,fdpp[i]->private_data);
 					if (nfds!=prenfds) /* the current fd has been deleted */
 						break; /* PERFORMANCE it is faster returning to poll */
 				}	
@@ -241,6 +293,8 @@ static void main_loop()
 							struct pollplus *tfdpp;
 							tfds=fds[i];fds[i]=fds[i_1];fds[i_1]=tfds;
 							tfdpp=fdpp[i];fdpp[i]=fdpp[i_1];fdpp[i_1]=tfdpp;
+							fdperm[fds[i].fd]=i;
+							fdperm[fds[i_1].fd]=i_1;
 						}
 					}
 				}
@@ -292,7 +346,7 @@ static void version(void)
 { 
 	printf(
 			"VDE " PACKAGE_VERSION "\n"
-			"Copyright 2003,2004,2005 Renzo Davoli\n"
+			"Copyright 2003,...,2011 Renzo Davoli\n"
 			"some code from uml_switch Copyright (C) 2001, 2002 Jeff Dike and others\n"
 			"VDE comes with NO WARRANTY, to the extent permitted by law.\n"
 			"You may redistribute copies of VDE under the terms of the\n"
@@ -470,7 +524,7 @@ static void cleanup(void)
 	file_cleanup();
 	for(swmp=swmh;swmp != NULL;swmp=swmp->next)
 		if (swmp->cleanup != NULL)
-			swmp->cleanup(0,-1,-1);
+			swmp->cleanup(0,-1,NULL);
 }
 
 static void sig_handler(int sig)

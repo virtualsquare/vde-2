@@ -36,8 +36,8 @@ struct swmodule {
 	void (*usage)(void); /* usage function: command line opts explanation */
 	int (*parseopt)(int parm,char *optarg); /* parse getopt output */
 	void (*init)(void); /* init */
-	void (*handle_input)(unsigned char type,int fd,int revents,int *arg); /* handle input */
-	void (*cleanup)(unsigned char type,int fd,int arg); /*cleanup for files or final if fd == -1 */
+	void (*handle_input)(unsigned char type,int fd,int revents,void *private_data); /* handle input */
+	void (*cleanup)(unsigned char type,int fd,void *private_data); /*cleanup for files or final if fd == -1 */
 	struct swmodule *next;
 };
 
@@ -45,8 +45,14 @@ void add_swm(struct swmodule *new);
 void del_swm(struct swmodule *old);
 unsigned char add_type(struct swmodule *mgr,int prio);
 void del_type(unsigned char type);
-void add_fd(int fd,unsigned char type,int arg);
+void add_fd(int fd,unsigned char type,void *private_data);
 void remove_fd(int fd);
+void *mainloop_get_private_data(int fd);
+void mainloop_set_private_data(int fd,void *private_data);
+short mainloop_pollmask_get(int fd);
+void mainloop_pollmask_add(int fd, short events);
+void mainloop_pollmask_del(int fd, short events);
+void mainloop_pollmask_set(int fd, short events);
 
 #define STDRCFILE "/etc/vde2/vde_switch.rc"
 

@@ -370,7 +370,7 @@ void mgmtnewfd(int new)
 		return;
 	}
 
-	add_fd(new,mgmt_data,-1);
+	add_fd(new,mgmt_data,NULL);
 	EVENTOUT(MGMTPORTNEW,new);
 	snprintf(buf,MAXCMD,header,PACKAGE_VERSION);
 	write(new,buf,strlen(buf));
@@ -381,7 +381,7 @@ void mgmtnewfd(int new)
 static int debugdel(int fd,char *arg);
 #endif
 static char *EOS="9999 END OF SESSION";
-static void handle_input(unsigned char type,int fd,int revents,int *unused)
+static void handle_input(unsigned char type,int fd,int revents,void *private_data)
 {
 	char buf[MAXCMD];
 	if (type != mgmt_ctl) {
@@ -393,7 +393,7 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 				printlog(LOG_WARNING,"Reading from mgmt %s",strerror(errno));
 			}
 		}
-		if (n==0) { /*EOF*/
+		if (n==0) { /*EOF || POLLHUP*/
 			if (type == console_type) {
 				printlog(LOG_WARNING,"EOF on stdin, cleaning up and exiting");
 				exit(0);
@@ -440,7 +440,7 @@ static void handle_input(unsigned char type,int fd,int revents,int *unused)
 			return;
 		}
 
-		add_fd(new,mgmt_data,-1);
+		add_fd(new,mgmt_data,NULL);
 		EVENTOUT(MGMTPORTNEW,new);
 		snprintf(buf,MAXCMD,header,PACKAGE_VERSION);
 		write(new,buf,strlen(buf));
@@ -478,7 +478,7 @@ static void save_pidfile()
 	fclose(f);
 }
 
-static void cleanup(unsigned char type,int fd,int arg)
+static void cleanup(unsigned char type,int fd,void *private_data)
 {
 	if (fd < 0) {
 		if((pidfile != NULL) && unlink(pidfile_path) < 0) {
@@ -572,7 +572,7 @@ static void init(void)
 	if(isatty(0) && !daemonize)
 	{
 		console_type=add_type(&swmi,0);
-		add_fd(0,console_type,-1);
+		add_fd(0,console_type,NULL);
 	}
 
 	/* saves current path in pidfile_path, because otherwise with daemonize() we
@@ -625,7 +625,7 @@ static void init(void)
 		}
 		mgmt_ctl=add_type(&swmi,0);
 		mgmt_data=add_type(&swmi,0);
-		add_fd(mgmtconnfd,mgmt_ctl,-1);
+		add_fd(mgmtconnfd,mgmt_ctl,NULL);
 	}
 }
 
