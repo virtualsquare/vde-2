@@ -231,11 +231,8 @@ static int checkport_ac(struct port *port, uid_t user)
 	}
 }
 
-/* initialize a port structure with control=fd, given data+data_len and sender
- * function; 
- * and then add it to the g_fdsdata array at index i. */
-int setup_ep(int portno, int fd_ctl, int fd_data,
-		uid_t user,
+/* initialize a new endpoint */
+struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
 		struct mod_support *modfun)
 {
 	struct port *port;
@@ -277,36 +274,32 @@ int setup_ep(int portno, int fd_ctl, int fd_data,
 				ep->next=port->ep;
 				port->ep=ep;
 			}
-			return portno;
+			return ep;
 		}
 		else {
 			if (port->curuser != user)
 				errno=EADDRINUSE;
 			else 
 				errno=ENOMEM;
-			return -1;
+			return NULL;
 		}
 	}
 	else {
 		errno=ENOMEM;
-		return -1;
+		return NULL;
 	}
 }
 
-void setup_description(int portno, int fd_ctl, char *descr)
+int ep_get_port(struct endpoint *ep)
 {
-	if (portno >=0 && portno < numports) {
-		struct port *port=portv[portno];
-		if (port != NULL) {
-			struct endpoint *ep;
-			for (ep=port->ep;ep!=NULL;ep=ep->next) 
-				if (ep->fd_ctl == fd_ctl) {
-					DBGOUT(DBGPORTDESCR,"Port %02d FD %2d -> \"%s\"",portno,fd_ctl,descr);
-					EVENTOUT(DBGPORTDESCR,portno,fd_ctl,descr);
-					ep->descr=descr;
-				}
-		}
-	}
+	return ep->port;
+}
+
+void setup_description(struct endpoint *ep, char *descr)
+{
+	DBGOUT(DBGPORTDESCR,"Port %02d FD %2d -> \"%s\"",ep->port,ep->fd_ctl,descr);
+	EVENTOUT(DBGPORTDESCR,ep->port,ep->fd_ctl,descr);
+	ep->descr=descr;
 }
 
 static int rec_close_ep(struct endpoint **pep, int fd_ctl)
@@ -330,7 +323,7 @@ static int rec_close_ep(struct endpoint **pep, int fd_ctl)
 		return ENXIO;
 }
 
-int close_ep(int portno, int fd_ctl)
+static int close_ep_port_fd(int portno, int fd_ctl)
 {
 	if (portno >=0 && portno < numports) {
 		struct port *port=portv[portno];
@@ -340,9 +333,6 @@ int close_ep(int portno, int fd_ctl)
 				DBGOUT(DBGPORTDEL,"%02d",portno);
 				EVENTOUT(DBGPORTDEL,portno);
 				hash_delete_port(portno);
-				/*if (portv[portno]->ms->delport)
-					portv[portno]->ms->delport(port->fd_data,portno);
-				port->fd_data=-1;*/
 				port->ms=NULL;
 				port->sender=NULL;
 				port->curuser=-1;
@@ -361,6 +351,11 @@ int close_ep(int portno, int fd_ctl)
 			return ENXIO;
 	} else
 		return EINVAL;
+}
+
+int close_ep(struct endpoint *ep)
+{
+	return close_ep_port_fd(ep->port, ep->fd_ctl);
 }
 
 int portflag(int op,int f)
@@ -508,10 +503,11 @@ int port_getcost(int port)
 	 (struct packet *)((char *)(P)-4); })
 
 
-void handle_in_packet(int port,  struct packet *packet, int len)
+void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 {
 	int tarport;
 	int vlan,tagged;
+	int port=ep->port;
 
 	if(PACKETFILTER(PKTFILTIN,port,packet,len)) {
 
@@ -781,7 +777,7 @@ static int epclose(char *arg)
 	if (sscanf(arg,"%i %i",&port,&id) != 2)
 		return EINVAL;
 	else
-		return close_ep(port,id);
+		return close_ep_port_fd(port,id);
 }
 
 static char *port_getuser(uid_t uid)

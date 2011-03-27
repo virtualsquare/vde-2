@@ -106,10 +106,11 @@ static int send_datasock(int fd_ctl, int fd_data, void *packet, int len, int por
 		(stat((PATH),&s)?-1:s.st_uid); \
 		})
 
-static int new_port_v1_v3(int fd_ctl, int type_port,
+static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 		struct sockaddr_un *sun_out)
 {
 	int n, portno;
+	struct endpoint *ep;
 	enum request_type type = type_port & 0xff;
 	int port_request=type_port >> 8;
 	uid_t user=-1;
@@ -127,7 +128,7 @@ static int new_port_v1_v3(int fd_ctl, int type_port,
 			if (sun_out->sun_path[0] != 0) { //not for unnamed sockets
 				if (access(sun_out->sun_path,R_OK | W_OK) != 0) { //socket error
 					remove_fd(fd_ctl);
-					return -1;
+					return NULL;
 				}
 				user=GETFILEOWNER(sun_out->sun_path);
 			}
@@ -135,13 +136,13 @@ static int new_port_v1_v3(int fd_ctl, int type_port,
 			if((fd_data = socket(PF_UNIX, SOCK_DGRAM, 0)) < 0){
 				printlog(LOG_ERR,"socket: %s",strerror(errno));
 				remove_fd(fd_ctl);
-				return -1;
+				return NULL;
 			}
 			if(fcntl(fd_data, F_SETFL, O_NONBLOCK) < 0){
 				printlog(LOG_ERR,"Setting O_NONBLOCK on data fd %s",strerror(errno));
 				close(fd_data);
 				remove_fd(fd_ctl);
-				return -1;
+				return NULL;
 			}
 
 #ifdef VDE_DARWIN
@@ -157,23 +158,22 @@ static int new_port_v1_v3(int fd_ctl, int type_port,
 				printlog(LOG_ERR,"Connecting to client data socket %s",strerror(errno));
 				close(fd_data);
 				remove_fd(fd_ctl);
-				return -1;
+				return NULL;
 			}
 
-			portno = setup_ep(port_request, fd_ctl, fd_data, user, &modfun); 
-			add_fd(fd_data,data_type,portno);
-			if(portno<0) {
-				close_ep(portno,fd_ctl);
-				return -1;
-			}
+			ep = setup_ep(port_request, fd_ctl, fd_data, user, &modfun); 
+			if(ep == NULL)
+				return NULL;
+			portno=ep_get_port(ep);
+			add_fd(fd_data,data_type,ep);
 			sun_in.sun_family = AF_UNIX;
 			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d.%d",ctl_socket,portno,fd_data);
 
 			if ((unlink(sun_in.sun_path) < 0 && errno != ENOENT) ||
 					bind(fd_data, (struct sockaddr *) &sun_in, sizeof(struct sockaddr_un)) < 0){
 				printlog(LOG_ERR,"Binding to data socket %s",strerror(errno));
-				close_ep(portno,fd_ctl);
-				return -1;
+				close_ep(ep);
+				return NULL;
 			}
 			if (geteuid() != 0)
 				user = -1;
@@ -184,29 +184,30 @@ static int new_port_v1_v3(int fd_ctl, int type_port,
 			if(chown(sun_in.sun_path,user,grp_owner) < 0) {
 				printlog(LOG_ERR, "chown: %s", strerror(errno));
 				unlink(sun_in.sun_path);
-				close_ep(portno,fd_ctl);
-				return -1;
+				close_ep(ep);
+				return NULL;
 			}
 
 			n = write(fd_ctl, &sun_in, sizeof(sun_in));
 			if(n != sizeof(sun_in)){
 				printlog(LOG_WARNING,"Sending data socket name %s",strerror(errno));
-				close_ep(portno,fd_ctl);
-				return -1;
+				close_ep(ep);
+				return NULL;
 			}
 			if (type==REQ_NEW_PORT0)
 				setmgmtperm(sun_in.sun_path);
-			return portno;
+			return ep;
 			break;
 		default:
 			printlog(LOG_WARNING,"Bad request type : %d", type);
 			remove_fd(fd_ctl); 
-			return -1;
+			return NULL;
 	}
 }
 
-static void handle_input(unsigned char type,int fd,int revents,int *arg)
+static void handle_input(unsigned char type,int fd,int revents,void *arg)
 {
+	struct endpoint *ep=arg;
 	if (type == data_type) {
 		struct bipacket packet;
 		int len;
@@ -219,7 +220,7 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 		else if(len == 0) 
 			printlog(LOG_WARNING,"EOF data port: %s",strerror(errno));
 		else if(len >= ETH_HEADER_SIZE)
-			handle_in_packet(*arg, &(packet.p), len);
+			handle_in_packet(ep, &(packet.p), len);
 	}
 	else if (type == wd_type) {
 		char reqbuf[REQBUFLEN+1];
@@ -236,12 +237,11 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 		} else if (len > 0) {
 			reqbuf[len]=0;
 			if(req->v1.magic == SWITCH_MAGIC){
-				int port=-1;
 				if(req->v3.version == 3) {
-					port=new_port_v1_v3(fd, req->v3.type, &(req->v3.sock));
-					if (port>=0) {
-						*arg=port;
-						setup_description(*arg,fd,strdup(req->v3.description));
+					ep=new_port_v1_v3(fd, req->v3.type, &(req->v3.sock));
+					if (ep != NULL) {
+						mainloop_set_private_data(fd,ep);
+						setup_description(ep,strdup(req->v3.description));
 					}
 				}
 				else if(req->v3.version > 2 || req->v3.version == 2) {
@@ -250,8 +250,11 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 					remove_fd(fd); 
 				}
 				else {
-					*arg=port=new_port_v1_v3(fd, req->v1.type, &(req->v1.u.new_control.name));
-					setup_description(*arg,fd,strdup(req->v1.description));
+					ep=new_port_v1_v3(fd, req->v1.type, &(req->v1.u.new_control.name));
+					if (ep != NULL) {
+						mainloop_set_private_data(fd,ep);
+						setup_description(ep,strdup(req->v1.description));
+					}
 				}
 			}
 			else {
@@ -260,8 +263,8 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 				return;
 			}
 		} else {
-			if (*arg >= 0)
-				close_ep(*arg,fd);
+			if (ep != NULL)
+				close_ep(ep);
 			else
 				remove_fd(fd);
 		}
@@ -284,11 +287,11 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 			return;
 		}*/
 
-		add_fd(new,wd_type,-1);
+		add_fd(new,wd_type,NULL);
 	}
 }
 
-static void cleanup(unsigned char type,int fd,int arg)
+static void cleanup(unsigned char type,int fd,void *arg)
 {
 	struct sockaddr_un clun;
 	int test_fd;
@@ -312,8 +315,9 @@ static void cleanup(unsigned char type,int fd,int arg)
 		}
 		else printlog(LOG_WARNING,"Cleanup not removing files");
 	} else {
-		if (type == data_type && arg>=0) {
-			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d.%d",ctl_socket,arg,fd);
+		if (type == data_type && arg != NULL) {
+			int portno=ep_get_port(arg);
+			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d.%d",ctl_socket,portno,fd);
 			unlink(clun.sun_path);
 		}
 		close(fd);
@@ -470,7 +474,7 @@ static void init(void)
 	ctl_type=add_type(&swmi,0);
 	wd_type=add_type(&swmi,0);
 	data_type=add_type(&swmi,1);
-	add_fd(connect_fd,ctl_type,-1);
+	add_fd(connect_fd,ctl_type,NULL);
 }
 
 static int showinfo(FILE *fd)

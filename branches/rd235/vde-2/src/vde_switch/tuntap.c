@@ -71,8 +71,9 @@ static int send_tap(int fd_ctl, int fd_data, void *packet, int len, int port)
 	return 0;
 }
 
-static void handle_input(unsigned char type,int fd,int revents,int *arg)
+static void handle_input(unsigned char type,int fd,int revents,void *private_data)
 {
+	struct endpoint *ep=private_data;
 	struct bipacket packet;
 	int len=read(fd, &(packet.p), sizeof(struct packet));
 
@@ -85,11 +86,11 @@ static void handle_input(unsigned char type,int fd,int revents,int *arg)
 			printlog(LOG_WARNING,"EOF tap data port: %s",strerror(errno));
 		/* close tap! */
 	} else if (len >= ETH_HEADER_SIZE)
-		handle_in_packet(*arg, &(packet.p), len);
+		handle_in_packet(ep, &(packet.p), len);
 }
 
 
-static void cleanup(unsigned char type,int fd,int arg)
+static void cleanup(unsigned char type,int fd,void *private_data)
 {
 	if (fd >= 0)
 		close(fd);
@@ -208,20 +209,19 @@ int open_tap(char *dev)
 }
 #endif
 
-static int newtap(char *dev)
+static struct endpoint *newtap(char *dev)
 {
 	int tap_fd;
 	tap_fd = open_tap(dev);
 	if (tap_fd>0) {
-		int portno=setup_ep(0,tap_fd,tap_fd,-1,&modfun);
-		if (portno >= 0) {
-			setup_description(portno,tap_fd,dev);
-			add_fd(tap_fd,tap_type,portno);
-			return portno;
-		} else 
-			return -1;
+		struct endpoint *ep=setup_ep(0,tap_fd,tap_fd,-1,&modfun);
+		if (ep != NULL) {
+			setup_description(ep,dev);
+			add_fd(tap_fd,tap_type,ep);
+		} 
+		return ep;
 	} else
-		return -1;
+		return NULL;
 }
 
 static void init(void)
@@ -230,7 +230,7 @@ static void init(void)
 		struct init_tap *p;
 		tap_type=add_type(&swmi,1);
 		for(p=hinit_tap;p != NULL;p=p->next) {
-			if (newtap(p->tap_dev) < 0)
+			if (newtap(p->tap_dev) == NULL)
 				printlog(LOG_ERR,"ERROR OPENING tap interface: %s",p->tap_dev);
 		}
 		hinit_tap=free_init_tap(hinit_tap);
