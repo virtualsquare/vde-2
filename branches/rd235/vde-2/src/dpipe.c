@@ -199,15 +199,14 @@ int main(int argc, char *argv[])
 	if (err)
 		exit(1);
 
-	if (setpgrp() == 0)
-		pgrp = getpgrp();
-	else {
+	if (daemonize != 0)
+		daemon(0,0);
+	else if (setpgrp() != 0) {
 		fprintf(stderr,"Err: cannot create pgrp\n");
 		exit(1);
 	}
 
-	if (daemonize != 0)
-		daemon(0,0);
+	pgrp = getpgrp();
 
 	if (pidfile != NULL) {
 		FILE *f=fopen(pidfile, "w");
