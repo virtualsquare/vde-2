@@ -57,38 +57,40 @@ static int send_tap(int fd_ctl, int fd_data, void *packet, int len, int port)
 	int n;
 
 	n = len - write(fd_ctl, packet, len);
-	if(n){
+	if(n > len){
 		int rv=errno;
-#ifndef VDE_PQ
-		if(errno != EAGAIN && errno != EWOULDBLOCK) 
+		if(rv != EAGAIN && rv != EWOULDBLOCK) 
 			printlog(LOG_WARNING,"send_tap port %d: %s",port,strerror(errno));
-#endif
-		if (n > len)
-			return -rv;
 		else
-			return n;
+			rv=EWOULDBLOCK;
+		return -rv;
 	}
-	return 0;
+	return n;
 }
 
 static void handle_io(unsigned char type,int fd,int revents,void *private_data)
 {
 	struct endpoint *ep=private_data;
-	struct bipacket packet;
-	int len=read(fd, &(packet.p), sizeof(struct packet));
+#ifdef VDE_PQ2
+	if (revents & POLLOUT) 
+		handle_out_packet(ep);
+#endif
+	if (revents & POLLIN) {
+		struct bipacket packet;
+		int len=read(fd, &(packet.p), sizeof(struct packet));
 
-	if(len < 0){
-		if(errno != EAGAIN && errno != EWOULDBLOCK) 
-			printlog(LOG_WARNING,"Reading tap data: %s",strerror(errno));
+		if(len < 0){
+			if(errno != EAGAIN && errno != EWOULDBLOCK) 
+				printlog(LOG_WARNING,"Reading tap data: %s",strerror(errno));
+		}
+		else if(len == 0) {
+			if(errno != EAGAIN && errno != EWOULDBLOCK) 
+				printlog(LOG_WARNING,"EOF tap data port: %s",strerror(errno));
+			/* close tap! */
+		} else if (len >= ETH_HEADER_SIZE)
+			handle_in_packet(ep, &(packet.p), len);
 	}
-	else if(len == 0) {
-		if(errno != EAGAIN && errno != EWOULDBLOCK) 
-			printlog(LOG_WARNING,"EOF tap data port: %s",strerror(errno));
-		/* close tap! */
-	} else if (len >= ETH_HEADER_SIZE)
-		handle_in_packet(ep, &(packet.p), len);
 }
-
 
 static void cleanup(unsigned char type,int fd,void *private_data)
 {
@@ -170,11 +172,9 @@ int open_tap(char *dev)
 		close(fd);
 		return(-1);
 	}
-#ifdef VDE_PQ
 	/* tuntap should be "fast", but if there is a packetq we can manage
 		 a tuntap which is "not fast enough" */
 	fcntl(fd, F_SETFL, O_NONBLOCK);
-#endif
 	return(fd);
 }
 #endif

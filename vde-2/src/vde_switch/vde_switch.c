@@ -32,10 +32,7 @@
 #include <vde.h>
 #include <vdecommon.h>
 
-#ifdef VDE_PQ
-#include "packetq.h"
 #include <poll.h>
-#endif
 
 static struct swmodule *swmh;
 
@@ -236,21 +233,25 @@ void mainloop_set_private_data(int fd,void *private_data)
 
 short mainloop_pollmask_get(int fd)
 {
+	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
 	return fds[fdperm[fd]].events;
 }
 
 void mainloop_pollmask_add(int fd, short events)
 {
+	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
 	fds[fdperm[fd]].events |= events;
 }
 
 void mainloop_pollmask_del(int fd, short events)
 {
+	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
 	fds[fdperm[fd]].events &= ~events;
 }
 
 void mainloop_pollmask_set(int fd, short events)
 {
+	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
 	fds[fdperm[fd]].events = events;
 }
 
@@ -259,15 +260,7 @@ static void main_loop()
 	time_t now;
 	register int n,i;
 	while(1) {
-#ifdef VDE_PQ
-#ifdef VDE_PQ_PPOLL
-		n=ppoll(fds,nfds,packetq_timeout,NULL);
-#else
-		n=poll(fds,nfds,packetq_timeout);
-#endif
-#else
 		n=poll(fds,nfds,-1);
-#endif
 		now=qtime();
 		if(n < 0){ 
 			if(errno != EINTR)
@@ -300,10 +293,6 @@ static void main_loop()
 				}
 #endif
 			}
-#ifdef VDE_PQ
-			if (packetq_timeout > 0)
-				packetq_try();
-#endif
 		}
 	}
 }

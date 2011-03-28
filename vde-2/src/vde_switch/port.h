@@ -54,6 +54,10 @@ extern void setup_description(struct endpoint *ep, char *descr);
 
 extern int close_ep(struct endpoint *ep);
 
+#ifdef VDE_PQ2
+extern void handle_out_packet(struct endpoint *ep);
+#endif
+
 extern void handle_in_packet(struct endpoint *ep, struct packet *packet, int len);
 
 extern bitarray validvlan;
