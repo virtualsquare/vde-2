@@ -85,18 +85,13 @@ union request {
 
 static int send_datasock(int fd_ctl, int fd_data, void *packet, int len, int port)
 {
-	int n;
-
-	n = len - send(fd_data, packet, len, 0);
-	if(n){
+	if (send(fd_data, packet, len, 0) < 0) {
 		int rv=errno;
-#ifndef VDE_PQ
-		if(errno != EAGAIN && errno != EWOULDBLOCK) printlog(LOG_WARNING,"send_sockaddr port %d: %s",port,strerror(errno));
-#endif
-		if (n>len)
-			return -rv;
+		if(rv != EAGAIN && rv != EWOULDBLOCK) 
+			printlog(LOG_WARNING,"send_sockaddr port %d: %s",port,strerror(errno));
 		else
-			return n;
+			rv=EWOULDBLOCK;
+		return -rv;
 	}
 	return 0;
 }
@@ -209,18 +204,24 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 {
 	struct endpoint *ep=arg;
 	if (type == data_type) {
-		struct bipacket packet;
-		int len;
+#ifdef VDE_PQ2
+		if (revents & POLLOUT)
+			handle_out_packet(ep);
+#endif
+		if (revents & POLLIN) {
+			struct bipacket packet;
+			int len;
 
-		len=recv(fd, &(packet.p), sizeof(struct packet),0);
-		if(len < 0){
-			if (errno == EAGAIN || errno == EWOULDBLOCK) return;
-			printlog(LOG_WARNING,"Reading  data: %s",strerror(errno));
+			len=recv(fd, &(packet.p), sizeof(struct packet),0);
+			if(len < 0){
+				if (errno == EAGAIN || errno == EWOULDBLOCK) return;
+				printlog(LOG_WARNING,"Reading  data: %s",strerror(errno));
+			}
+			else if(len == 0) 
+				printlog(LOG_WARNING,"EOF data port: %s",strerror(errno));
+			else if(len >= ETH_HEADER_SIZE)
+				handle_in_packet(ep, &(packet.p), len);
 		}
-		else if(len == 0) 
-			printlog(LOG_WARNING,"EOF data port: %s",strerror(errno));
-		else if(len >= ETH_HEADER_SIZE)
-			handle_in_packet(ep, &(packet.p), len);
 	}
 	else if (type == wd_type) {
 		char reqbuf[REQBUFLEN+1];

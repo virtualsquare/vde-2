@@ -648,7 +648,6 @@ static int showinfo(FILE *fd)
 			qtime());
 	if (mgmt_socket)
 		printoutc(fd,"mgmt %s perm 0%03o",mgmt_socket,mgmt_mode);
-	printoutc(fd,"unsent_pktq_len %d",packetq_count());
 	return 0;
 }
 
