@@ -442,7 +442,7 @@ int portflag(int op,int f)
 		 Port->ms->sender(ep->fd_ctl, ep->fd_data, (PACKET), (LEN), ep->port) == -EWOULDBLOCK) {\
 	 if (ep->vdepq_count < ep->vdepq_max) \
 	 ep->vdepq_count += vdepq_add(&(ep->vdepq), (PACKET), (LEN), TMPBUF); \
-	 if (ep->vdepq_count == 1) mainloop_pollmask_set(ep->fd_data, POLLOUT);\
+	 if (ep->vdepq_count == 1) mainloop_pollmask_add(ep->fd_data, POLLOUT);\
 	 } \
 	 } \
 	 })
