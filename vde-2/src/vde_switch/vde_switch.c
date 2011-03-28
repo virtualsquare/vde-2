@@ -233,25 +233,33 @@ void mainloop_set_private_data(int fd,void *private_data)
 
 short mainloop_pollmask_get(int fd)
 {
+#if DEBUG_MAINLOOP_MASK
 	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
+#endif
 	return fds[fdperm[fd]].events;
 }
 
 void mainloop_pollmask_add(int fd, short events)
 {
+#if DEBUG_MAINLOOP_MASK
 	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
+#endif
 	fds[fdperm[fd]].events |= events;
 }
 
 void mainloop_pollmask_del(int fd, short events)
 {
+#if DEBUG_MAINLOOP_MASK
 	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
+#endif
 	fds[fdperm[fd]].events &= ~events;
 }
 
 void mainloop_pollmask_set(int fd, short events)
 {
+#if DEBUG_MAINLOOP_MASK
 	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
+#endif
 	fds[fdperm[fd]].events = events;
 }
 
