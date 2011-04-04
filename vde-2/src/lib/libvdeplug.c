@@ -38,6 +38,7 @@
 #include <vdecommon.h>
 
 #include <libvdeplug.h>
+#define CONNECTED_P2P
 
 /* Per-User standard switch definition */
 /* This will be prefixed by getenv("HOME") */
@@ -513,16 +514,55 @@ cleanup:
 
 ssize_t vde_recv(VDECONN *conn,void *buf,size_t len,int flags)
 {
+#ifdef CONNECTED_P2P
+	ssize_t retval;
+	if (__builtin_expect(conn!=0,1)) {
+		if (__builtin_expect(((retval=recv(conn->fddata,buf,len,0)) > 0), 1))
+			return retval;
+		else {
+			if (retval == 0 && conn->outpath != NULL) {
+				static struct sockaddr unspec={AF_UNSPEC};
+				connect(conn->fddata,&unspec,sizeof(unspec));
+			}
+			return retval;
+		}
+	}
+	else {
+		errno=EBADF;
+		return -1;
+	}
+#else
 	if (__builtin_expect(conn!=0,1))
 		return recv(conn->fddata,buf,len,0);
 	else {
 		errno=EBADF;
 		return -1;
 	}
+#endif
 }
 
 ssize_t vde_send(VDECONN *conn,const void *buf,size_t len,int flags)
 {
+#ifdef CONNECTED_P2P
+	if (__builtin_expect(conn!=0,1)) {
+		ssize_t retval;
+		if (__builtin_expect(((retval=send(conn->fddata,buf,len,0)) >= 0),1))
+			return retval;
+		else {
+			if (__builtin_expect(errno == ENOTCONN,0)) {
+				if (__builtin_expect(conn->outpath != NULL,1)) {
+					connect(conn->fddata, (struct sockaddr *)conn->outpath,sizeof(conn->inpath));
+					return send(conn->fddata,buf,len,0);
+				} else
+					return retval;
+			} else
+				return retval;
+		}
+	} else {
+		errno=EBADF;
+		return -1;
+	}
+#else
 	if (__builtin_expect(conn!=0,1)) {
 		if (__builtin_expect(conn->outpath == NULL,1))
 			return send(conn->fddata,buf,len,0);
@@ -533,6 +573,7 @@ ssize_t vde_send(VDECONN *conn,const void *buf,size_t len,int flags)
 		errno=EBADF;
 		return -1;
 	}
+#endif
 }
 
 int vde_datafd(VDECONN *conn)
@@ -558,6 +599,9 @@ int vde_ctlfd(VDECONN *conn)
 int vde_close(VDECONN *conn)
 {
 	if (__builtin_expect(conn!=0,1)) {
+#ifdef CONNECTED_P2P
+		send(conn->fddata,NULL,0,0);
+#endif
 		if (*(conn->inpath.sun_path))
 			unlink(conn->inpath.sun_path);
 		if (conn->outpath != NULL)
