@@ -59,9 +59,18 @@ static int calc_hash(u_int64_t src)
 	return x; 
 }
 
+#if BYTE_ORDER == LITTLE_ENDIAN
 #define EMAC2MAC6(X) \
 	(u_int)((X)&0xff), (u_int)(((X)>>8)&0xff), (u_int)(((X)>>16)&0xff), \
-	(u_int)(((X)>>24)&0xff), (u_int)(((X)>>32)&0xff), (u_int)(((X)>>40)&0xff)
+  (u_int)(((X)>>24)&0xff), (u_int)(((X)>>32)&0xff), (u_int)(((X)>>40)&0xff)
+#elif BYTE_ORDER == BIG_ENDIAN
+#define EMAC2MAC6(X) \
+	(u_int)(((X)>>24)&0xff), (u_int)(((X)>>16)&0xff), (u_int)(((X)>>8)&0xff), \
+  (u_int)((X)&0xff), (u_int)(((X)>>40)&0xff), (u_int)(((X)>>32)&0xff)
+#else
+#error Unknown Endianess
+#endif
+
 #define EMAC2VLAN(X) ((u_int16_t) ((X)>>48))
 #define EMAC2VLAN2(X) ((u_int) (((X)>>48) &0xff)), ((u_int) (((X)>>56) &0xff))
 
