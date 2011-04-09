@@ -205,7 +205,7 @@ int parse_red(char *arg, struct red_parms *p){
 	|| (!rmin || !rmax || !limit || probability <= 0)
 	){
 		fprintf(stderr,"Failed to set RED parameters. Red disabled.\n");
-		return -1;
+		return 0;
 	}
 	fprintf(stderr,"red min=%lu, max=%lu, prob=%lf, limit=%lu\n", rmin,rmax,probability,limit);
 	switch (direction){
@@ -222,7 +222,7 @@ int parse_red(char *arg, struct red_parms *p){
 			return 0;
 	}
 
-	return -1;
+	return 0;
 }
 
 #define WFP_LOSS 0x01
@@ -1184,6 +1184,11 @@ static int setchanbufsize(int fd,char *s)
 	return read_wirevalue(s,CHANBUFSIZE);
 }
 
+static int setred(int fd, char *s)
+{
+	return parse_red(s, red);
+}
+
 static int setfifo(int fd,char *s)
 {
 	int n=atoi(s);
@@ -1316,7 +1321,7 @@ static int help(int fd,char *s)
 	printoutc(fd, "mtu          set channel MTU (bytes)");
 	printoutc(fd, "chanbufsize  set channel buffer size (bytes)");
 	printoutc(fd, "fifo         set channel fifoness");
-	printoutc(fd, "RED  	    set channel random early detection algorithm min,max,probability,limit,burst,avpkt,bandwidth");
+	printoutc(fd, "RED  	    set channel random early detection algorithm min,max,probability,limit");
 	printoutc(fd, "shutdown     shut the channel down");
 	printoutc(fd, "logout       log out from this mgmt session");
 	printoutc(fd, "markov-numnodes n  markov mode: set number of states");
@@ -1455,6 +1460,7 @@ static struct comlist {
 	{"showedges",showedges, WITHFILE},
 	{"showcurrent",showcurrent, WITHFILE},
 	{"markov-debug",setmarkov_debug, 0},
+	{"red",setred,0},
 	{"logout",logout, 0},
 	{"shutdown",doshutdown, 0}
 };
@@ -1586,7 +1592,7 @@ void usage(void)
 			"\t--pidfile pidfile\n"
 			"\t--blink blinksocket\n"
 			"\t--blinkid blink_id_string\n"
-			"\t--RED min,max,probability,limit,burst,avpkt,bandwidth\n"
+			"\t--RED min,max,probability,limit\n"
 			,progname);
 	exit (1);
 }
