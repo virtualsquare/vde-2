@@ -66,8 +66,9 @@ char *mgmt;
 int mgmtmode=0700;
 #define LR 0
 #define RL 1
-#define ALGO_UNIFORM      0
+#define ALGO_UNIFORM	  0
 #define ALGO_GAUSS_NORMAL 1
+#define OPPOSITE_DIR(x) x==LR?RL:LR
 static char charalgo[]="UN";
 struct wirevalue {
 	double value;
@@ -97,6 +98,7 @@ struct wirevalue {
 #define MEGA (1<<20)
 #define GIGA (1<<30)
 
+
 /* general Markov chain approach */
 int markov_numnodes=0;
 int markov_current=0;
@@ -122,6 +124,7 @@ char loss_status[2]; /* Gilbert model Markov chain status */
 struct timeval nextband[2];
 struct timeval nextspeed[2];
 int nofifo = 0; 
+int adv_flow = 0;
 int ndirs; //1 mono directional, 2 bi directional filter (always 2 with -v)
 char *vdepath[2]; //path of the directly connected switched (via vde_plug)
 VDECONN *vdeplug[2]; //vde_plug connections (if NULL stdin/stdout)
@@ -202,13 +205,13 @@ int parse_red(char *arg, struct red_parms *p){
 	} else direction = 2;
 
 	if (
-	sscanf(arg,"%lu,%lu,%lf,%lu",&rmin,&rmax,&probability,&limit)<=0 
+	sscanf(arg,"%u,%u,%lf,%u",&rmin,&rmax,&probability,&limit)<=0 
 	|| (!rmin || !rmax || !limit || probability <= 0)
 	){
 		fprintf(stderr,"Failed to set RED parameters. Red disabled.\n");
 		return 0;
 	}
-	fprintf(stderr,"red min=%lu, max=%lu, prob=%lf, limit=%lu\n", rmin,rmax,probability,limit);
+	fprintf(stderr,"red min=%u, max=%u, prob=%lf, limit=%u\n", rmin,rmax,probability,limit);
 	switch (direction){
 		case LR:
  			red_set_parms(&p[LR],rmin,rmax,probability,limit);
@@ -236,7 +239,7 @@ struct wf_packet {
 	unsigned char flags;
 };
 
-static unsigned long outqueue_delay;
+int writepacket(struct wf_packet *pkt);
 static struct wf_packet *wf_queue_in[2], *wf_queue_in_tail[2];
 static struct wf_packet *wf_queue_out[2], *wf_queue_out_tail[2];
 static unsigned long queue_size_in[2], queue_size_out[2];
@@ -315,7 +318,7 @@ static int is_time_to_dequeue(int dir)
 
 static int process_queue_in(void)
 {
-	static unsigned long long now, last_in[2];
+	static unsigned long long last_in[2];
 	static unsigned long backlog[2] = {0U, 0U};
 	struct wf_packet *pkt;
 	int i, count[2] = {0}, old_count[2] = {0};
@@ -379,7 +382,7 @@ static int process_queue_out(void)
 	} while (old_count < count);
 	return count;
 }
-
+#ifdef DELME
 static struct wf_packet 
 *pkt_discard(struct wf_packet *q, struct wf_packet *pkt)
 {
@@ -392,6 +395,7 @@ static struct wf_packet
 		q->next = pkt_discard(q->next, pkt);
 	return q;
 }
+#endif
 
 
 static void printoutc(int fd, const char *format, ...);
@@ -721,17 +725,28 @@ void set_ingres_delay(struct wf_packet *pkt)
 	if (max_wirevalue(markov_current,DELAY,pkt->dir) > 0) {
 		double delval=compute_wirevalue(DELAY,pkt->dir);
 		if (delval > 0) {
-			struct timeval tv;
 			unsigned long long now = gettimeofdayms();
 			pkt->dequeue_time = now + delval; 
 		}
 	}
 }
 
+#define IS_TCP(x) ( x->size > 34 && x->payload[16] == 0x45 && x->payload[17] == 0x00 && x->payload[25]==0x06 )
+
+static void tcp_adv0(struct wf_packet *ack)
+{
+	unsigned long chk_offset = ack->payload[50] + ack->payload[51];
+	unsigned short chk = (ack->payload[52] << 8) + ack->payload[53];
+	chk -= chk_offset;
+	ack->payload[50] = 0;
+	ack->payload[51] = 0;
+	ack->payload[52] = chk >> 8;
+	ack->payload[53] = (chk & 0x00ff);
+}
+
 void handle_packet(struct wf_packet *pkt)
 {
 	int times=1;
-	int chanbuf;
 	pkt->flags = 0;
 
 	/* MTU */
@@ -790,6 +805,20 @@ void handle_packet(struct wf_packet *pkt)
 		} else
 			pkt_in = pkt;
 		set_ingres_delay(pkt_in);
+
+		/* Mangle ACK with available window */
+		if ((adv_flow > 0) && IS_TCP(pkt_in)) {
+			unsigned long tail_max = max_wirevalue(markov_current, CHANBUFSIZE, OPPOSITE_DIR(pkt_in->dir));
+			unsigned long tail_cur = queue_size_in[OPPOSITE_DIR(pkt_in->dir)];
+			if (tail_max && (tail_max < tail_cur)) {
+				//fprintf(stderr,"TCP ACK w=0!\n");
+				tcp_adv0(pkt_in);
+			} else {
+			    //fprintf(stderr,"TCP ACK... current tail: %lu/%lu\n", tail_cur, tail_max);
+            }
+		} else {
+            //fprintf(stderr, "NO TCP ACK: %02x%02x - %02x - %02x\n", pkt_in->payload[16], pkt_in->payload[17], pkt_in->payload[25], pkt_in->payload[49]); 
+        }
 		/* RED */
 		double red_probability;
 		if (red[pkt_in->dir].enabled){
@@ -815,14 +844,15 @@ void handle_packet(struct wf_packet *pkt)
 			}
 			
 		} else {
+			/* DROP TAIL */
 			int drop_tail = max_wirevalue(markov_current, CHANBUFSIZE, pkt_in->dir);
-			if (drop_tail > 0 && drop_tail < queue_size_in[pkt_in->dir]) {
-				fprintf(stderr, "Drop Tail. Queue size: %lu, limit: %lu\n", queue_size_in[pkt_in->dir], drop_tail);
+			if (drop_tail > 0 && adv_flow == 0 && drop_tail < queue_size_in[pkt_in->dir]) { 
+				fprintf(stderr, "Drop Tail. Queue size: %lu, limit: %u\n", queue_size_in[pkt_in->dir], drop_tail);
 				free(pkt_in);
 				times--;
-				continue;
-			}
-		}
+			   	continue;
+			  }
+		  }
 	RED_PASS:
 		pkt_enqueue_in(pkt_in);
 		times--;
@@ -1048,8 +1078,8 @@ static void sig_handler(int sig)
 static void setsighandlers()
 {
 	/* setting signal handlers.
-	 *    *      * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
-	 *       *           * ignores all the others signals which could cause termination. */
+	 *	*	  * sets clean termination for SIGHUP, SIGINT and SIGTERM, and simply
+	 *	   *		   * ignores all the others signals which could cause termination. */
 	struct { int sig; const char *name; int ignore; } signals[] = {
 		{ SIGHUP, "SIGHUP", 0 },
 		{ SIGINT, "SIGINT", 0 },
@@ -1286,7 +1316,7 @@ static int setmarkov_debug(int fd,char *s)
 static int showcurrent(int fd,char *s)
 {
 	printoutc(fd, "Current Markov Node %d \"%s\" (0,..,%d)",markov_current,
-			        WFNAME(markov_current)?WFNAME(markov_current):"",
+					WFNAME(markov_current)?WFNAME(markov_current):"",
 							markov_numnodes-1);
 	return 0;
 }
@@ -1325,7 +1355,7 @@ static int doshutdown(int fd,char *s)
 
 static int help(int fd,char *s)
 {
-	printoutc(fd, "COMMAND      HELP");
+	printoutc(fd, "COMMAND	  HELP");
 	printoutc(fd, "------------ ------------");
 	printoutc(fd, "help         print a summary of mgmt commands");
 	printoutc(fd, "load         load a configuration file");
@@ -1340,7 +1370,7 @@ static int help(int fd,char *s)
 	printoutc(fd, "mtu          set channel MTU (bytes)");
 	printoutc(fd, "chanbufsize  set channel buffer size (bytes)");
 	printoutc(fd, "fifo         set channel fifoness");
-	printoutc(fd, "RED  	    set channel random early detection algorithm min,max,probability,limit");
+	printoutc(fd, "RED          set channel random early detection algorithm min,max,probability,limit");
 	printoutc(fd, "shutdown     shut the channel down");
 	printoutc(fd, "logout       log out from this mgmt session");
 	printoutc(fd, "markov-numnodes n  markov mode: set number of states");
@@ -1382,7 +1412,7 @@ static int showinfo(int fd,char *s)
 		printoutc(fd, "Delay  L->R %g+%g%c   R->L %g+%g%c",
 				WIREVALUE_FIELDS(node,DELAY,LR),
 				WIREVALUE_FIELDS(node,DELAY,RL));
-		printoutc(fd, "Dup    L->R %g+%g%c   R->L %g+%g%c",
+		printoutc(fd, "Dup	L->R %g+%g%c   R->L %g+%g%c",
 				WIREVALUE_FIELDS(node,DDUP,LR),
 				WIREVALUE_FIELDS(node,DDUP,RL));
 		printoutc(fd, "Bandw  L->R %g+%g%c   R->L %g+%g%c",
@@ -1394,7 +1424,7 @@ static int showinfo(int fd,char *s)
 		printoutc(fd, "Noise  L->R %g+%g%c   R->L %g+%g%c",
 				WIREVALUE_FIELDS(node,NOISE,LR),
 				WIREVALUE_FIELDS(node,NOISE,RL));
-		printoutc(fd, "MTU    L->R %g     R->L %g   ",
+		printoutc(fd, "MTU	L->R %g	 R->L %g   ",
 				min_wirevalue(node,MTU,LR),
 				min_wirevalue(node,MTU,RL));
 		printoutc(fd, "Cap.   L->R %g+%g%c   R->L %g+%g%c",
@@ -1407,7 +1437,7 @@ static int showinfo(int fd,char *s)
 			WIREVALUE_FIELDS(node,LOSTBURST,0));
 		printoutc(fd, "Delay  %g+%g%c",
 			WIREVALUE_FIELDS(node,DELAY,0));
-		printoutc(fd, "Dup    %g+%g%c",
+		printoutc(fd, "Dup	%g+%g%c",
 			WIREVALUE_FIELDS(node,DDUP,0));
 		printoutc(fd, "Bandw  %g+%g%c",
 			WIREVALUE_FIELDS(node,BAND,0));
@@ -1415,7 +1445,7 @@ static int showinfo(int fd,char *s)
 			WIREVALUE_FIELDS(node,SPEED,0));
 		printoutc(fd, "Noise  %g+%g%c",
 			WIREVALUE_FIELDS(node,NOISE,0));
-		printoutc(fd, "MTU    %g", min_wirevalue(node,MTU,0));
+		printoutc(fd, "MTU	%g", min_wirevalue(node,MTU,0));
 		printoutc(fd, "Cap.   %g+%g%c",
 			WIREVALUE_FIELDS(node,CHANBUFSIZE,0));
 	}
@@ -1424,7 +1454,7 @@ static int showinfo(int fd,char *s)
 	if (blinksock) {
 		blinkmsg[(int)blinkidlen]=0;
 		printoutc(fd,"Blink socket: %s",blinksun.sun_path);
-		printoutc(fd,"Blink id:     %s",blinkmsg);
+		printoutc(fd,"Blink id:	 %s",blinkmsg);
 	}
 	return 0;
 }
@@ -1611,7 +1641,8 @@ void usage(void)
 			"\t--pidfile pidfile\n"
 			"\t--blink blinksocket\n"
 			"\t--blinkid blink_id_string\n"
-			"\t--RED min,max,probability,limit\n"
+			"\t--RED |-r min,max,probability,limit\n"
+			"\t--TCPADV| -A\n"
 			,progname);
 	exit (1);
 }
@@ -1637,6 +1668,8 @@ int main(int argc,char *argv[])
 		{"noise",1 , 0, 'n'},
 		{"mtu",1 , 0, 'm'},
 		{"nofifo",0 , 0, 'N'},
+		{"TCPADV",0 , 0, 'A'},
+		{"RED",1, 0, 'r'},
 		{"mgmt", 1, 0, 'M'},
 		{"mgmtmode", 1, 0, MGMTMODEARG},
 		{"vde-plug",1,0,'v'},
@@ -1654,7 +1687,7 @@ int main(int argc,char *argv[])
 
 	while(1) {
 		int c;
-		c = GETOPT_LONG (argc, argv, "hl:n:d:M:D:m:b:s:c:v:L:f:r:",
+		c = GETOPT_LONG (argc, argv, "hl:n:d:M:D:m:b:s:c:v:L:f:r:A",
 				long_options, &option_index);
 		if (c<0)
 			break;
@@ -1687,6 +1720,7 @@ int main(int argc,char *argv[])
 				read_wirevalue(optarg,NOISE);
 				break;
 			case 's':
+				fprintf(stderr, "Warning: -s has no effect in this version. If you want to limit the bandwidth of the cable, use -b\n");
 				read_wirevalue(optarg,SPEED);
 				break;
 			case 'c':
@@ -1714,6 +1748,10 @@ int main(int argc,char *argv[])
 						usage();
 					}
 				}
+                break;
+			case 'A':
+				adv_flow = 1;
+				break;
 			case MGMTMODEARG:
 				sscanf(optarg,"%o",&mgmtmode);
 				break;
