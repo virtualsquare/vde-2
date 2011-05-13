@@ -13,7 +13,7 @@
 
 static PyObject *vdeplug_open(PyObject *self, PyObject *args)
 {
-	struct vde_open_args vde_args = {0,NULL,0};
+	struct vde_open_args vde_args = {0,NULL,0777};
 	char *vde_sock = NULL, *vde_descr = NULL;
 	VDECONN *ret;
 	int e;
