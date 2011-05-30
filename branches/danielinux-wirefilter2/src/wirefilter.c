@@ -308,18 +308,18 @@ static void pkt_enqueue_out(struct wf_packet *pkt)
 	//fprintf(stderr,"============= OUT =========== enqueued[%d]. Size now: %d\n", pkt->dir, queue_size(wf_queue_out[pkt->dir]));
 }
 
-static int is_time_to_dequeue(int dir)
+static __inline__ int is_time_to_dequeue(int dir, unsigned long long now)
 {
-	unsigned long long now = gettimeofdayms();
 	if (wf_queue_out[dir])
 		return (now >= wf_queue_out[dir]->dequeue_time);
-	else return 0;
+	return 0;
 }
 
 static int process_queue_in(void)
 {
 	static unsigned long long last_in[2];
 	static unsigned long backlog[2] = {0U, 0U};
+	static unsigned long mtu[2] = {128U, 128U};
 	struct wf_packet *pkt;
 	int i, count[2] = {0}, old_count[2] = {0};
  
@@ -333,30 +333,36 @@ static int process_queue_in(void)
 		for (i = 0; i < 2; i++) {
 			unsigned long bandval;
 			pkt = wf_queue_in[i];
-			if (!pkt)
+			if (!pkt) {
+				backlog[i] = 0; 
 				continue;
+			}
 			bandval = (unsigned long)compute_wirevalue(BAND,i);
 			if (bandval == 0) {
 				wf_queue_in[i] = pkt->next;
 				pkt_enqueue_out(pkt);
-				queue_size_in[pkt->dir] -= pkt->size;
+				queue_size_in[i] -= pkt->size;
 				count[i] += pkt->size;
 				last_in[i] = gettimeofdayms(); 
 			} else {
 				unsigned long long now = gettimeofdayms();
 				static unsigned long long delta;
-				delta = now - last_in[pkt->dir];
-					
-				backlog[pkt->dir] = (delta * bandval) / 1000U;
-				while (pkt && (backlog[pkt->dir] > pkt->size)) {
+				delta = now - last_in[i];
+				if (delta > 1)
+					backlog[i] %= mtu[i];
+				backlog[i] += (delta * bandval) / 1000U;
+				while (pkt && (backlog[i] > pkt->size)) {
+					if (mtu[i] < pkt->size)
+						mtu[i] = pkt->size;
 					wf_queue_in[i] = pkt->next;
 					pkt_enqueue_out(pkt);
-					queue_size_in[pkt->dir] -= pkt->size;
+					queue_size_in[i] -= pkt->size;
 					count[i] += pkt->size;
 					last_in[i] = now; 
-					backlog[pkt->dir] -= pkt->size;
+					backlog[i] -= pkt->size;
 					pkt = pkt->next;
 				}
+				backlog[i] %= mtu[i]; 
 			}
 		}
 	} while (count[0] > old_count[0] || count[1] > old_count[1]);
@@ -367,10 +373,11 @@ static int process_queue_out(void)
 {
 	struct wf_packet *p;
 	int i, count = 0, old_count;
+	unsigned long long now = gettimeofdayms();
 	do {
 		old_count = count;
 		for (i = 0; i < 2; i++) {
-			if(is_time_to_dequeue(i)) {
+			while(is_time_to_dequeue(i, now)) {
 				p = wf_queue_out[i];
 				wf_queue_out[i] = p->next;
 				queue_size_out[p->dir] -= p->size;
@@ -847,7 +854,7 @@ void handle_packet(struct wf_packet *pkt)
 			/* DROP TAIL */
 			int drop_tail = max_wirevalue(markov_current, CHANBUFSIZE, pkt_in->dir);
 			if (drop_tail > 0 && adv_flow == 0 && drop_tail < queue_size_in[pkt_in->dir]) { 
-				fprintf(stderr, "Drop Tail. Queue size: %lu, limit: %u\n", queue_size_in[pkt_in->dir], drop_tail);
+//				fprintf(stderr, "Drop Tail. Queue size: %lu, limit: %u\n", queue_size_in[pkt_in->dir], drop_tail);
 				free(pkt_in);
 				times--;
 			   	continue;
