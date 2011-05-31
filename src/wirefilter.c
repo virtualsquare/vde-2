@@ -288,10 +288,40 @@ static void pkt_enqueue_in(struct wf_packet *pkt)
 	
 }
 
+static inline double max_wirevalue(int node,int tag, int dir)
+{
+	return (WFVAL(node,tag,dir).value + WFVAL(node,tag,dir).plus);
+}
+
+static inline double min_wirevalue(int node,int tag, int dir)
+{
+	return (WFVAL(node,tag,dir).value - WFVAL(node,tag,dir).plus);
+}
+
+static void initrand()
+{
+	struct timeval v;
+	gettimeofday(&v,NULL);
+	srand48(v.tv_sec ^ v.tv_usec ^ getpid());
+}
+
+void set_egres_delay(struct wf_packet *pkt)
+{
+	pkt->dequeue_time = 0U;
+	if (max_wirevalue(markov_current,DELAY,pkt->dir) > 0) {
+		double delval=compute_wirevalue(DELAY,pkt->dir);
+		if (delval > 0) {
+			unsigned long long now = gettimeofdayms();
+			pkt->dequeue_time = now + delval; 
+		}
+	}
+}
+
 static void pkt_enqueue_out(struct wf_packet *pkt)
 {
 	struct wf_packet *q = wf_queue_out[pkt->dir];
 	queue_size_out[pkt->dir] += pkt->size;
+	set_egres_delay(pkt);
 	pkt->next = NULL;
 	if (!q) {
 		wf_queue_out[pkt->dir] = pkt;
@@ -520,22 +550,6 @@ static void markov_start(void) {
 }
 
 
-static inline double max_wirevalue(int node,int tag, int dir)
-{
-	return (WFVAL(node,tag,dir).value + WFVAL(node,tag,dir).plus);
-}
-
-static inline double min_wirevalue(int node,int tag, int dir)
-{
-	return (WFVAL(node,tag,dir).value - WFVAL(node,tag,dir).plus);
-}
-
-static void initrand()
-{
-	struct timeval v;
-	gettimeofday(&v,NULL);
-	srand48(v.tv_sec ^ v.tv_usec ^ getpid());
-}
 
 
 void printlog(int priority, const char *format, ...)
@@ -677,7 +691,7 @@ int writepacket(struct wf_packet *pkt)
 	}
 	static int max_q = 0;
 	if (!pkt->dir && queue_size_out[0] > max_q) { 
-		fprintf(stderr, "%llu, %lu\n", gettimeofdayms(), queue_size_out[0]);
+		//fprintf(stderr, "%llu, %lu\n", gettimeofdayms(), queue_size_out[0]);
 		max_q = queue_size_out[0];
 	}
 	/* NOISE */
@@ -726,17 +740,6 @@ unsigned long time_in_queue(struct wf_packet *pkt)
 	return timetogo;
 }
 
-void set_ingres_delay(struct wf_packet *pkt)
-{
-	pkt->dequeue_time = 0U;
-	if (max_wirevalue(markov_current,DELAY,pkt->dir) > 0) {
-		double delval=compute_wirevalue(DELAY,pkt->dir);
-		if (delval > 0) {
-			unsigned long long now = gettimeofdayms();
-			pkt->dequeue_time = now + delval; 
-		}
-	}
-}
 
 #define IS_TCP(x) ( x->size > 34 && x->payload[16] == 0x45 && x->payload[17] == 0x00 && x->payload[25]==0x06 )
 
@@ -811,7 +814,6 @@ void handle_packet(struct wf_packet *pkt)
 			memcpy(pkt_in, pkt, sizeof(struct wf_packet));
 		} else
 			pkt_in = pkt;
-		set_ingres_delay(pkt_in);
 
 		/* Mangle ACK with available window */
 		if ((adv_flow > 0) && IS_TCP(pkt_in)) {
