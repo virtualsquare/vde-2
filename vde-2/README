@@ -188,7 +188,8 @@ tables and to network saturation.
 Copyright 2003/2004/2005/2006 Renzo Davoli
 Acknowlegments:
 Thanks to Marco Giordani, Leonardo Macchia for their useful help for debugging.
-Imported code by Danny Gasparovsky, Fabrice Ballard.
+This project includes software developed by Danny Gasparovski and Fabrice 
+Ballard (slirp).
 Thanks to Giuseppe Della Bianca <bepi@adria.it> for many bug reports, and
 patch proposals.
 Thanks to Daniel P. Barrange <berrange at redhat dot com> for several patches
