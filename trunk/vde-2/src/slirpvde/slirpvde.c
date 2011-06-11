@@ -344,6 +344,7 @@ void usage(char *name) {
 			" %s [-s vdesock] [-D] [-d] [-n netaddr]\n"
 			"\t [-L host_port:guest_addr:guest_port] [-X guest_addr[:display[.screen]]] \n" 
 			"\t [-x portno:unix_socket_path]\n"
+			"This tool includes software developed by Danny Gasparovski.\n\n"
 			,name,name);
 	exit(-1);
 }
