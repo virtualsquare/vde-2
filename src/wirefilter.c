@@ -305,23 +305,22 @@ static void initrand()
 	srand48(v.tv_sec ^ v.tv_usec ^ getpid());
 }
 
-void set_egres_delay(struct wf_packet *pkt)
+void set_egres_delay(struct wf_packet *pkt, unsigned long long now)
 {
 	pkt->dequeue_time = 0U;
 	if (max_wirevalue(markov_current,DELAY,pkt->dir) > 0) {
 		double delval=compute_wirevalue(DELAY,pkt->dir);
 		if (delval > 0) {
-			unsigned long long now = gettimeofdayms();
 			pkt->dequeue_time = now + delval; 
 		}
 	}
 }
 
-static void pkt_enqueue_out(struct wf_packet *pkt)
+static void pkt_enqueue_out(struct wf_packet *pkt, unsigned long long now)
 {
 	struct wf_packet *q = wf_queue_out[pkt->dir];
 	queue_size_out[pkt->dir] += pkt->size;
-	set_egres_delay(pkt);
+	set_egres_delay(pkt, now);
 	pkt->next = NULL;
 	if (!q) {
 		wf_queue_out[pkt->dir] = pkt;
@@ -345,7 +344,7 @@ static __inline__ int is_time_to_dequeue(int dir, unsigned long long now)
 	return 0;
 }
 
-static int process_queue_in(void)
+static int process_queue_in(unsigned long long now)
 {
 	static unsigned long long last_in[2];
 	static unsigned long backlog[2] = {0U, 0U};
@@ -354,8 +353,8 @@ static int process_queue_in(void)
 	int i, count[2] = {0}, old_count[2] = {0};
  
 	if (last_in[0] == 0) {
-		last_in[0] = gettimeofdayms();
-		last_in[1] = gettimeofdayms();
+		last_in[0] = now;
+		last_in[1] = now;
 	}
 	do {
 		old_count[0] = count[0];
@@ -370,40 +369,57 @@ static int process_queue_in(void)
 			bandval = (unsigned long)compute_wirevalue(BAND,i);
 			if (bandval == 0) {
 				wf_queue_in[i] = pkt->next;
-				pkt_enqueue_out(pkt);
+				pkt_enqueue_out(pkt, now);
 				queue_size_in[i] -= pkt->size;
 				count[i] += pkt->size;
-				last_in[i] = gettimeofdayms(); 
+				last_in[i] = now; 
 			} else {
-				unsigned long long now = gettimeofdayms();
-				static unsigned long long delta;
-				delta = now - last_in[i];
-				if (delta > 1)
-					backlog[i] %= mtu[i];
-				backlog[i] += (delta * bandval) / 1000U;
-				while (pkt && (backlog[i] > pkt->size)) {
-					if (mtu[i] < pkt->size)
-						mtu[i] = pkt->size;
-					wf_queue_in[i] = pkt->next;
-					pkt_enqueue_out(pkt);
-					queue_size_in[i] -= pkt->size;
-					count[i] += pkt->size;
-					last_in[i] = now; 
-					backlog[i] -= pkt->size;
-					pkt = pkt->next;
+				unsigned long long delta = now - last_in[i];
+				unsigned long long deadline = (1000 * mtu[i]) / bandval;
+
+				/* Recalculate maximum packet lenght if needed. */
+				if (mtu[i] < pkt->size)
+					mtu[i] = pkt->size;
+
+				if (deadline > 0) {
+					/* Case 1: Less than 1000 packets per second, 
+					 * calculate inter-packet delay (deadline send) 
+					 */
+					if (pkt && (deadline <= delta)) {
+						wf_queue_in[i] = pkt->next;
+						pkt_enqueue_out(pkt, now);
+						queue_size_in[i] -= pkt->size;
+						last_in[i] = now; 
+						count[i] += pkt->size;
+					}
+					continue;
+				} else {
+					/* Case 2: 1000 or more packets per second, 
+					 * calculate sending backlog and send as many packets
+					 * as needed at this time. 
+					 */
+					if (delta > 0)
+						backlog[i] += (delta * bandval) / 1000U;
+					while (pkt && (backlog[i] > pkt->size)) {
+						wf_queue_in[i] = pkt->next;
+						pkt_enqueue_out(pkt, now);
+						queue_size_in[i] -= pkt->size;
+						count[i] += pkt->size;
+						last_in[i] = now; 
+						backlog[i] -= pkt->size;
+						pkt = pkt->next;
+					}
 				}
-				backlog[i] %= mtu[i]; 
 			}
 		}
-	} while (count[0] > old_count[0] || count[1] > old_count[1]);
+	} while ((count[0] > old_count[0] || count[1] > old_count[1]));
 	return count[0] + count[1];
 }
 
-static int process_queue_out(void)
+static int process_queue_out(unsigned long long now)
 {
 	struct wf_packet *p;
 	int i, count = 0, old_count;
-	unsigned long long now = gettimeofdayms();
 	do {
 		old_count = count;
 		for (i = 0; i < 2; i++) {
@@ -1870,6 +1886,7 @@ int main(int argc,char *argv[])
 	initrand();
 	while(1) {
 		unsigned long long delay=nextms();
+		unsigned long long now;
 		int markovdelay=markovms();
 		if (markovdelay >= 0 &&
 				(markovdelay < delay || delay < 0)) delay=markovdelay;
@@ -1937,7 +1954,8 @@ int main(int argc,char *argv[])
 				exit(0);*/
 		}
 		markov_try();
-		process_queue_out();
-		process_queue_in();
+		now = gettimeofdayms();
+		process_queue_out(now);
+		process_queue_in(now);
 	}
 }
