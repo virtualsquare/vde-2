@@ -94,9 +94,19 @@ struct wirevalue {
 #define PIDFILEARG 131
 #define LOGSOCKETARG 132
 #define LOGIDARG 133
-#define KILO (1<<10)
-#define MEGA (1<<20)
-#define GIGA (1<<30)
+#define KILO ((1<<10) << 3)
+#define MEGA ((1<<20) << 3)
+#define GIGA ((1<<30) << 3)
+
+#define KILOBIT (1000)
+#define MEGABIT (KILOBIT * KILOBIT)
+#define GIGABIT (KILOBIT * MEGABIT)
+
+#define VAL_BIT (1)
+#define VAL_BYTE (8)
+
+/* Maximum number of memory allocation fails. */
+#define MEMORY_LIMIT 10
 
 
 /* general Markov chain approach */
@@ -591,7 +601,7 @@ static int read_wirevalue(char *s, int tag)
 	double v=0.0;
 	double vplus=0.0;
 	int n;
-	int mult;
+	int mult = VAL_BYTE, bitmode = 0;
 	char algo=ALGO_UNIFORM;
 	n=strlen(s)-1;
 	while ((s[n] == ' ' || s[n] == '\n' || s[n] == '\t') && n>0)
@@ -621,33 +631,43 @@ static int read_wirevalue(char *s, int tag)
 			break;
 	}
 	switch (s[n]) {
+		case 'b':
+			bitmode=1;
+			n--;
+			break;
+		case 'B':
+			bitmode=0;
+			n--;
+			break;
+	}
+	switch (s[n]) {
 		case 'k':
 		case 'K':
-			mult=KILO;
+			mult = bitmode?KILOBIT:KILO;
 			break;
 		case 'm':
 		case 'M':
-			mult=MEGA;
+			mult = bitmode?MEGABIT:MEGA;
 			break;
 		case 'g':
 		case 'G':
-			mult=GIGA;
+			mult = bitmode?GIGABIT:GIGA;
 			break;
 		default:
-			mult=1;
+			mult = bitmode?VAL_BIT:VAL_BYTE;
 			break;
 	}
 	if ((n=sscanf(s,"%lf+%lf",&v,&vplus)) > 0) {
-		wv[LR].value=wv[RL].value=v*mult;
-		wv[LR].plus=wv[RL].plus=vplus*mult;
-		wv[LR].alg=wv[RL].alg=algo;
+		wv[LR].value = wv[RL].value = (v * mult) / VAL_BYTE;
+		wv[LR].plus = wv[RL].plus = (vplus * mult) / VAL_BYTE;
+		wv[LR].alg = wv[RL].alg = algo;
 	} else if ((n=sscanf(s,"LR%lf+%lf",&v,&vplus)) > 0) {
-		wv[LR].value=v*mult;
-		wv[LR].plus=vplus*mult;
-		wv[LR].alg=algo;
+		wv[LR].value = (v * mult) / VAL_BYTE;
+		wv[LR].plus = vplus * mult / VAL_BYTE;
+		wv[LR].alg = algo;
 	} else if ((n=sscanf(s,"RL%lf+%lf",&v,&vplus)) > 0) {
-		wv[RL].value=v*mult;
-		wv[RL].plus=vplus*mult;
+		wv[RL].value = (v * mult) / VAL_BYTE;
+		wv[RL].plus = (vplus * mult) / VAL_BYTE;
 		wv[RL].alg=algo;
 	}
 	return 0;
@@ -827,7 +847,13 @@ void handle_packet(struct wf_packet *pkt)
 		struct wf_packet *pkt_in;
 		if (times > 1) { 
 			pkt_in = malloc(sizeof(struct wf_packet)); 
-			memcpy(pkt_in, pkt, sizeof(struct wf_packet));
+			if (pkt_in) 
+				memcpy(pkt_in, pkt, sizeof(struct wf_packet));
+			else {
+				/* Out of memory: send just the original packet */
+				times = 1;
+				continue;
+			}
 		} else
 			pkt_in = pkt;
 
@@ -939,8 +965,23 @@ static int packet_in(int dir)
 {
 	struct wf_packet *pkt;
 	int n;
+	static int oom;
 
 	pkt = malloc(sizeof(struct wf_packet));
+	if (!pkt) {
+		/* Out of memory */
+		fprintf(stderr, "Warning: memory limit hit!\n");
+		if (++oom > MEMORY_LIMIT) {
+			fprintf(stderr, "Error: Too much memory used. Try to reduce buffer sizes.\n");
+			exit(ENOMEM);
+		}	
+		if (vdeplug[dir]) {
+			unsigned char discard_buf[BUFSIZE];
+			n=vde_recv(vdeplug[dir],discard_buf,BUFSIZE,0);
+		}
+		return 0;
+	}
+	oom = 0;
 	pkt->next = NULL;
 	pkt->dir = dir;
 	if(vdeplug[dir]) {
@@ -1885,8 +1926,7 @@ int main(int argc,char *argv[])
 
 	initrand();
 	while(1) {
-		unsigned long long delay=nextms();
-		unsigned long long now;
+		unsigned long long delay=nextms(), lastcall_time = 0, now;
 		int markovdelay=markovms();
 		if (markovdelay >= 0 &&
 				(markovdelay < delay || delay < 0)) delay=markovdelay;
@@ -1950,12 +1990,20 @@ int main(int argc,char *argv[])
 					n--;
 				}
 			}
-/*			if (n>0) // if there are already pending events, it means that a ctlfd has hunged up
-				exit(0);*/
+			/* if there are still pending events, it means that a 
+			   ctlfd has hunged up 
+			*/
+			if (n > 0) {
+				fprintf(stderr, "Connection to the switch was closed. Exiting...\n");
+				exit(0);
+			}
 		}
 		markov_try();
 		now = gettimeofdayms();
-		process_queue_out(now);
-		process_queue_in(now);
+		if (now > lastcall_time) {
+			lastcall_time = now;
+			process_queue_out(now);
+			process_queue_in(now);
+		}
 	}
 }
