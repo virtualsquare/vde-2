@@ -81,18 +81,45 @@ Channel bandwidth in Bytes/sec. It has the same syntax of -d. It is also possibl
 use suffixes K,M,G to abbreviate 2^10, 2^20, 2^30.
 128K means 128KBytes/sec. 128+64K means 64i to 196KBytes/sec.
 Sender is not prevented from sending packets, delivery is delayed to limit the bandwidth
-to the desired value. (Like a bottleneck along the path)
+to the desired value. (Like a bottleneck along the path). The management of the queue depends
+on -c, -A and -R parameters (see below).
 U and N after the values (e.g. 128+64KN) set the statistic distribution to
-use (uniform or normal).
+use (uniform or normal). 
+In order to use bits instead of Bytes, 'b' can be appended to the
+value, so 64Kb means 64 kilobit per seconds. Please note that one Kbit=1000 bit, while
+one KByte=1024 Bytes.
 .TP
-.B \-s "\fIspeed\fP"
-Interface speed in Bytes/sec. It has the same syntax of -b. Input is blocked for
-the tramission time of the packet, thus the sender is prevented from sending too fast.
-.TP
+
 .B \-c "\fIchannel_bufsize\fP"
 Channel buffer size (in Bytes): maximum size of the packet queue. Exceeding packets 
-are discarded. 
+are discarded in a drop-tail policy.
 .TP
+.B \-R "\fIrmin,rmax,probability,limit\fP"
+For packet waiting in the queue due to a bandwidth restriction, use Random Early Detection
+policy for queue management. Parameters are the following:
+.sp
+.in +4n
+.nf
+\fImin\fP: Average queue size at which marking becomes a possibility.
+\fImax\fP: At this average queue size, the marking probability is maximal. 
+\fIprobability\fP: Maximum probability for marking, specified as a floating point number from 0.0 to 1.0. 
+\fIlimit\fP: Hard limit on queue size in bytes. Further packets are dropped. 
+.fi
+.in
+.sp
+For more information about the algorithm see 
+\fBtc-red\fP(8).
+.TP
+.B \-A
+When used with 
+.B -c
+instead of discarding packets in drop-tail, 
+mangle TCP acknowledgements in the opposite direction of the current flow,
+so the advertised window field in the TCP options is zeroed, thus preventing
+the TCP endpoint to inject new segments into the network. Works only on frames
+containing TCP/IPv4 valid segments carrying the ACK flag.
+.TP
+
 .B \-n "\fInoise factor\fP"
 Number of bits damaged/one megabyte. 
 .TP
@@ -216,6 +243,7 @@ Technologies").
 \fBvdeq\fP(1).
 \fBdpipe\fP(1).
 \fBunixterm\fP(1).
+\fBtc-red\fP(8).
 .br
 .SH AUTHOR
 VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
