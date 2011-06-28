@@ -603,7 +603,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	}
 
 	/* check if there is already an ipn-network socket with that name */
-#ifndef IPN_PRE2630
+#ifndef IPN_PRE2639
 	err = kern_path(sunaddr->sun_path, LOOKUP_FOLLOW, &nd.path);
 #else
 	err = path_lookup(sunaddr->sun_path, LOOKUP_FOLLOW, &nd);
