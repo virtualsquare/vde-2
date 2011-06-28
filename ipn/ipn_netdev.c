@@ -36,11 +36,17 @@
 #define DRV_NAME  "ipn"
 #define DRV_VERSION "0.3.1"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+#define IPN_PRE2624
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 #define IPN_PRE2629
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 #define IPN_PRE2637
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
+#define IPN_PRE2639
 #endif
 
 static const struct ethtool_ops ipn_ethtool_ops;
@@ -100,9 +106,16 @@ drop:
 /* receive from a GRAB via interface hook */
 struct sk_buff *ipn_handle_hook(struct ipn_node *ipn_node, struct sk_buff *skb)
 #else
+#ifdef IPN_PRE2639
 static struct sk_buff *ipn_handle_frame(struct sk_buff *skb)
+#else
+static rx_handler_result_t ipn_handle_frame(struct sk_buff **pskb)
+#endif
 #endif
 {
+#ifndef IPN_PRE2639
+	struct sk_buff *skb = *pskb;
+#endif
 	char *data=(skb->data)-(skb->mac_len);
 	int len=skb->len+skb->mac_len;
 #ifndef IPN_PRE2637
@@ -122,7 +135,11 @@ static struct sk_buff *ipn_handle_frame(struct sk_buff *skb)
 		}
 	}
 
+#ifdef IPN_PRE2639
 	return (skb);
+#else
+	return RX_HANDLER_PASS;
+#endif
 }
 
 #ifndef IPN_PRE2629
@@ -180,7 +197,11 @@ struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *e
 			}
 #endif
 #endif
+#ifdef IPN_PRE2624
+			dev=dev_get_by_name(name);
+#else
 			dev=dev_get_by_name(net,name);
+#endif
 			if (dev) {
 				if (dev->flags & IFF_LOOPBACK)
 					*err= -EINVAL;

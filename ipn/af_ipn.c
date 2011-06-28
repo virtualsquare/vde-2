@@ -53,6 +53,9 @@ MODULE_DESCRIPTION("IPN Kernel Module");
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 #define IPN_PRE2637
 #endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
+#define IPN_PRE2639
+#endif
 
 /*extension of RCV_SHUTDOWN defined in include/net/sock.h
  * when the bit is set recv fails */
@@ -600,11 +603,19 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	}
 
 	/* check if there is already an ipn-network socket with that name */
+#ifndef IPN_PRE2630
+	err = kern_path(sunaddr->sun_path, LOOKUP_FOLLOW, &nd.path);
+#else
 	err = path_lookup(sunaddr->sun_path, LOOKUP_FOLLOW, &nd);
+#endif
 	if (err) { /* it does not exist, NEW IPN socket! */
 		unsigned int mode;
 		/* Is it everything okay with the parent? */
+#ifndef IPN_PRE2639
+		err = kern_path_parent(sunaddr->sun_path, &nd);
+#else
 		err = path_lookup(sunaddr->sun_path, LOOKUP_PARENT, &nd);
+#endif
 		if (err)
 			goto out_mknod_parent;
 		/* Do I have the permission to create a file? */
@@ -742,7 +753,13 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 		int addr_len, int flags){
 	struct sockaddr_un *sunaddr=(struct sockaddr_un*)addr;
 	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
+#ifndef IPN_PRE2639
+	struct path ndpath;
+#else
 	struct nameidata nd;
+#define ndpath nd.path
+#endif
+
 	struct ipn_network *ipnn,*previousipnn;
 	int err=0;
 	int portno;
@@ -760,17 +777,21 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 		if (err < 0)
 			goto out;
 		addr_len=err;
+#ifndef IPN_PRE2639
+		err = kern_path(sunaddr->sun_path, LOOKUP_FOLLOW, &ndpath);
+#else
 		err = path_lookup(sunaddr->sun_path, LOOKUP_FOLLOW, &nd);
+#endif
 		if (err)
 			goto out;
-		err = inode_permission(nd.path.dentry->d_inode, MAY_READ);
+		err = inode_permission(ndpath.dentry->d_inode, MAY_READ);
 		if (err) {
 			if (err == -EACCES || err == -EROFS)
 				mustshutdown|=RCV_SHUTDOWN;
 			else
 				goto put_fail;
 		}
-		err = inode_permission(nd.path.dentry->d_inode, MAY_WRITE);
+		err = inode_permission(ndpath.dentry->d_inode, MAY_WRITE);
 		if (err) {
 			if (err == -EACCES)
 				mustshutdown|=SEND_SHUTDOWN;
@@ -787,11 +808,11 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 			err=0;
 			ipn_node->shutdown=mustshutdown;
 		}
-		if (!S_ISSOCK(nd.path.dentry->d_inode->i_mode)) {
+		if (!S_ISSOCK(ndpath.dentry->d_inode->i_mode)) {
 			err = -ECONNREFUSED;
 			goto put_fail;
 		}
-		ipnn=ipn_find_network_byinode(nd.path.dentry->d_inode);
+		ipnn=ipn_find_network_byinode(ndpath.dentry->d_inode);
 		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED)) {
 			err = -ECONNREFUSED;
 			goto put_fail;
@@ -802,7 +823,7 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 			err = -EPROTO;
 			goto put_fail;
 		}
-		path_put(&nd.path);
+		path_put(&ndpath);
 		ipn_node->ipn=ipnn;
 	} else
 		ipnn=ipn_node->ipn;
@@ -833,7 +854,7 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 	return err;
 
 put_fail:
-	path_put(&nd.path);
+	path_put(&ndpath);
 out:
 	up(&ipn_glob_mutex);
 	return err;
