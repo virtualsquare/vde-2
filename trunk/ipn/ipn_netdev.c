@@ -36,9 +36,6 @@
 #define DRV_NAME  "ipn"
 #define DRV_VERSION "0.3.1"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-#define IPN_PRE2624
-#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 #define IPN_PRE2629
 #endif
@@ -183,11 +180,7 @@ struct net_device *ipn_netdev_alloc(struct net *net,int type, char *name, int *e
 			}
 #endif
 #endif
-#ifdef IPN_PRE2624
-			dev=dev_get_by_name(name);
-#else
 			dev=dev_get_by_name(net,name);
-#endif
 			if (dev) {
 				if (dev->flags & IFF_LOOPBACK)
 					*err= -EINVAL;

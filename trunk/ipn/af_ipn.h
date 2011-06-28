@@ -96,9 +96,6 @@ struct numnode_oob {
 
 #ifdef __KERNEL__
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-#define kmem_cache_create(A,B,C,D,E) kmem_cache_create((A),(B),(C),(D),(E),(E))
-#endif
 
 #include <linux/mutex.h>
 #include <linux/un.h>

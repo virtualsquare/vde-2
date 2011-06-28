@@ -41,8 +41,14 @@ MODULE_AUTHOR("VIEW-OS TEAM");
 MODULE_DESCRIPTION("IPN Kernel Module");
 
 #define IPN_MAX_PROTO 4
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+#define IPN_PRE2630
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
 #define IPN_PRE2632
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+#define IPN_PRE2633
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 #define IPN_PRE2637
@@ -295,9 +301,7 @@ struct ipn_node *ipn_node_create(struct net *net)
 /* create a socket
  * ipn_node is a separate structure, pointed by ipn_sock -> node
  * when a node is "persistent", ipn_node survives while ipn_sock gets released*/
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-static int ipn_create(struct socket *sock, int protocol)
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
+#ifdef IPN_PRE2633
 static int ipn_create(struct net *net,struct socket *sock, int protocol)
 #else
 static int ipn_create(struct net *net,struct socket *sock, 
@@ -306,12 +310,8 @@ static int ipn_create(struct net *net,struct socket *sock,
 {
 	struct ipn_sock *ipn_sk;
 	
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	void *net=NULL;
-#else
 	if (net != &init_net)
 		return -EAFNOSUPPORT;
-#endif
 
 	if (sock->type != SOCK_RAW)
 		return -EPROTOTYPE;
@@ -322,11 +322,7 @@ static int ipn_create(struct net *net,struct socket *sock,
 	if (protocol < 0 || protocol >= IPN_MAX_PROTO ||
 			ipn_protocol_table[protocol] == NULL)
 		return -EPROTONOSUPPORT;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	ipn_sk = (struct ipn_sock *) sk_alloc(PF_IPN, GFP_KERNEL, &ipn_proto, 1);
-#else
 	ipn_sk = (struct ipn_sock *) sk_alloc(net, PF_IPN, GFP_KERNEL, &ipn_proto);
-#endif
 
 	if (!ipn_sk) 
 		return -ENOMEM;
@@ -623,7 +619,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			mode = ipn_node->pbp->mode;
 		else
 			mode = SOCK_INODE(sock)->i_mode;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
+#ifdef IPN_PRE2630
 		mode = S_IFSOCK | (mode & ~current->fs->umask);
 #else
 		mode = S_IFSOCK | (mode & ~current_umask());
@@ -849,11 +845,7 @@ int ipn_node_create_connect(struct ipn_node **ipn_node_out,
 	struct ipn_network *ipnn;
 	int err=0;
 	int portno;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	ipn_node=ipn_node_create(NULL);
-#else
 	ipn_node=ipn_node_create(&init_net);
-#endif
 	if (down_interruptible(&ipn_glob_mutex)) {
 		err=-ERESTARTSYS;
 		goto err_ipn_node_release;
@@ -1050,17 +1042,9 @@ static int ipn_join_netdev(struct socket *sock,struct ifreq *ifr)
 		up(&ipn_glob_mutex);
 		return -ERESTARTSYS;
 	}
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	dev=__dev_get_by_name(ifr->ifr_name);
-#else
 	dev=__dev_get_by_name(ipn_node->net,ifr->ifr_name);
-#endif
 	if (!dev) 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-		dev=__dev_get_by_index(ifr->ifr_ifindex);
-#else
 		dev=__dev_get_by_index(ipn_node->net,ifr->ifr_ifindex);
-#endif
 	if (dev && (ipn_joined=ipn_netdev2node(dev)) != NULL) { /* the interface does exist */
 		int i;
 		for (i=0;i<ipnn->maxports && ipn_joined != ipnn->connport[i] ;i++)
@@ -1091,17 +1075,9 @@ static int ipn_setpersist_netdev(struct ifreq *ifr, int value)
 		return -EPERM;
 	if (down_interruptible(&ipn_glob_mutex))
 		return -ERESTARTSYS;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	dev=__dev_get_by_name(ifr->ifr_name);
-#else
 	dev=__dev_get_by_name(&init_net,ifr->ifr_name);
-#endif
 	if (!dev)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-		dev=__dev_get_by_index(ifr->ifr_ifindex);
-#else
 		dev=__dev_get_by_index(&init_net,ifr->ifr_ifindex);
-#endif
 	if (dev && (ipn_node=ipn_netdev2node(dev)) != NULL) 
 		_ipn_setpersist(ipn_node,value);
 	else
