@@ -161,7 +161,7 @@ static struct class *sysfs_register(struct chrdevreq *devr)
 {
 	unsigned int minor_count;
 	struct class *devclass;
-	struct device *fdevice;
+	struct device *fdevice=NULL;
 	/* create a sysfs class for this device*/
 	if(IS_ERR(devclass=class_create(THIS_MODULE,devr->name)) )
 		return devclass;
