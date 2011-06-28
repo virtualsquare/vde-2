@@ -41,9 +41,6 @@ MODULE_AUTHOR("VIEW-OS TEAM");
 MODULE_DESCRIPTION("IPN Kernel Module");
 
 #define IPN_MAX_PROTO 4
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
-#define IPN_PRE2625
-#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
 #define IPN_PRE2632
 #endif
@@ -631,30 +628,16 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 #else
 		mode = S_IFSOCK | (mode & ~current_umask());
 #endif
-#ifndef IPN_PRE2625
 #ifdef APPARMOR
 		err = vfs_mknod(nd.path.dentry->d_inode, dentry, nd.path.mnt, mode, 0);
 #else
 		err = vfs_mknod(nd.path.dentry->d_inode, dentry, mode, 0);
 #endif
-#else
-#ifdef APPARMOR
-		err = vfs_mknod(nd.dentry->d_inode, dentry, nd.path.mnt, mode, 0);
-#else
-		err = vfs_mknod(nd.dentry->d_inode, dentry, mode, 0);
-#endif
-#endif
 		if (err)
 			goto out_mknod_dput;
-#ifndef IPN_PRE2625
 		mutex_unlock(&nd.path.dentry->d_inode->i_mutex);
 		dput(nd.path.dentry);
 		nd.path.dentry = dentry;
-#else
-		mutex_unlock(&nd.dentry->d_inode->i_mutex);
-		dput(nd.dentry);
-		nd.dentry = dentry;
-#endif
 		/* create a new ipn_network item */
 		if (ipn_node->pbp) 
 			parms=*ipn_node->pbp;
@@ -690,13 +673,8 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		INIT_LIST_HEAD(&ipnn->unconnectqueue);
 		INIT_LIST_HEAD(&ipnn->connectqueue);
 		ipnn->refcnt=0;
-#ifndef IPN_PRE2625
 		ipnn->dentry=nd.path.dentry;
 		ipnn->mnt=nd.path.mnt;
-#else
-		ipnn->dentry=nd.dentry;
-		ipnn->mnt=nd.mnt;
-#endif
 		sema_init(&ipnn->ipnn_mutex,1);
 		ipnn->sunaddr_len=addr_len;
 		ipnn->protocol=ipn_node->protocol;
@@ -713,11 +691,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		err=ipn_protocol_table[ipnn->protocol]->ipn_p_newnet(ipnn);
 		if (err)
 			goto out_mknod_dput_putmodule;
-#ifndef IPN_PRE2625
 		ipn_insert_network(&ipn_network_table[nd.path.dentry->d_inode->i_ino & (IPN_HASH_SIZE-1)],ipnn);
-#else
-		ipn_insert_network(&ipn_network_table[nd.dentry->d_inode->i_ino & (IPN_HASH_SIZE-1)],ipnn);
-#endif
 	} else {
 		/* join an existing network */
 		if (parms.flags & IPN_FLAG_EXCL) {
@@ -728,15 +702,9 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		if (err)
 			goto put_fail;
 		err = -ECONNREFUSED;
-#ifndef IPN_PRE2625
 		if (!S_ISSOCK(nd.path.dentry->d_inode->i_mode))
 			goto put_fail;
 		ipnn=ipn_find_network_byinode(nd.path.dentry->d_inode);
-#else
-		if (!S_ISSOCK(nd.dentry->d_inode->i_mode))
-			goto put_fail;
-		ipnn=ipn_find_network_byinode(nd.dentry->d_inode);
-#endif
 		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED) ||
 				(ipnn->flags & IPN_FLAG_EXCL))
 			goto put_fail;
@@ -750,11 +718,7 @@ static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	return 0;
 
 put_fail:
-#ifndef IPN_PRE2625
 	path_put(&nd.path);
-#else
-	path_release(&nd);
-#endif
 out:
 	up(&ipn_glob_mutex);
 	return err;
@@ -768,13 +732,8 @@ out_mknod_dput_ipnn:
 out_mknod_dput:
 	dput(dentry);
 out_mknod_unlock:
-#ifndef IPN_PRE2625
 	mutex_unlock(&nd.path.dentry->d_inode->i_mutex);
 	path_put(&nd.path);
-#else
-	mutex_unlock(&nd.dentry->d_inode->i_mutex);
-	path_release(&nd);
-#endif
 out_mknod_parent:
 	if (err==-EEXIST)
 		err=-EADDRINUSE;
@@ -832,19 +791,11 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 			err=0;
 			ipn_node->shutdown=mustshutdown;
 		}
-#ifndef IPN_PRE2625
 		if (!S_ISSOCK(nd.path.dentry->d_inode->i_mode)) {
 			err = -ECONNREFUSED;
 			goto put_fail;
 		}
 		ipnn=ipn_find_network_byinode(nd.path.dentry->d_inode);
-#else
-		if (!S_ISSOCK(nd.dentry->d_inode->i_mode)) {
-			err = -ECONNREFUSED;
-			goto put_fail;
-		}
-		ipnn=ipn_find_network_byinode(nd.dentry->d_inode);
-#endif
 		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED)) {
 			err = -ECONNREFUSED;
 			goto put_fail;
@@ -855,11 +806,7 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 			err = -EPROTO;
 			goto put_fail;
 		}
-#ifndef IPN_PRE2625
 		path_put(&nd.path);
-#else
-		path_release(&nd);
-#endif
 		ipn_node->ipn=ipnn;
 	} else
 		ipnn=ipn_node->ipn;
@@ -890,11 +837,7 @@ static int ipn_connect(struct socket *sock, struct sockaddr *addr,
 	return err;
 
 put_fail:
-#ifndef IPN_PRE2625
 	path_put(&nd.path);
-#else
-	path_release(&nd);
-#endif
 out:
 	up(&ipn_glob_mutex);
 	return err;
