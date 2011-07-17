@@ -4,19 +4,19 @@
  * Licensed under the GPLv2
  */
 
-#ifdef VDE_PQ
+#ifdef VDE_PQ2
 #ifndef _PACKETQ_H
 #define _PACKETQ_H
 
-extern int packetq_timeout;
+struct vdepq;
+struct endpoint;
 
-void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port),
-		int fd, int fd_ctl, void *packet, int len, void *data, int port);
+int vdepq_add(struct vdepq **tail, void *packet, int len, void *tmp);
 
-void packetq_try(void);
+void vdepq_del(struct vdepq **tail);
 
-void packetq_delfd(int fd);
+int vdepq_try(struct vdepq **tail, struct endpoint *ep,
+		int (*sendfun)(struct endpoint *ep, void *packet, int len));
 
-int packetq_count();
 #endif
 #endif

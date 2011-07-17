@@ -1,6 +1,6 @@
 /*
  * packetq - packet queue management. try to send packets several times before discarding.
- * Copyright 2005 Renzo Davoli
+ * Copyright 2011 Renzo Davoli
  * Licensed under the GPLv2
  */
 
@@ -20,134 +20,84 @@
 
 #include "consmgmt.h"
 
-#ifdef VDE_PQ
-#include "packetq.h"
+#ifdef VDE_PQ2
 
-int packetq_timeout= -1;
-static int countq;
-#define TIMEOUT 5
-#define TIMES 10
-#define MAXQLEN 4192
-
-struct packetqq {
-	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
-	int fd; 
-	int fd_ctl; 
-	void *packet; 
-	int len; 
-	void *data; 
-	int port;
-	int times;
-	struct packetqq *next;
+struct packetbuf {
+	short len;
+	short count;
 };
 
-static struct packetqq *pqh=NULL;
-static struct packetqq *pqt=NULL;
-static struct timeval last_try;
+struct vdepq {
+	struct packetbuf *vdepq_pb;
+	struct vdepq *vdepq_next;
+};
 
-void packetq_add(int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port),
-		int fd, int fd_ctl, void *packet, int len, void *data, int port)
+int vdepq_add(struct vdepq **tail, void *packet, int len, void **tmp)
 {
-	if (countq < MAXQLEN) {
-		struct packetqq *new=malloc(sizeof(struct packetqq));
-		void *packetcopy=malloc(len);
-		if (new != NULL && packetcopy != NULL && len > 0) {
-			countq++;
-			new->sender=sender;
-			new->fd=fd;
-			new->fd_ctl=fd_ctl;
-			memcpy(packetcopy,packet,len);
-			new->packet=packetcopy;
-			new->len=len;
-			new->data=data;
-			new->port=port;
-			new->times=TIMES;
-			new->next=NULL;
-			if (pqh==NULL) {
-				gettimeofday(&last_try,NULL);
-				packetq_timeout=TIMEOUT;
-				pqh=pqt=new;
-			} else {
-				pqt->next=new;
-				pqt=new;
-			}
-		} else {
-			if (new != NULL) free(new);
-			if (packetcopy != NULL) free(packetcopy);
+	struct packetbuf *packetbuftmp = *tmp;
+	struct vdepq *newelem;
+	if ((newelem = malloc(sizeof(struct vdepq))) == NULL)
+		return 0;
+	if (packetbuftmp == NULL) {
+		if ((*tmp = packetbuftmp = malloc (sizeof(struct packetbuf)+len))==NULL) {
+			free(newelem);
+			return 0;
 		}
+		packetbuftmp->len=len;
+		packetbuftmp->count=0;
+		memcpy(((void *)(packetbuftmp+1)),packet,len);
+	}
+	newelem->vdepq_pb=packetbuftmp;
+	(packetbuftmp->count)++;
+	//printf("add %p count %d len %d/%d \n",newelem,packetbuftmp->count,len,packetbuftmp->len);
+	if (*tail == NULL) 
+		*tail=newelem->vdepq_next=newelem;
+	else {
+		newelem->vdepq_next=(*tail)->vdepq_next;
+		(*tail)->vdepq_next=newelem;
+		*tail=newelem;
+	}
+	return 1;
+}
+
+#define PACKETBUFDEL(X) \
+	({ if (--((X)->count) == 0) \
+	 free(X);\
+	 })
+
+void vdepq_del(struct vdepq **tail)
+{
+	while (*tail != NULL) {
+		struct vdepq *first=(*tail)->vdepq_next;
+		//printf("kill one %p %p\n",first,*tail);
+		PACKETBUFDEL(first->vdepq_pb);
+		if (first == (*tail))
+			*tail=NULL;
+		else
+			(*tail)->vdepq_next=first->vdepq_next;
+		free(first);
 	}
 }
 
-static struct packetqq *packetq_scantry(struct packetqq *h,struct packetqq **t,fd_set *fds)
-{
-	if (h != NULL) {
-		int sendrv=!(FD_ISSET(h->fd,fds));
-		h->times--;
-		if ((sendrv && (sendrv=h->sender(h->fd,h->fd_ctl,h->packet,h->len,h->data,h->port)) == 0)   /*send OK*/
-				|| h->times<=0) { /*or max number of attempts reached*/
-			struct packetqq *next;
-			next=h->next;
-			countq--;
-			free(h->packet);
-			free(h);
-			return packetq_scantry(next,t,fds);
-		} else {
-			FD_SET(h->fd,fds);
-			h->next=packetq_scantry(h->next,t,fds);
-			if (h->next == NULL) *t=h;
-			return h;
-		}
-	} else
-		return NULL;
-}
-
-void packetq_try(void)
-{
-	if (pqh != NULL) {
-		struct timeval this_try;
-		gettimeofday(&this_try,NULL);
-		packetq_timeout=TIMEOUT - ((this_try.tv_sec-last_try.tv_sec) * 1000 + 
-				(this_try.tv_usec-last_try.tv_usec) / 1000);
-		if (packetq_timeout <= 0) {
-			fd_set fds;
-			FD_ZERO(&fds);
-			pqh=packetq_scantry(pqh,&pqt,&fds);	
-			if (pqh != NULL) {
-				gettimeofday(&last_try,NULL);
-				packetq_timeout=TIMEOUT;
-			} else
-				packetq_timeout = -1;
-		}
+int vdepq_try(struct vdepq **tail, void *ep,
+		int (*sendfun)(void *ep, void *packet, int len)) {
+	int sent=0;
+	while (*tail != NULL) {
+		struct vdepq *first = (*tail)->vdepq_next;
+		//printf("trysend %p len %d\n",first,first->vdepq_pb->len);
+		if (sendfun(ep, (void *)(first->vdepq_pb + 1), first->vdepq_pb->len) == -EWOULDBLOCK) 
+			break;
+		else {
+			PACKETBUFDEL(first->vdepq_pb);
+			if (first == (*tail))
+				*tail=NULL;
+			else
+				(*tail)->vdepq_next=first->vdepq_next;
+			free(first);
+			sent++;
+		} 
 	}
+	return sent;
 }
 
-static struct packetqq *packetq_scandelfd(int fd,struct packetqq *h,struct packetqq **t)
-{
-	if (h != NULL) {
-		if (fd == h->fd) {
-			struct packetqq *next=h->next;
-			countq--;
-			free(h->packet);
-			free(h);
-			return packetq_scandelfd(fd,next,t);
-		} else {
-			h->next=packetq_scandelfd(fd,h->next,t);
-			if (h->next == NULL) *t=h;
-			return h;
-		}
-	} else
-		return NULL;
-}
-
-void packetq_delfd(int fd)
-{
-	pqh=packetq_scandelfd(fd,pqh,&pqt);
-	if (pqh == NULL)
-		packetq_timeout = -1;
-}
-
-int packetq_count()
-{
-	return countq;
-}
 #endif
