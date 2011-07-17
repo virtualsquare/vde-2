@@ -286,7 +286,6 @@ unsigned char bufin[BUFSIZE];
 int main(int argc, char **argv)
 {
 	static char *sockname=NULL;
-	int result;
 	register ssize_t nx;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 
@@ -383,7 +382,7 @@ int main(int argc, char **argv)
 	pollv[2].fd=vde_ctlfd(conn);
 
 	for(;;) {
-		result=poll(pollv,3,-1);
+		poll(pollv,3,-1);
 		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
 				pollv[2].revents & POLLIN)
 			break;

@@ -52,50 +52,47 @@ struct init_tap {
 
 struct init_tap *hinit_tap=NULL;
 
-static int send_tap(int fd, int ctl_fd, void *packet, int len, void *unused, int port)
+static int send_tap(int fd_ctl, int fd_data, void *packet, int len, int port)
 {
 	int n;
 
-	n = len - write(ctl_fd, packet, len);
-	if(n){
+	n = len - write(fd_ctl, packet, len);
+	if(n > len){
 		int rv=errno;
-#ifndef VDE_PQ
-		if(errno != EAGAIN && errno != EWOULDBLOCK) 
+		if(rv != EAGAIN && rv != EWOULDBLOCK) 
 			printlog(LOG_WARNING,"send_tap port %d: %s",port,strerror(errno));
-#endif
-		if (n > len)
-			return -rv;
 		else
-			return n;
+			rv=EWOULDBLOCK;
+		return -rv;
 	}
-	return 0;
+	return n;
 }
 
-static void closeport(int fd, int portno)
+static void handle_io(unsigned char type,int fd,int revents,void *private_data)
 {
-	  if (fd>0)
-			    remove_fd(fd);
-}
+	struct endpoint *ep=private_data;
+#ifdef VDE_PQ2
+	if (revents & POLLOUT) 
+		handle_out_packet(ep);
+#endif
+	if (revents & POLLIN) {
+		struct bipacket packet;
+		int len=read(fd, &(packet.p), sizeof(struct packet));
 
-static void handle_input(unsigned char type,int fd,int revents,int *arg)
-{
-	struct bipacket packet;
-	int len=read(fd, &(packet.p), sizeof(struct packet));
-
-	if(len < 0){
-		if(errno != EAGAIN && errno != EWOULDBLOCK) 
-			printlog(LOG_WARNING,"Reading tap data: %s",strerror(errno));
+		if(len < 0){
+			if(errno != EAGAIN && errno != EWOULDBLOCK) 
+				printlog(LOG_WARNING,"Reading tap data: %s",strerror(errno));
+		}
+		else if(len == 0) {
+			if(errno != EAGAIN && errno != EWOULDBLOCK) 
+				printlog(LOG_WARNING,"EOF tap data port: %s",strerror(errno));
+			/* close tap! */
+		} else if (len >= ETH_HEADER_SIZE)
+			handle_in_packet(ep, &(packet.p), len);
 	}
-	else if(len == 0) {
-		if(errno != EAGAIN && errno != EWOULDBLOCK) 
-			printlog(LOG_WARNING,"EOF tap data port: %s",strerror(errno));
-		/* close tap! */
-	} else if (len >= ETH_HEADER_SIZE)
-		handle_in_packet(*arg, &(packet.p), len);
 }
 
-
-static void cleanup(unsigned char type,int fd,int arg)
+static void cleanup(unsigned char type,int fd,void *private_data)
 {
 	if (fd >= 0)
 		close(fd);
@@ -175,6 +172,9 @@ int open_tap(char *dev)
 		close(fd);
 		return(-1);
 	}
+	/* tuntap should be "fast", but if there is a packetq we can manage
+		 a tuntap which is "not fast enough" */
+	fcntl(fd, F_SETFL, O_NONBLOCK);
 	return(fd);
 }
 #endif
@@ -209,25 +209,19 @@ int open_tap(char *dev)
 }
 #endif
 
-static int newport(int fd, int portno, uid_t user)
-{
-	return fd;
-}
-
-static int newtap(char *dev)
+static struct endpoint *newtap(char *dev)
 {
 	int tap_fd;
 	tap_fd = open_tap(dev);
 	if (tap_fd>0) {
-		int portno=setup_ep(0,tap_fd,NULL,-1,&modfun);
-		if (portno >= 0) {
-			setup_description(portno,tap_fd,dev);
-			add_fd(tap_fd,tap_type,portno);
-			return portno;
-		} else 
-			return -1;
+		struct endpoint *ep=setup_ep(0,tap_fd,tap_fd,-1,&modfun);
+		if (ep != NULL) {
+			setup_description(ep,dev);
+			add_fd(tap_fd,tap_type,ep);
+		} 
+		return ep;
 	} else
-		return -1;
+		return NULL;
 }
 
 static void init(void)
@@ -236,15 +230,17 @@ static void init(void)
 		struct init_tap *p;
 		tap_type=add_type(&swmi,1);
 		for(p=hinit_tap;p != NULL;p=p->next) {
-			if (newtap(p->tap_dev) < 0)
+			if (newtap(p->tap_dev) == NULL)
 				printlog(LOG_ERR,"ERROR OPENING tap interface: %s",p->tap_dev);
 		}
 		hinit_tap=free_init_tap(hinit_tap);
 	}
 }
 
-static void delep (int fd, void* data, void *descr)
+static void delep (int fd_ctl, int fd_data, void *descr)
 {
+	if (fd_ctl>=0)
+		remove_fd(fd_ctl);
 	if (descr) free(descr);
 }
 
@@ -256,12 +252,10 @@ void start_tuntap(void)
 	swmi.usage=usage;
 	swmi.parseopt=parseopt;
 	swmi.init=init;
-	swmi.handle_input=handle_input;
+	swmi.handle_io=handle_io;
 	swmi.cleanup=cleanup;
 	modfun.sender=send_tap;
-	modfun.newport=newport;
 	modfun.delep=delep;
-	modfun.delport=closeport;
 	add_swm(&swmi);
 }
 

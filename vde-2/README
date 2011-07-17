@@ -185,8 +185,9 @@ Please note also that the vde-switches do not manage (yet) the minimum spanning
 tree protocol thus a loop in the topology can lead to inconsistent MAC forward 
 tables and to network saturation.
 
-Copyright 2003/2004/2005/2006 Renzo Davoli
-This product includes software developed by Danny Gasparovski (slirp support).
+Copyright 2003/2004/2005/2006/2011 Renzo Davoli
+This product includes software developed by Danny Gasparovski and Fabrice 
+Ballard (slirp support).
 Acknowlegments:
 Thanks to Marco Giordani, Leonardo Macchia for their useful help for debugging.
 Imported code by Danny Gasparovsky, Fabrice Ballard.

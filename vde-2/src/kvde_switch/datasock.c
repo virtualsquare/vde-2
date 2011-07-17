@@ -48,12 +48,12 @@ static gid_t grp_owner = -1;
 
 #define MODULENAME "kernel module interface"
 
-static void handle_input(unsigned char type,int fd,int revents,int *arg)
+static void handle_io(unsigned char type,int fd,int revents,void *arg)
 {
 	/*here OOB messages will be delivered for debug options */
 }
 
-static void cleanup(unsigned char type,int fd,int arg)
+static void cleanup(unsigned char type,int fd,void *unused)
 {
 	unlink(ctl_socket);
 }
@@ -215,7 +215,7 @@ static void init(void)
 		exit(1);
 	}
 	runextinterfaces(&sun);
-	add_fd(kvdefd,ctl_type,-1);
+	add_fd(kvdefd,ctl_type,NULL);
 }
 
 static int showinfo(FILE *fd)
@@ -247,7 +247,7 @@ void start_datasock(void)
 	swmi.usage=usage;
 	swmi.parseopt=parseopt;
 	swmi.init=init;
-	swmi.handle_input=handle_input;
+	swmi.handle_io=handle_io;
 	swmi.cleanup=cleanup;
 	ADDCL(cl);
 	add_swm(&swmi);

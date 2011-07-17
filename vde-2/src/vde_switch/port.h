@@ -35,24 +35,30 @@ struct bipacket {
 #define psetcfi(X,V)  ((X)[0]= ((X)[0] & 0xef) | (V&1)<<4)
 #define psetvlan(X,V) ({(X)[1]=(V)&0xff;(X)[0]=((X)[0] & 0xf0) | ((V)>>8) & 0xf; (V); })
 
+struct endpoint;
+
 struct mod_support {
 	char *modname;
-	int (*sender)(int fd, int fd_ctl, void *packet, int len, void *data, int port);
-	int (*newport)(int fd_ctl,int portno,uid_t user);
-	void (*delep)(int fd, void* data, void *descr);
-	void (*delport)(int fd,int portno);
+	int (*sender)(int fd_ctl, int fd_data, void *packet, int len, int port);
+	void (*delep)(int fd_ctl, int fd_data, void *descr);
 };
 
-extern int setup_ep(int portno, int fd_ctl,
-		void *data,
+extern struct endpoint *setup_ep(int portno, int fd_ctl,
+		int fd_data,
 		uid_t user,
 		struct mod_support *modfun);
 
-extern void setup_description(int portno, int fd_ctl, char *descr);
+extern int ep_get_port(struct endpoint *ep);
 
-extern int close_ep(int portno, int fd_ctl);
+extern void setup_description(struct endpoint *ep, char *descr);
 
-extern void handle_in_packet(int port, struct packet *packet, int len);
+extern int close_ep(struct endpoint *ep);
+
+#ifdef VDE_PQ2
+extern void handle_out_packet(struct endpoint *ep);
+#endif
+
+extern void handle_in_packet(struct endpoint *ep, struct packet *packet, int len);
 
 extern bitarray validvlan;
 int portflag(int op, int f);
