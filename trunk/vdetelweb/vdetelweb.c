@@ -466,6 +466,7 @@ int pfdsearch(int fd)
 	return i;
 }
 
+#if 0
 int setfds(fd_set *rds, fd_set *exc)
 {
 	int i,max=0;
@@ -478,6 +479,7 @@ int setfds(fd_set *rds, fd_set *exc)
 	}
 	return max+1;
 }
+#endif
 
 static void save_pidfile(void)
 {
@@ -693,6 +695,7 @@ int main(int argc, char *argv[])
 		printlog(LOG_INFO,"VDETELWEB started");
 	}
 
+#if 0
 	while (1)
 	{
 		int n,m,i;
@@ -707,5 +710,19 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
+#endif
+#if 1
+	while (1)
+	{
+		int i;
+		int m=lwip_poll(pfd,npfd,-1);
+		for (i=0;i<npfd && m>0;i++) {
+			if (pfd[i].revents) {
+				m--;
+				fpfd[i](i,pfd[i].fd,vdefd);
+			}
+		}
+	}
+#endif
 }
 
