@@ -26,6 +26,7 @@ AC_CHECK_FUNCS([atexit bzero getcwd memset socket strdup strerror strndup strstr
 
 # Checks for libraries.
 AC_CHECK_LIB([lwipv6], [lwip_init],, AC_MSG_ERROR([liblwipv6 missing]), [-lpthread])
+AC_CHECK_LIB([ssl], [SHA1_Init],, AC_MSG_ERROR([libssl (openssl) missing]), [-lssl])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

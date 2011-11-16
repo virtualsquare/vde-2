@@ -53,6 +53,7 @@
 #include "vdetelweb.h"
 #include <lwipv6.h>
 #include <limits.h>
+#include <openssl/sha.h>
 
 int daemonize;
 int telnet;
@@ -105,36 +106,21 @@ static void cleanup(void)
 	}
 }
 
+static char hex[]="0123456789abcdef";
 int sha1passwdok(const char *pw) {
-	char buf[HASH_SIZE + 1];
-	int pfd_fc[2];
-	int pfd_cf[2];
-	pid_t pid;
-
-	pipe(pfd_fc);
-	pipe(pfd_cf);
-	pid = fork();
-
-	if (!pid) {
-		close(pfd_fc[1]);
-		close(pfd_cf[0]);
-		dup2(pfd_fc[0], STDIN_FILENO);
-		dup2(pfd_cf[1], STDOUT_FILENO);
-
-		execl("/usr/bin/sha1sum", "/usr/bin/sha1sum", NULL);
-		exit(1);
-	} else {
-		close(pfd_cf[1]);
-		close(pfd_fc[0]);
-
-		write(pfd_fc[1], pw, strlen(pw));
-		close(pfd_fc[1]);
-		read(pfd_cf[0], buf, sizeof(buf));
-		close(pfd_cf[0]);
-
-		waitpid(pid, NULL, 0);
-		return (strncmp(buf,passwd,strlen(passwd))==0);
+	unsigned char out[SHA_DIGEST_LENGTH];
+	char outstr[SHA_DIGEST_LENGTH*2+1];
+	int i;
+	SHA_CTX c;
+	SHA1_Init(&c);
+	SHA1_Update(&c, pw, strlen(pw));
+	SHA1_Final(out, &c);
+	for (i=0; i<SHA_DIGEST_LENGTH; i++) {
+		outstr[2*i]=hex[out[i] >> 4];
+		outstr[2*i+1]=hex[out[i] & 0xf];
 	}
+	outstr[2*i]=0;
+	return (memcmp(outstr,passwd,SHA_DIGEST_LENGTH)==0);
 }
 
 static void sig_handler(int sig)
@@ -695,23 +681,6 @@ int main(int argc, char *argv[])
 		printlog(LOG_INFO,"VDETELWEB started");
 	}
 
-#if 0
-	while (1)
-	{
-		int n,m,i;
-		fd_set rds,exc;
-		int max=setfds(&rds,&exc);
-		m=lwip_select(max,&rds,NULL,&exc,NULL);
-		for(i=0; m>0 && i<max; i++) {
-			if (FD_ISSET(i,&rds) || FD_ISSET(i,&exc)) {
-				n=pfdsearch(i);
-				fpfd[n](n,i,vdefd);
-				m--;
-			}
-		}
-	}
-#endif
-#if 1
 	while (1)
 	{
 		int i;
@@ -723,6 +692,5 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-#endif
 }
 
