@@ -1,3 +1,10 @@
+VDE 2.3.2, 2011-11-23
+	* dpipe: new daemon mode
+	* [vde_switch] new mainloop management
+	* [vde_switch] hash table based on 64bits integers
+	* [vde_switch] new priority queue for packets
+	* wirefilter: capacity renamed as "channel buffer size"
+
 VDE 2.3.1, 2010-07-25
 	* [vde_switch] Fix control socket path resolution regression.
 
