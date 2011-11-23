@@ -115,6 +115,8 @@ static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 	int optsize = sizeof(sockbufsize);
 #endif
 	struct sockaddr_un sun_in;
+	// init sun_in memory
+	memset(&sun_in,0,sizeof(sun_in));
 	switch(type){
 		case REQ_NEW_PORT0:
 			port_request= -1;

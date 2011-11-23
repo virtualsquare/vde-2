@@ -184,6 +184,7 @@ void add_fd(int fd,unsigned char type,void *private_data)
 	p->events = POLLIN | POLLHUP;
 	fdpp[index]->type=type;
 	fdpp[index]->private_data=private_data;
+	fdpp[index]->timestamp=0;
 	nfds++;
 }
 
