@@ -53,7 +53,7 @@
 #include "vdetelweb.h"
 #include <lwipv6.h>
 #include <limits.h>
-#include <openssl/sha.h>
+#include <mhash.h>
 
 int daemonize;
 int telnet;
@@ -108,19 +108,19 @@ static void cleanup(void)
 
 static char hex[]="0123456789abcdef";
 int sha1passwdok(const char *pw) {
-	unsigned char out[SHA_DIGEST_LENGTH];
-	char outstr[SHA_DIGEST_LENGTH*2+1];
+	unsigned char out[mhash_get_block_size(MHASH_SHA1)];
+	char outstr[mhash_get_block_size(MHASH_SHA1)*2+1];
 	int i;
-	SHA_CTX c;
-	SHA1_Init(&c);
-	SHA1_Update(&c, pw, strlen(pw));
-	SHA1_Final(out, &c);
-	for (i=0; i<SHA_DIGEST_LENGTH; i++) {
+	MHASH td;
+	td=mhash_init(MHASH_SHA1);
+	mhash(td, pw, strlen(pw));
+	mhash_deinit(td, out);
+	for (i=0; i<mhash_get_block_size(MHASH_SHA1); i++) {
 		outstr[2*i]=hex[out[i] >> 4];
 		outstr[2*i+1]=hex[out[i] & 0xf];
 	}
 	outstr[2*i]=0;
-	return (memcmp(outstr,passwd,SHA_DIGEST_LENGTH)==0);
+	return (memcmp(outstr,passwd,mhash_get_block_size(MHASH_SHA1))==0);
 }
 
 static void sig_handler(int sig)
