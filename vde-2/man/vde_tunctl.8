@@ -3,9 +3,9 @@
 vde_tunctl \(em create and manage persistent TUN/TAP interfaces 
 .SH "SYNOPSIS" 
 .PP 
-\fBvde_tunctl\fR [\fB-f\fP \fItun-clone-device\fR]  [\fB-u\fP \fIowner\fR]  [\fB-t\fP \fIdevice-name\fR]  
+\fBvde_tunctl\fR [\fB-f\fP \fIclone-dev\fR] [\fB-u\fP \fIowner\fR] [\fB-g\fP \fIgroup\fR] [\fB-n\fR] [\fB-t\fP \fIdev-name\fR]  
 .PP 
-\fBvde_tunctl\fR [\fB-f\fP \fItun-clone-device\fR] \fB-d\fP \fIdevice-name\fR  
+\fBvde_tunctl\fR [\fB-f\fP \fIclone-dev\fR] \fB-d\fP \fIdev-name\fR  
 .SH "DESCRIPTION" 
 .PP 
 \fBvde_tunctl\fR allows the host sysadmin to 
@@ -13,7 +13,10 @@ preconfigure a TUN/TAP device for use by a particular user.  That
 user may open and use the device, but may not change any aspects 
 of the host side of the interface. 
 .PP
-vde_tunctl is a simple copy of \fBtunctl\fR done for practical purposes.
+vde_tunctl is an extension of \fBtunctl\fR.
+.PP
+vde_tunctl defines tap interfaces unless \fIdev-name\fR begins by "tun" or
+the option \fR-n\fR appears in the command line. 
 .SH "USAGE" 
 .PP 
 To create an interface for use by a particular user, invoke 
@@ -22,7 +25,6 @@ tunctl without the \-d option:
 .nf 
 # \fBvde_tunctl \-u someuser\fP  
 Set 'tap0' persistent and owned by uid 500 
- 
 .fi 
 .PP 
 Then, configure the interface as normal: 
@@ -39,8 +41,16 @@ To delete the interface, use the \-d option:
 .nf 
 # \fBvde_tunctl \-d tap0\fP  
 Set 'tap0' nonpersistent 
- 
 .fi 
+
+To create or destroy a tun interface (instead of tap):
+.nf
+# \fBvde_tunctl -n \-u someuser\fP
+Set 'tun0' persistent and owned by uid 500
+# \fBvde_tunctl \-d tun0\fP
+Set 'tun0' nonpersistent
+.fi
+
 .SH "SEE ALSO" 
 .PP 
 \fBvde_switch\fP(1)
