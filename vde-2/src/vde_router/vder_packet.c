@@ -1,3 +1,8 @@
+/* VDE_ROUTER (C) 2007:2011 Daniele Lacamera
+ *
+ * Licensed under the GPLv2
+ *
+ */
 #include "vder_datalink.h"
 #include "vder_arp.h"
 #include "vder_icmp.h"

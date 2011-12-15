@@ -1,0 +1,61 @@
+.TH VDE_ROUTER 1 "December 16, 2011" "Virtual Distributed Ethernet"
+.SH NAME
+vde_router \- Virtual Distributed Ethernet Router.
+.SH SYNOPSIS
+.B vde_router
+\fB\-c\fI configfile\fR
+[\fB\-d\fI]
+[\fB\-M\fI mgmt_socket\fR]
+[\fB\-m\fI mgmt_mode\fR]
+[\fB\-p\fI pidfile\fR]
+.br
+.SH DESCRIPTION
+A
+\fBvde_router\fP 
+
+
+
+.SH OPTIONS
+.TP
+.B -d
+Daemonize the process and put in background.
+
+.TP
+.B -r \fIconfigfile\fR
+Parse configuration parameters from \fBconfigfile\fP at startup
+
+
+.TP
+.B -M \fImgmt_socket
+the unix socket where the parameters (interfaces addresses, routes, etc.) can be checked and
+changed runtime. \fBunixterm\fP(1) can be used as a remote terminal for wirefilter.
+
+.TP
+.B -m \fImgmt_mode
+Specify the permission for the access to \fBmgmt_socket\fP
+
+.TP
+.B -p \fIpidfile
+Save the process id to \fBpidfile\fP
+
+
+.SH NOTICE
+Virtual Distributed Ethernet is not related in any way with
+www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
+i.e. the German "Association for Electrical, Electronic & Information
+Technologies").
+
+.SH SEE ALSO
+\fBvde_switch\fP(1),
+\fBvdeq\fP(1),
+\fBunixterm\fP(1),
+\fBvde_cryptcab\fP(1),
+\fBwirefilter\fP(1).
+.br
+.SH AUTHORS
+VDE_ROUTER is a tool by Daniele Lacamera <root@danielinux.net>
+
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
+
+Red-Black Tree used to implement ARP tables is a free port to userspace from the Linux kernel, by Andrea Arcangeli and David Woodhouse. 
+
