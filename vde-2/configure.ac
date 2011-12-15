@@ -1,4 +1,4 @@
-#                                               -*- Autoconf -*-
+#                                               -*- Autoconf -*-/
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
@@ -25,6 +25,9 @@ AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([crypto], [EVP_EncryptInit],
   [add_cryptcab_support=yes],
   [add_cryptcab_support=no ; warn_cryptcab=yes])
+AC_CHECK_LIB([pthread], [pthread_create],
+  [enable_router=yes],
+  [enable_router=no ; warn_router=yes])
 AC_CHECK_LIB([pcap], [pcap_open_dead],
   [add_pcap=yes],
   [add_pcap=no ; warn_pcap=yes])
@@ -124,6 +127,12 @@ AC_ARG_ENABLE([cryptcab],
     [Disable libcrypto-dependend vde_cryptcab compilation]),
   [if test $enableval = "no" ; then add_cryptcab_support=no ; warn_cryptcab=no ; fi])
 
+# Disable vde_router? (depends on lpthread, maybe unwanted)
+AC_ARG_ENABLE([router],
+  AS_HELP_STRING([--disable-router],
+    [Disable libpthread-dependent vde_router compilation]),
+  [if test $enableval = "no" ; then enable_router=no ; warn_router=no ; fi])
+
 # Check of tuntap device
 AC_ARG_ENABLE([tuntap],
   AS_HELP_STRING([--disable-tuntap], [Disable tuntap compilation]), [:],
@@ -212,6 +221,7 @@ fi
 
 
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
+AM_CONDITIONAL(ENABLE_ROUTER, test "$enable_router" = yes)
 AM_CONDITIONAL(ENABLE_PYTHON, test "$enable_python" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
@@ -244,6 +254,7 @@ AC_CONFIG_FILES(
   [src/vdetaplib/Makefile]
   [src/vde_l3/Makefile]
   [src/vde_cryptcab/Makefile]
+  [src/vde_router/Makefile]
   [src/slirpvde/Makefile]
   [src/vde_switch/plugins/Makefile]
 )
@@ -258,6 +269,12 @@ if test x$add_cryptcab_support = "xyes" ; then
   AS_ECHO " + VDE CryptCab............ enabled"
 else
   AS_ECHO " - VDE CryptCab............ disabled"
+fi
+
+if test x$enable_router = "xyes" ; then
+  AS_ECHO " + VDE Router.............. enabled"
+else
+  AS_ECHO " - VDE Router.............. disabled"
 fi
 
 if test x$enable_python = "xyes" ; then
@@ -303,6 +320,14 @@ if ! test x$add_cryptcab_support = "xyes" ; then
     AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
 not installed on your system, or because openssl/blowfish.h could not be found.
 Please install them if you want CryptCab to be compiled and installed.])
+    AS_ECHO
+  fi
+fi
+
+if ! test x$enable_router = "xyes" ; then
+  if test x$warn_router = "xyes" ; then
+    AC_MSG_WARN([VDE Router support has been disabled because libpthread is
+not installed on your system.])
     AS_ECHO
   fi
 fi
