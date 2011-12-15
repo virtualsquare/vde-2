@@ -1,0 +1,43 @@
+VDE support for Contiki
+
+---------------------------------
+INSTALL howto:
+
+- get the Contiki source distribution from 
+http://sourceforge.net/projects/contiki/files/Contiki/Contiki%202.5/
+- unzip it,
+- and add the vde support files to the source tree as follows.
+
+$ unzip contiki-2.5.zip
+$ tar zxvf contiki-2.5+vde.tgz
+---------------------------------
+
+The tar file includes: 
+the driver files for vde:
+  contiki-2.5/cpu/native/net/vdedev6.c
+  contiki-2.5/cpu/native/net/vdedev6.h
+  contiki-2.5/cpu/native/net/vdedev.c
+  contiki-2.5/cpu/native/net/vdedev-drv.c
+  contiki-2.5/cpu/native/net/vdedev-drv.h
+  contiki-2.5/cpu/native/net/vdedev.h
+
+a new platform: 
+  contiki-2.5/platform/minimal-net-vde
+
+and two examples (ipv4 and ipv6 web server running on vde)
+	contiki-2.5/examples/webserver-vde
+	contiki-2.5/examples/webserver-ipv6-vde
+
+To try the tests: go to the example dir, type "make" and run the executable.
+minimal-net-vde uses the default vde switch.
+(If you want to define your own default switch create a symbolic link
+ to your switch as ~/.vde2/stdsock, or on newer vde versions as
+ ~/vde2/default.switch:
+ e.g.
+        vde_switch -s /tmp/myvde.ctl 
+        ln -s /tmp/myvde.ctl ~/vde/stdsock
+ or
+        ln -s /tmp/myvde.ctl ~/vde/default.switch
+)
+
+Renzo Davoli November 2011
