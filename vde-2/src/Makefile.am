@@ -31,6 +31,10 @@ if ENABLE_CRYPTCAB
   SUBDIRS += vde_cryptcab
 endif
 
+if ENABLE_ROUTER
+  SUBDIRS += vde_router
+endif
+
 if ENABLE_KERNEL_SWITCH
   SUBDIRS += kvde_switch
 endif
