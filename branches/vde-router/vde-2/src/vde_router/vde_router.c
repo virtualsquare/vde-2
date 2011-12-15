@@ -1,3 +1,12 @@
+/* VDE_ROUTER (C) 2007:2011 Daniele Lacamera
+ *
+ * Licensed under the GPLv2
+ *
+ * Description: this module is just a frontend for command line,
+ * configuration, etc.
+ *
+ * For the router engine see vder_datalink.c
+ */
 #include "vder_datalink.h"
 #include "vde_router.h"
 #include "vder_queue.h"
@@ -57,8 +66,7 @@ static int help(int fd,char *s)
 		printoutc(fd, "ipfilter     show/change ip filtering configuration");
 		printoutc(fd, "stats        print interface statistics");
 		printoutc(fd, "logout       close current management session");
-		printoutc(fd, "shutdown     disconnect the vde_router and exit");
-		printoutc(fd, "quit         alias for \"shutdown\"");
+		printoutc(fd, "shutdown     turn the router off");
 		return 0;
 	} else if (match_input("help",arg)) {
 		printoutc(fd, "help         print a summary of mgmt commands.");
@@ -183,12 +191,11 @@ static int help(int fd,char *s)
 		return 0;
 	} else if (match_input("logout",arg)) {
 		printoutc(fd, "Syntax:");
+		printoutc(fd, "\tlogout");
 		return 0;
 	} else if (match_input("shutdown",arg)) {
 		printoutc(fd, "Syntax:");
-		return 0;
-	} else if (match_input("quit",arg)) {
-		printoutc(fd, "Syntax:");
+		printoutc(fd, "\tshutdown");
 		return 0;
 	} else {
 		printoutc(fd, "No help available for %s", arg);
@@ -390,11 +397,6 @@ static void show_route(int fd, struct vder_route *ro)
 	free(netmask);
 	free(gateway);
 }
-
-static int confirmquitplease(int fd,char *s) {
-	printoutc(fd, "(did you mean 'quit'?)");
-	return EBADRQC;
-};
 
 static int route(int fd,char *s)
 {
@@ -986,9 +988,7 @@ static struct comlist {
 	{"ipfilter", filter, WITHFILE},
 	{"queue", queue, WITHFILE},
 	{"logout",logout, 0},
-	{"shutdown",doshutdown, 0},
-	{"quit",doshutdown, 0},
-	{"q",confirmquitplease, 0}
+	{"shutdown",doshutdown, 0}
 };
 
 #define NCL sizeof(commandlist)/sizeof(struct comlist)

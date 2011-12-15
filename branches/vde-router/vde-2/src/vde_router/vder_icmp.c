@@ -1,3 +1,8 @@
+/* VDE_ROUTER (C) 2007:2011 Daniele Lacamera
+ *
+ * Licensed under the GPLv2
+ *
+ */
 #include "vde_router.h"
 #include "vde_headers.h"
 #include "vder_packet.h"

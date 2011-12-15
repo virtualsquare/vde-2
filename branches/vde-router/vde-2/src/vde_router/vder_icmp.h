@@ -1,3 +1,8 @@
+/* VDE_ROUTER (C) 2007:2011 Daniele Lacamera
+ *
+ * Licensed under the GPLv2
+ *
+ */
 #ifndef __VDER_ICMP
 #define __VDER_ICMP
 int vder_icmp_service_unreachable(uint32_t dst, uint8_t *foot);

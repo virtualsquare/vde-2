@@ -1,3 +1,8 @@
+/* VDE_ROUTER (C) 2007:2011 Daniele Lacamera
+ *
+ * Licensed under the GPLv2
+ *
+ */
 #ifndef __VDER_QUEUE
 #define __VDER_QUEUE
 #include <stdint.h>

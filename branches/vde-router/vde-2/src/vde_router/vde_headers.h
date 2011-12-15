@@ -2,9 +2,6 @@
  *
  * Licensed under the GPLv2
  *
- * This is a tiny v4 router that can be used to link 
- * together two or more vde switches.
- *
  */
 
 #ifndef __VDE_BUFF_H

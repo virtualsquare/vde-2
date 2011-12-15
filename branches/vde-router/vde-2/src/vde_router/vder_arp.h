@@ -1,3 +1,8 @@
+/* VDE_ROUTER (C) 2007:2011 Daniele Lacamera
+ *
+ * Licensed under the GPLv2
+ *
+ */
 #ifndef __VDER_ARP
 #define __VDER_ARP
 struct vder_arp_entry *vder_get_arp_entry(struct vder_iface *vif, uint32_t addr);
