@@ -56,6 +56,9 @@ MODULE_DESCRIPTION("IPN Kernel Module");
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
 #define IPN_PRE2639
 #endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0)
+#define IPN_PRE310
+#endif
 
 /*extension of RCV_SHUTDOWN defined in include/net/sock.h
  * when the bit is set recv fails */
@@ -569,6 +572,176 @@ static int ipn_node_bind(struct ipn_node *ipn_node, struct ipn_network *ipnn)
 }
 
 /* IPN BIND */
+#ifndef IPN_PRE310
+static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
+{
+	struct sockaddr_un *sunaddr=(struct sockaddr_un *)uaddr;
+	struct ipn_node *ipn_node=((struct ipn_sock *)sock->sk)->node;
+	struct path path;
+	struct ipn_network *ipnn;
+	struct dentry * dentry = NULL;
+	int err;
+	struct pre_bind_parms parms=STD_BIND_PARMS;
+
+	//printk("IPN bind\n");
+
+	if (down_interruptible(&ipn_glob_mutex))
+		return -ERESTARTSYS;
+	if (sock->state != SS_UNCONNECTED || 
+			ipn_node->ipn != NULL) {
+		err= -EISCONN;
+		goto out;
+	}
+
+	if (ipn_node->protocol >= 0 && 
+			(ipn_node->protocol >= IPN_MAX_PROTO ||
+			 ipn_protocol_table[ipn_node->protocol] == NULL)) {
+		err= -EPROTONOSUPPORT;
+		goto out;
+	}
+
+	addr_len = ipn_mkname(sunaddr, addr_len);
+	if (addr_len < 0) {
+		err=addr_len;
+		goto out;
+	}
+
+	/* check if there is already an ipn-network socket with that name */
+	err = kern_path(sunaddr->sun_path, LOOKUP_FOLLOW, &path);
+	if (err) { /* it does not exist, NEW IPN socket! */
+		unsigned int mode;
+		/* Do I have the permission to create a file? */
+		dentry = kern_path_create(AT_FDCWD, sunaddr->sun_path, &path, 0);
+		err = PTR_ERR(dentry);
+		if (IS_ERR(dentry))
+			goto out_mknod_unlock;
+		/*
+		 * All right, let's create it.
+		 */
+		if (ipn_node->pbp) 
+			mode = ipn_node->pbp->mode;
+		else
+			mode = SOCK_INODE(sock)->i_mode;
+		mode = S_IFSOCK | (mode & ~current_umask());
+		err = mnt_want_write(path.mnt);
+		if (err)
+			goto out_mknod_dput;
+		if (!err) {
+#ifdef APPARMOR
+			err = vfs_mknod(path.dentry->d_inode, dentry, path.mnt, mode, 0);
+#else
+			err = vfs_mknod(path.dentry->d_inode, dentry, mode, 0);
+#endif
+		}
+		mnt_drop_write(path.mnt);
+		if (err)
+			goto out_mknod_dput;
+		mutex_unlock(&path.dentry->d_inode->i_mutex);
+		dput(path.dentry);
+		path.dentry = dentry;
+		/* create a new ipn_network item */
+		if (ipn_node->pbp) 
+			parms=*ipn_node->pbp;
+		ipnn=kmem_cache_zalloc(ipn_network_cache,GFP_KERNEL); 
+		if (!ipnn) {
+			err=-ENOMEM;
+			goto out_mknod_dput_ipnn;
+		}
+		ipnn->connport=kzalloc(parms.maxports * sizeof(struct ipn_node *),GFP_KERNEL);
+		if (!ipnn->connport) {
+			err=-ENOMEM;
+			goto out_mknod_dput_ipnn2;
+		}
+
+		/* module refcnt is incremented for each network, thus
+		 * rmmod is forbidden if there are persistent nodes */
+		if (!try_module_get(THIS_MODULE)) {
+			err = -EINVAL;
+			goto out_mknod_dput_ipnn2;
+		}
+		memcpy(&ipnn->sunaddr,sunaddr,addr_len);
+		ipnn->mtu=parms.mtu;
+		ipnn->flags=parms.flags;
+		if (ipnn->flags & IPN_FLAG_FLEXMTU)
+			ipnn->msgpool_cache= NULL;
+		else {
+			ipnn->msgpool_cache=ipn_msgbuf_get(ipnn->mtu);
+			if (!ipnn->msgpool_cache) {
+				err=-ENOMEM;
+				goto out_mknod_dput_putmodule;
+			}
+		}
+		INIT_LIST_HEAD(&ipnn->unconnectqueue);
+		INIT_LIST_HEAD(&ipnn->connectqueue);
+		ipnn->refcnt=0;
+		ipnn->dentry=path.dentry;
+		ipnn->mnt=path.mnt;
+		sema_init(&ipnn->ipnn_mutex,1);
+		ipnn->sunaddr_len=addr_len;
+		ipnn->protocol=ipn_node->protocol;
+		if (ipnn->protocol < 0) ipnn->protocol = 0;
+		ipn_protocol_table[ipnn->protocol]->refcnt++;
+		ipnn->numreaders=0;
+		ipnn->numwriters=0;
+		ipnn->maxports=parms.maxports;
+		atomic_set(&ipnn->msgpool_nelem,0);
+		ipnn->msgpool_size=parms.msgpoolsize;
+		ipnn->proto_private=NULL;
+		init_waitqueue_head(&ipnn->send_wait);
+		ipnn->chrdev=NULL;
+		err=ipn_protocol_table[ipnn->protocol]->ipn_p_newnet(ipnn);
+		if (err)
+			goto out_mknod_dput_putmodule;
+		ipn_insert_network(&ipn_network_table[path.dentry->d_inode->i_ino & (IPN_HASH_SIZE-1)],ipnn);
+	} else {
+		/* join an existing network */
+		if (parms.flags & IPN_FLAG_EXCL) {
+			err=-EEXIST;
+			goto put_fail;
+		}
+		err = inode_permission(path.dentry->d_inode, MAY_EXEC);
+		if (err)
+			goto put_fail;
+		err = -ECONNREFUSED;
+		if (!S_ISSOCK(path.dentry->d_inode->i_mode))
+			goto put_fail;
+		ipnn=ipn_find_network_byinode(path.dentry->d_inode);
+		if (!ipnn || (ipnn->flags & IPN_FLAG_TERMINATED) ||
+				(ipnn->flags & IPN_FLAG_EXCL))
+			goto put_fail;
+	}
+	if (ipn_node->pbp) {
+		kfree(ipn_node->pbp);
+		ipn_node->pbp=NULL;
+	} 
+	ipn_node_bind(ipn_node,ipnn);
+	up(&ipn_glob_mutex);
+	return 0;
+
+put_fail:
+	path_put(&path);
+out:
+	up(&ipn_glob_mutex);
+	return err;
+
+out_mknod_dput_putmodule:
+	module_put(THIS_MODULE);
+out_mknod_dput_ipnn2:
+	kfree(ipnn->connport);
+out_mknod_dput_ipnn:
+	kmem_cache_free(ipn_network_cache,ipnn);
+out_mknod_dput:
+	dput(dentry);
+	mutex_unlock(&path.dentry->d_inode->i_mutex);
+	path_put(&path);
+out_mknod_unlock:
+	if (err==-EEXIST)
+		err=-EADDRINUSE;
+	up(&ipn_glob_mutex);
+	return err;
+}
+#else
+/* pre 3.1.0 */
 static int ipn_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
 	struct sockaddr_un *sunaddr=(struct sockaddr_un *)uaddr;
@@ -747,6 +920,7 @@ out_mknod_parent:
 	up(&ipn_glob_mutex);
 	return err;
 }
+#endif
 
 /* IPN CONNECT */
 static int ipn_connect(struct socket *sock, struct sockaddr *addr,
