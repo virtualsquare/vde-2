@@ -9,18 +9,25 @@
 #include "vde_headers.h"
 #include "vde_router.h"
 
+
 /* Global router initialization */
 void vderouter_init(void);
 
 /* Route management */
 
 uint32_t vder_get_right_localip(struct vder_iface *vif, uint32_t dst);
+uint32_t vder_get_netmask(struct vder_iface *vif, uint32_t localip);
+uint32_t vder_get_network(uint32_t localip, uint32_t netmask);
+uint32_t vder_get_broadcast(uint32_t localip, uint32_t netmask);
+
 int vder_route_add(uint32_t address, uint32_t netmask, uint32_t gateway, uint16_t metric, struct vder_iface *dst);
 int vder_route_del(uint32_t address, uint32_t netmask, int metric);
 struct vder_route * vder_get_route(uint32_t address);
 int vder_default_route(uint32_t gateway, int metric);
 uint32_t vder_get_right_localip(struct vder_iface *vif, uint32_t dst);
 int vder_ipaddress_is_local(uint32_t addr);
+int vder_ipaddress_is_broadcast(uint32_t addr);
+
 
 /* Interface management */
 
@@ -59,4 +66,9 @@ int vder_filter_add(struct vder_iface *src, uint8_t proto,
 		enum filter_action action, uint8_t priority);
 
 int vder_filter(struct vde_buff *buf);
+
+/* Get TCP/UDP header ports */
+#define transport_sport(vdb) *((uint16_t *)((unsigned char*)(payload(vdb)) + 0))
+#define transport_dport(vdb) *((uint16_t *)((unsigned char*)(payload(vdb)) + 2))
+
 #endif

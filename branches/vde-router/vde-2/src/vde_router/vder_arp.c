@@ -12,7 +12,7 @@
 #include <errno.h>
 #include "rbtree.h"
 
-static void add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
+void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
 {
 	struct rb_node **link, *parent;
 	uint32_t hostorder_ip = ntohl(p->ipaddr);
@@ -119,9 +119,36 @@ int vder_parse_arp(struct vder_iface *vif, struct vde_buff *vdb)
 	memcpy(ae->macaddr,ah->s_mac,6);
 	ae->ipaddr = ah->s_addr;
 
-	add_arp_entry(vif, ae);
+	vder_add_arp_entry(vif, ae);
 
 	if(ntohs(ah->opcode) == ARP_REQUEST)
 		vder_arp_reply(vif, vdb);
 	return 0;
+}
+
+struct vder_arp_entry *vder_arp_get_record_by_macaddr(struct vder_iface *vif, uint8_t *mac)
+{
+	struct rb_node *node;
+	struct vder_arp_entry *found=NULL;
+	node = vif->arp_table.rb_node;
+	while(node) {
+		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
+		if (memcmp(entry->macaddr, mac, ETHERNET_ADDRESS_SIZE) == 0) {
+			found = entry;
+			break;
+		}
+		node = node->rb_left;
+	}
+	if (found)
+		return found;
+	node = vif->arp_table.rb_node;
+	while(node) {
+		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
+		if (memcmp(entry->macaddr, mac, ETHERNET_ADDRESS_SIZE) == 0) {
+			found = entry;
+			break;
+		}
+		node = node->rb_right;
+	}
+	return found;
 }

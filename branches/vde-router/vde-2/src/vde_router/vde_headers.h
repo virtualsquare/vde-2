@@ -88,8 +88,9 @@ vde_arp_header
 #define check_destination(vb,mac) ( strncmp((ethhead(vb))->dst, mac) == 0)
 
 #define iphead(vb) ((struct iphdr *)(vb->data + 14))
+#define udp_pseudohead(vb) ((uint8_t *)(vb->data + 14 + sizeof(struct iphdr) - (2 * sizeof(uint32_t))))
 #define footprint(vb) ((uint8_t *)(vb->data + 14))
 #define arphead(vb) ((struct vde_arp_header *)(vb->data + 14))
-#define payload(vb) ((struct vde_ethernet_header *)(vb->data + 14 + sizeof(struct iphdr)))
+#define payload(vb) ((uint8_t *)(vb->data + 14 + sizeof(struct iphdr)))
 
 #endif

@@ -6,6 +6,88 @@
 #include "vder_queue.h"
 #include "vde_router.h"
 #include <stdlib.h>
+
+void enqueue(struct vder_queue *q, struct vde_buff *b)
+{
+	pthread_mutex_lock(&q->lock);
+
+	if (!q->may_enqueue(q, b)) {
+		free(b);
+		pthread_mutex_unlock(&q->lock);
+		return;
+	}
+
+	b->next = NULL;
+	if (!q->head) {
+		q->head = b;
+		q->tail = b;
+	} else {
+		q->tail->next = b;
+		q->tail = b;
+	}
+	q->size += b->len;
+	q->n++;
+	pthread_mutex_unlock(&q->lock);
+	if (q->policy != QPOLICY_TOKEN) {
+		if (q->type != QTYPE_PRIO)
+			sem_post(&q->semaphore);
+		else
+			sem_post(q->prio_semaphore);
+	}
+}
+
+struct vde_buff *prio_dequeue(struct vder_iface *vif)
+{
+	struct vder_queue *q;
+	int i;
+	struct vde_buff *ret = NULL;
+	sem_wait(&vif->prio_semaphore);
+	for (i = 0; i < PRIO_NUM; i++) {
+		q = &(vif->prio_q[i]);
+		pthread_mutex_lock(&q->lock);
+		if (q->size == 0){
+			pthread_mutex_unlock(&q->lock);
+			continue;
+		}
+		if (q->n) {
+			ret = q->head;
+			q->head = ret->next;
+			q->n--;
+			q->size -= ret->len;
+			if (q->n == 0) {
+				q->tail = NULL;
+				q->head = NULL;
+			}
+			pthread_mutex_unlock(&q->lock);
+			break;
+		}
+		pthread_mutex_unlock(&q->lock);
+	}
+	return ret;
+}
+
+struct vde_buff *dequeue(struct vder_queue *q)
+{
+	struct vde_buff *ret = NULL;
+	if (q->type != QTYPE_PRIO)
+		sem_wait(&q->semaphore);
+	else
+		return NULL;
+	pthread_mutex_lock(&q->lock);
+	if (q->n) {
+		ret = q->head;
+		q->head = ret->next;
+		q->n--;
+		q->size -= ret->len;
+		if (q->n == 0) {
+			q->tail = NULL;
+			q->head = NULL;
+		}
+	}
+	pthread_mutex_unlock(&q->lock);
+	return ret;
+}
+
 /* Unlimited policy */
 int qunlimited_may_enqueue(struct vder_queue *q, struct vde_buff *b)
 {

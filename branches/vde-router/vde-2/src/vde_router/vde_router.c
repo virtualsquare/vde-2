@@ -11,6 +11,7 @@
 #include "vde_router.h"
 #include "vder_queue.h"
 #include "vder_packet.h"
+#include "vder_dhcpd.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -61,6 +62,7 @@ static int help(int fd,char *s)
 		printoutc(fd, "help         print a summary of mgmt commands. Use \"help <command>\" for details.");
 		printoutc(fd, "connect      create a new interface connect it to vde socket");
 		printoutc(fd, "ifconfig     show/change interface addresses configuration");
+		printoutc(fd, "dhcpd	    start/stop dhcp server on a specific interface");
 		printoutc(fd, "route        show/change routing table");
 		printoutc(fd, "queue        show/change outgoing frames queues");
 		printoutc(fd, "ipfilter     show/change ip filtering configuration");
@@ -97,6 +99,18 @@ static int help(int fd,char *s)
 		printoutc(fd, "ifconfig eth0");
 		printoutc(fd, "ifconfig eth1 add 10.0.0.1 255.0.0.0");
 		printoutc(fd, "ifconfig eth1 del 10.0.0.1");
+		return 0;
+	} else if (match_input("dhcpd",arg)) {
+		printoutc(fd, "Syntax:");
+		printoutc(fd, "\tdhcpd start <devname> <dhcp_pool_start> <dhcp_pool_end>");
+		printoutc(fd, "--or--");
+		printoutc(fd, "\tdhcpd stop <devname>");
+		printoutc(fd, "Start/stop DHCP server on a specific interface. Devices/machines connected to the router");
+		printoutc(fd, "will be provided with a dynamic IP address on request.");
+		printoutc(fd, "");
+		printoutc(fd, "Examples:");
+		printoutc(fd, "dhcpd start eth0 10.0.0.101 10.0.0.120");
+		printoutc(fd, "dhcpd stop eth0");
 		return 0;
 	} else if (match_input("route",arg)) {
 		printoutc(fd, "Syntax:");
@@ -213,14 +227,6 @@ static int doshutdown(int fd,char *s)
 	exit(0);
 }
 
-static char *vder_ntoa(uint32_t addr)
-{
-	struct in_addr a;
-	char *res;
-	a.s_addr = addr;
-	res = inet_ntoa(a);
-	return res;
-}
 
 static int not_understood(int fd, char *s)
 {
@@ -625,7 +631,7 @@ static int filter(int fd,char *s)
 					return EINVAL;
 				}
 			}
-		} else if (match_input("from",arg)){
+		} else if (match_input("from",arg)) {
 			arg = strtok_r(NULL, " ", &nextargs);
 			if (!arg)
 				return EINVAL;
@@ -642,7 +648,7 @@ static int filter(int fd,char *s)
 				printoutc(fd, "Invalid netmask \"%s\"", arg);
 				return EINVAL;
 			}
-		} else if (match_input("to",arg)){
+		} else if (match_input("to",arg)) {
 			arg = strtok_r(NULL, " ", &nextargs);
 			if (!arg)
 				return EINVAL;
@@ -659,7 +665,7 @@ static int filter(int fd,char *s)
 				printoutc(fd, "Invalid netmask \"%s\"", arg);
 				return EINVAL;
 			}
-		} else if (match_input("tos",arg)){
+		} else if (match_input("tos",arg)) {
 			arg = strtok_r(NULL, " ", &nextargs);
 			if (!arg)
 				return EINVAL;
@@ -668,7 +674,7 @@ static int filter(int fd,char *s)
 				printoutc(fd, "Invalid tos %s", arg);
 				return EINVAL;
 			}
-		} else if (match_input("sport",arg)){
+		} else if (match_input("sport",arg)) {
 			arg = strtok_r(NULL, " ", &nextargs);
 			if (!arg)
 				return EINVAL;
@@ -677,7 +683,7 @@ static int filter(int fd,char *s)
 				return EINVAL;
 			}
 			sport = htons(atoi(arg));
-		} else if (match_input("dport",arg)){
+		} else if (match_input("dport",arg)) {
 			arg = strtok_r(NULL, " ", &nextargs);
 			if (!arg)
 				return EINVAL;
@@ -686,7 +692,7 @@ static int filter(int fd,char *s)
 				return EINVAL;
 			}
 			dport = htons(atoi(arg));
-		} else if (match_input("prio",arg)){
+		} else if (match_input("prio",arg)) {
 			if (filter_action != filter_invalid) {
 				printoutc(fd, "Invalid double action for filter");
 			}
@@ -803,6 +809,8 @@ double get_labeled_arg(int fd, char *label, char **nextargs) {
 	}
 	return strtod(arg, NULL);
 }
+
+
 
 static int queue(int fd, char *s)
 {
@@ -974,6 +982,86 @@ static int stats(int fd, char *args)
 	return 0;
 }
 
+#define DEFAULT_LEASE_TIME htonl(0xa8c0)
+static int dhcpd(int fd,char *s)
+{
+	char *nextargs = NULL, *arg;
+	struct vder_dhcpd_settings *dhcpd_settings;
+	struct vder_iface *selected = NULL;
+	struct in_addr temp_pool_start, temp_pool_end;
+	enum command_action_enum action = -1;
+
+	arg = strtok_r(s, " ", &nextargs);
+	if(!arg) {
+		printoutc(fd, "Error: arguments required");
+		return EINVAL;
+	}
+	if ((!arg) || (strlen(arg) < 4) || ((strncmp(arg, "start", 5) != 0) && (strncmp(arg, "stop", 4) != 0))) {
+		printoutc(fd, "Invalid action \"%s\".", arg);
+		return EINVAL;
+	}
+	if (strncmp(arg, "start", 5) == 0)
+		action = ACTION_ADD;
+	else
+		action = ACTION_DELETE;
+
+
+	arg = strtok_r(NULL, " ", &nextargs);
+	if (!arg) {
+		not_understood(fd, "");
+		return EINVAL;
+	}
+	if ((strlen(arg) < 4) || (strncmp(arg, "eth", 3)!= 0)) {
+		printoutc(fd, "Invalid interface \"%s\".", arg);
+		return EINVAL;
+	}
+	selected = select_interface(arg);
+	if (!selected)
+		return ENXIO;
+
+	if (action == ACTION_ADD) {
+		arg = strtok_r(NULL, " ", &nextargs);
+		if (!arg) {
+			not_understood(fd, "");
+			return EINVAL;
+		}
+
+		if (!inet_aton(arg, &temp_pool_start) || !is_unicast(temp_pool_start.s_addr)) {
+			printoutc(fd, "Invalid pool start address \"%s\"", arg);
+			return EINVAL;
+		}
+
+		arg = strtok_r(NULL, " ", &nextargs);
+		if (!arg) {
+			not_understood(fd, "");
+			return EINVAL;
+		}
+		if (!inet_aton(arg, &temp_pool_end) || !is_unicast(temp_pool_end.s_addr)) {
+			printoutc(fd, "Invalid pool end address \"%s\"", arg);
+			return EINVAL;
+		}
+
+		dhcpd_settings = malloc(sizeof(struct vder_dhcpd_settings));
+		if (!dhcpd_settings)
+			return ENOMEM;
+
+		dhcpd_settings->iface = selected;
+		dhcpd_settings->my_ip = vder_get_right_localip(selected, temp_pool_start.s_addr);
+		dhcpd_settings->netmask = vder_get_netmask(selected, dhcpd_settings->my_ip);
+		dhcpd_settings->pool_start = temp_pool_start.s_addr;
+		dhcpd_settings->pool_end = temp_pool_end.s_addr;
+		dhcpd_settings->lease_time = DEFAULT_LEASE_TIME;
+		dhcpd_settings->flags = 0;
+		selected->dhcpd_started = 1;
+		pthread_create(&selected->dhcpd, 0, dhcp_server_loop, dhcpd_settings); 
+	} else if (selected->dhcpd_started) {
+		pthread_cancel(selected->dhcpd);
+		selected->dhcpd_started = 0;
+	}
+	return 0;
+}
+
+
 #define WITHFILE 0x80
 static struct comlist {
 	char *tag;
@@ -987,6 +1075,7 @@ static struct comlist {
 	{"stats", stats, WITHFILE},
 	{"ipfilter", filter, WITHFILE},
 	{"queue", queue, WITHFILE},
+	{"dhcpd", dhcpd, 0 },
 	{"logout",logout, 0},
 	{"shutdown",doshutdown, 0}
 };
@@ -1275,6 +1364,7 @@ int main(int argc, char *argv[])
 		pfd[npfd].events = POLLIN | POLLHUP;
 		npfd++;
 	}
+
 
 	while(1) {
 		n = poll(pfd, npfd, -1);
