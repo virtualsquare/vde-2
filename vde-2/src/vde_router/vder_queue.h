@@ -8,6 +8,9 @@
 #include <stdint.h>
 #include "vde_router.h"
 #include "vder_datalink.h"
+void enqueue(struct vder_queue *q, struct vde_buff *b);
+struct vde_buff *prio_dequeue(struct vder_iface *vif);
+struct vde_buff *dequeue(struct vder_queue *q);
 
 void qunlimited_setup(struct vder_queue *q);
 void qfifo_setup(struct vder_queue *q, uint32_t limit);

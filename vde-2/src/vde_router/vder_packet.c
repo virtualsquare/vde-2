@@ -6,13 +6,25 @@
 #include "vder_datalink.h"
 #include "vder_arp.h"
 #include "vder_icmp.h"
+#include "vder_udp.h"
 #include <sys/poll.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #define MAX_PACKET_SIZE 2000
+
+char *vder_ntoa(uint32_t addr)
+{
+	struct in_addr a;
+	char *res;
+	a.s_addr = addr;
+	res = inet_ntoa(a);
+	return res;
+}
 
 /*
  * Forward the ip packet to next hop. TTL is decreased,
@@ -33,7 +45,7 @@ int vder_ip_decrease_ttl(struct vde_buff *vdb){
  */
 uint16_t net_checksum(void *inbuf, int len)
 {
-	uint8_t *buf = (uint8_t *) buf;
+	uint8_t *buf = (uint8_t *) inbuf;
 	uint32_t sum = 0, carry=0;
 	int i=0;
 	for(i=0; i<len; i++){
@@ -62,14 +74,25 @@ uint16_t vder_ip_checksum(struct iphdr *iph)
 int vder_ip_input(struct vde_buff *vb)
 {
 	struct iphdr *iph = iphead(vb);
-	if (vder_ipaddress_is_local(iph->daddr)) {
-		if (iph->protocol == PROTO_ICMP)
+	int recvd = 0;
+	int is_broadcast = vder_ipaddress_is_broadcast(iph->daddr);
+
+
+	if (!vder_ipaddress_is_local(iph->daddr) && !is_broadcast)
+		return 0;
+	switch(iph->protocol) {
+		case PROTO_ICMP:
 			vder_icmp_recv(vb);
-		else
-			vder_icmp_service_unreachable((uint32_t)iph->saddr, footprint(vb));
-		return 1;
+			recvd=1;
+			break;
+		case PROTO_UDP:
+			if (vder_udp_recv(vb) == 1)
+				recvd=1;
+			break;
 	}
-	return 0;
+	if (!recvd && !is_broadcast)
+		vder_icmp_service_unreachable((uint32_t)iph->saddr, footprint(vb));
+	return 1;
 }
 
 int vder_packet_send(struct vde_buff *vdb, uint32_t dst_ip, uint8_t protocol)
@@ -142,7 +165,7 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 
 			if (vder_ip_input(packet)) {
 				/* If the packet is for us, process it here. */
-				free(packet);
+				//free(packet);
 				return;
 			} else {
 				struct iphdr *hdr = iphead(packet);

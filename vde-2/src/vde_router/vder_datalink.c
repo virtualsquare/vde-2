@@ -15,8 +15,8 @@
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include <stdio.h>
 #include <sys/time.h>
+#include <stdio.h>
 
 struct vde_router Router = {};
 
@@ -46,10 +46,6 @@ static void new_macaddress(struct vder_iface *vif)
 	vif->macaddr[5] = vif->interface_id;
 }
 
-/* Get TCP/UDP header ports */
-
-#define transport_sport(vdb) *((uint16_t *)((unsigned char*)(payload(vdb)) + 0))
-#define transport_dport(vdb) *((uint16_t *)((unsigned char*)(payload(vdb)) + 2))
 
 /* Queue management */
 
@@ -58,87 +54,6 @@ static void queue_init(struct vder_queue *q)
 	memset(q, 0, sizeof(struct vder_queue));
 	pthread_mutex_init(&q->lock, NULL);
 	qunlimited_setup(q);
-}
-
-static void enqueue(struct vder_queue *q, struct vde_buff *b)
-{
-	pthread_mutex_lock(&q->lock);
-
-	if (!q->may_enqueue(q, b)) {
-		free(b);
-		pthread_mutex_unlock(&q->lock);
-		return;
-	}
-
-	b->next = NULL;
-	if (!q->head) {
-		q->head = b;
-		q->tail = b;
-	} else {
-		q->tail->next = b;
-		q->tail = b;
-	}
-	q->size += b->len;
-	q->n++;
-	pthread_mutex_unlock(&q->lock);
-	if (q->policy != QPOLICY_TOKEN) {
-		if (q->type == QTYPE_OUT)
-			sem_post(&q->semaphore);
-		else
-			sem_post(q->prio_semaphore);
-	}
-}
-
-static struct vde_buff *prio_dequeue(struct vder_iface *vif)
-{
-	struct vder_queue *q;
-	int i;
-	struct vde_buff *ret = NULL;
-	sem_wait(&vif->prio_semaphore);
-	for (i = 0; i < PRIO_NUM; i++) {
-		q = &(vif->prio_q[i]);
-		pthread_mutex_lock(&q->lock);
-		if (q->size == 0){
-			pthread_mutex_unlock(&q->lock);
-			continue;
-		}
-		if (q->n) {
-			ret = q->head;
-			q->head = ret->next;
-			q->n--;
-			q->size -= ret->len;
-			if (q->n == 0) {
-				q->tail = NULL;
-				q->head = NULL;
-			}
-			pthread_mutex_unlock(&q->lock);
-			break;
-		}
-		pthread_mutex_unlock(&q->lock);
-	}
-	return ret;
-}
-
-static struct vde_buff *dequeue(struct vder_queue *q)
-{
-	struct vde_buff *ret = NULL;
-	if (q->type == QTYPE_OUT)
-		sem_wait(&q->semaphore);
-	else
-		return NULL;
-	pthread_mutex_lock(&q->lock);
-	if (q->n) {
-		ret = q->head;
-		q->head = ret->next;
-		q->n--;
-		q->size -= ret->len;
-		if (q->n == 0) {
-			q->tail = NULL;
-			q->head = NULL;
-		}
-	}
-	pthread_mutex_unlock(&q->lock);
-	return ret;
 }
 
 #define microseconds(tv) (unsigned long long)((tv.tv_sec * 1000000) + (tv.tv_usec));
@@ -239,6 +154,27 @@ uint32_t vder_get_right_localip(struct vder_iface *vif, uint32_t dst)
 		cur = cur->next;
 	}
 	return 0U;
+}
+
+uint32_t vder_get_netmask(struct vder_iface *vif, uint32_t localip)
+{
+	struct vder_ip4address *cur = vif->address_list;
+	while(cur) {
+		if (cur->address == localip)
+			return cur->netmask;
+		cur = cur->next;
+	}
+	return 0U;
+}
+
+uint32_t vder_get_network(uint32_t localip, uint32_t netmask)
+{
+	return (localip & netmask);
+}
+
+uint32_t vder_get_broadcast(uint32_t localip, uint32_t netmask)
+{
+	return (localip | (~netmask));
 }
 
 /* insert route, ordered by netmask, metric.
@@ -534,6 +470,24 @@ int vder_ipaddress_is_local(uint32_t addr) {
 		struct vder_ip4address *cur = iface->address_list;
 		while(cur) {
 			if (cur->address == addr) {
+				return 1;
+			}
+			cur = cur->next;
+		}
+		iface = iface->next;
+	}
+	return 0;
+}
+
+int vder_ipaddress_is_broadcast(uint32_t addr) 
+{
+	struct vder_iface *iface = Router.iflist;
+	if (addr == (uint32_t)(-1))
+		return 1;
+	while (iface) {
+		struct vder_ip4address *cur = iface->address_list;
+		while(cur) {
+			if (((cur->address & cur->netmask) == (addr & cur->netmask)) && ((cur->netmask | addr) == 0xFFFFFFFF)) {
 				return 1;
 			}
 			cur = cur->next;
