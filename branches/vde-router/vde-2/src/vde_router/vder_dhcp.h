@@ -35,9 +35,16 @@ struct vder_dhcpd_settings
 /* DHCP OPTIONS, RFC2132 */
 #define DHCPOPT_PAD 			0x00
 #define DHCPOPT_NETMASK 		0x01
+#define DHCPOPT_TIME			0x02
 #define DHCPOPT_ROUTER 			0x03
 #define DHCPOPT_DNS				0x06
+#define DHCPOPT_HOSTNAME		0x0c
+#define DHCPOPT_DOMAINNAME		0x0f
+#define DHCPOPT_MTU 			0x1a
 #define DHCPOPT_BCAST 			0x1c
+#define DHCPOPT_NETBIOSNS	 	0x2c
+#define DHCPOPT_NETBIOSSCOPE 	0x2f
+
 #define DHCPOPT_REQIP			0x32
 #define DHCPOPT_LEASETIME 		0x33
 #define DHCPOPT_MSGTYPE			0x35
@@ -45,6 +52,8 @@ struct vder_dhcpd_settings
 #define DHCPOPT_PARMLIST 		0x37
 #define DHCPOPT_RENEWALTIME 	0x3a
 #define DHCPOPT_REBINDINGTIME	0x3b
+#define DHCPOPT_DOMAINSEARCH	0x77
+#define DHCPOPT_STATICROUTE		0x79
 #define DHCPOPT_END 			0xFF
 
 /* DHCP MESSAGE TYPE */
@@ -96,5 +105,6 @@ struct vder_dhcp_negotiation {
 };
 
 void *dhcp_server_loop(void *ptr_iface);
+void *dhcp_client_loop(void *ptr_iface);
 
 #endif

@@ -77,9 +77,9 @@ int vder_ip_input(struct vde_buff *vb)
 	int recvd = 0;
 	int is_broadcast = vder_ipaddress_is_broadcast(iph->daddr);
 
-
 	if (!vder_ipaddress_is_local(iph->daddr) && !is_broadcast)
 		return 0;
+
 	switch(iph->protocol) {
 		case PROTO_ICMP:
 			vder_icmp_recv(vb);
@@ -125,6 +125,27 @@ int vder_packet_send(struct vde_buff *vdb, uint32_t dst_ip, uint8_t protocol)
 	return vder_sendto(ro->iface, vdb, ae->macaddr);
 }
 
+int vder_packet_broadcast(struct vde_buff *vdb, struct vder_iface *iface, uint32_t dst_ip, uint8_t protocol)
+{
+	struct iphdr *iph=iphead(vdb);
+	struct vde_ethernet_header *eth = ethhead(vdb);
+	uint8_t bcast_macaddr[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+	eth->buftype = htons(PTYPE_IP);
+
+	memset(iph,0x45,1);
+	iph->tos = 0;
+	iph->frag_off=htons(0x4000); // Don't fragment.
+	iph->tot_len = htons(vdb->len - sizeof(struct vde_ethernet_header));
+	iph->id = 0;
+	iph->protocol = protocol;
+	iph->ttl = DEFAULT_TTL;
+	iph->daddr = dst_ip;
+	//iph->saddr = vder_get_right_localip(iface, iph->daddr);
+	iph->saddr = 0;
+	iph->check = htons(vder_ip_checksum(iph));
+	return vder_sendto(iface, vdb, bcast_macaddr);
+}
 
 void vder_packet_recv(struct vder_iface *vif, int timeout)
 {

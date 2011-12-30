@@ -372,7 +372,8 @@ int vder_iface_address_add(struct vder_iface *iface, uint32_t addr, uint32_t net
 	pthread_mutex_unlock(&Router.global_config_lock);
 
 	/* Add static route towards neightbors */
-	vder_route_add(address->address, address->netmask, 0U, 1, iface);
+	if (addr != (uint32_t) (-1))
+		vder_route_add(address->address, address->netmask, 0U, 1, iface);
 
 	return 0;
 }
@@ -469,7 +470,7 @@ int vder_ipaddress_is_local(uint32_t addr) {
 	while (iface) {
 		struct vder_ip4address *cur = iface->address_list;
 		while(cur) {
-			if (cur->address == addr) {
+			if ((cur->address == addr)|| (cur->address == (uint32_t)(-1))) {
 				return 1;
 			}
 			cur = cur->next;

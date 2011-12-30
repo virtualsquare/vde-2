@@ -164,6 +164,7 @@ struct vder_iface {
 	pthread_t receiver;
 	pthread_t queue_manager;
 	pthread_t dhcpd;
+	pthread_t dhcpclient;
 	int dhcpd_started;
 	struct {
 		uint32_t sent;
