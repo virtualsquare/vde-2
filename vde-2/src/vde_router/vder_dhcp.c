@@ -455,7 +455,7 @@ void *dhcp_client_loop(void *iface)
 				vder_iface_address_add(client.iface, client.address, client.netmask);
 				if ((client.gateway != 0) && ((client.gateway & client.netmask) == (client.address & client.netmask)))
 					vder_route_add(0, 0, client.gateway, 1, client.iface);
-				sleep(client.lease_time);
+				sleep(ntohl(client.lease_time));
 				client.state = DHCPSTATE_REQUEST;
 				break;
 			default:
