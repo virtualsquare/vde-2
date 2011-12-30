@@ -156,8 +156,6 @@ int qred_may_enqueue(struct vder_queue *q, struct vde_buff *b)
 }
 
 
-
-
 void qred_setup(struct vder_queue *q, uint32_t min, uint32_t max, double P, uint32_t limit)
 {
 	pthread_mutex_lock(&q->lock);

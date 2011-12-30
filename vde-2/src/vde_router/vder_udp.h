@@ -27,6 +27,8 @@ int vder_udp_recv(struct vde_buff *buf);
 struct vder_udp_socket *vder_udpsocket_open(uint16_t port);
 void vder_udp_close(struct vder_udp_socket *sock);
 int vder_udpsocket_sendto(struct vder_udp_socket *sock, void *data, size_t len, uint32_t dst, uint16_t dstport);
-int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len, uint32_t *from, uint16_t *fromport);
+int vder_udpsocket_sendto_broadcast(struct vder_udp_socket *sock, void *data, size_t len,
+	struct vder_iface *iface, uint32_t dst, uint16_t dstport);
+int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len, uint32_t *from, uint16_t *fromport, int timeout);
 
 #endif

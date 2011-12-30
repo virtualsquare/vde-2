@@ -1,5 +1,6 @@
 #include "vder_udp.h"
 #include <stdio.h>
+#include <unistd.h>
 
 /* UDP header, rfc 768 */
 
@@ -17,6 +18,7 @@ int vder_udp_recv(struct vde_buff *buf)
 	int found = 0;
 	struct vde_buff *copy = NULL;
 	uint16_t port = transport_dport(buf);
+
 	while(cur) {
 		if (cur->port == port) {
 			if (!found) {
@@ -88,6 +90,7 @@ int vder_udpsocket_sendto(struct vder_udp_socket *sock, void *data, size_t len, 
 		errno = EINVAL;
 		return -1;
 	}
+
 	ro = vder_get_route(dst);
 	if (!ro) {
 		errno = EHOSTUNREACH;
@@ -113,8 +116,39 @@ int vder_udpsocket_sendto(struct vder_udp_socket *sock, void *data, size_t len, 
 	return len;
 }
 
+int vder_udpsocket_sendto_broadcast(struct vder_udp_socket *sock, void *data, size_t len,
+	struct vder_iface *iface, uint32_t dst, uint16_t dstport)
+{
+	struct vde_buff *b;
+	struct udphdr *uh;
+	uint8_t *datagram;
+	int bufsize;
+	if (len <= 0) {
+		errno = EINVAL;
+		return -1;
+	}
 
-int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len, uint32_t *from, uint16_t *fromport)
+	bufsize = sizeof(struct vde_buff) + sizeof(struct vde_ethernet_header) + sizeof(struct iphdr) + sizeof(struct udphdr) + len;
+	b = malloc(bufsize);
+	if (!b)
+		return -1;
+	b->len = bufsize - sizeof(struct vde_buff);
+	b->src = NULL;
+	b->priority = PRIO_BESTEFFORT;
+	uh = (struct udphdr *) payload(b);
+	datagram = (uint8_t *)((payload(b) + sizeof(struct udphdr)));
+	memcpy(datagram, data, len);
+
+	uh->sport = sock->port;
+	uh->dport = dstport;
+	uh->len = htons(len);
+	uh->crc = 0;
+	vder_packet_broadcast(b, iface, dst, PROTO_UDP);
+	return len;
+}
+
+
+int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len, uint32_t *from, uint16_t *fromport, int timeout)
 {
 	struct vde_buff *b;
 	struct udphdr *uh;
@@ -123,6 +157,17 @@ int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len
 	if (len <= 0) {
 		errno = EINVAL;
 		return -1;
+	}
+
+	while ((timeout > 0) && (sock->inq.n == 0)) {
+		usleep(10000);
+		timeout -= 10;
+		if (timeout < 0)
+			timeout = 0;
+	}
+
+	if ((timeout == 0) && (sock->inq.n == 0)) {
+		return 0;
 	}
 
 	do {

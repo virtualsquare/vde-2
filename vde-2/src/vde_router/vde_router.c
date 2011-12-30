@@ -11,7 +11,7 @@
 #include "vde_router.h"
 #include "vder_queue.h"
 #include "vder_packet.h"
-#include "vder_dhcpd.h"
+#include "vder_dhcp.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -64,6 +64,7 @@ static int help(int fd,char *s)
 		printoutc(fd, "ifconfig     show/change interface addresses configuration");
 		printoutc(fd, "dhcpd	    start/stop dhcp server on a specific interface");
 		printoutc(fd, "route        show/change routing table");
+		printoutc(fd, "arp			show neighbors ip/mac associations");
 		printoutc(fd, "queue        show/change outgoing frames queues");
 		printoutc(fd, "ipfilter     show/change ip filtering configuration");
 		printoutc(fd, "stats        print interface statistics");
@@ -87,17 +88,21 @@ static int help(int fd,char *s)
 	} else if (match_input("ifconfig",arg)) {
 		printoutc(fd, "Syntax:");
 		printoutc(fd, "\tifconfig [<devname> [<action> <address> <netmask>]]");
+		printoutc(fd, "--or--");
+		printoutc(fd, "\tifconfig <devname> add dhcp");
 		printoutc(fd, "Show/store IP address configuration. If no <devname> is provided, the default action");
 		printoutc(fd, "will be to display the current configuration for all the existing ethernet devices.");
 		printoutc(fd, "<action> can be \"add\" or \"del\". If \"add\" is specified, all other arguments are mandatory.");
 		printoutc(fd, "If \"del\" is specified, only <address> will be used to search for an existing entry.");
 		printoutc(fd, "Each virtual ethernet can be associated to more than one IP addresses. A static route for");
 		printoutc(fd, "the resulting neighborhood will be added.");
+		printoutc(fd, "Dhcp option allows to ask for a dynamic IP address.");
 		printoutc(fd, "");
 		printoutc(fd, "Examples:");
 		printoutc(fd, "ifconfig");
 		printoutc(fd, "ifconfig eth0");
 		printoutc(fd, "ifconfig eth1 add 10.0.0.1 255.0.0.0");
+		printoutc(fd, "ifconfig eth1 add dhcp");
 		printoutc(fd, "ifconfig eth1 del 10.0.0.1");
 		return 0;
 	} else if (match_input("dhcpd",arg)) {
@@ -199,6 +204,10 @@ static int help(int fd,char *s)
 		printoutc(fd, "ipfilter add src eth1 tos 2 to 172.16.0.0 255.255.0.0 prio 7");
 		printoutc(fd, "ipfilter del src eth1 tos 2 to 172.16.0.0 255.255.0.0");
 		return 0;
+	} else if (match_input("arp",arg)) {
+		printoutc(fd, "Syntax:");
+		printoutc(fd, "\tarp");
+		return 0;
 	} else if (match_input("stats",arg)) {
 		printoutc(fd, "Syntax:");
 		printoutc(fd, "\tstats");
@@ -247,7 +256,10 @@ static void show_ifconfig(int fd, struct vder_iface *iface)
 			char *txt_address, *txt_netmask;
 			txt_address = strdup(vder_ntoa(addr->address));
 			txt_netmask= strdup(vder_ntoa(addr->netmask));
-			printoutc(fd, "\taddress: %s netmask: %s", txt_address, txt_netmask);
+			if (addr->address == (uint32_t)(-1))
+				printoutc(fd, "\tAcquiring one IP address via DHCP...");
+			else
+				printoutc(fd, "\taddress: %s netmask: %s", txt_address, txt_netmask);
 			free(txt_address);
 			free(txt_netmask);
 			addr = addr->next;
@@ -358,16 +370,21 @@ static int ifconfig(int fd,char *s)
 			not_understood(fd, "");
 			return EINVAL;
 		}
-		if (!inet_aton(arg, &temp_address) || !is_unicast(temp_address.s_addr)) {
+		if (match_input("dhcp", arg)) {
+			temp_address.s_addr = (uint32_t)(-1);
+			pthread_create(&selected->dhcpclient, 0, dhcp_client_loop, selected); 
+		}
+		else if (!inet_aton(arg, &temp_address) || !is_unicast(temp_address.s_addr)) {
 			printoutc(fd, "Invalid address \"%s\"", arg);
 			return EINVAL;
 		}
 		arg = strtok_r(NULL, " ", &nextargs);
-		if (!arg && (action == ACTION_ADD)) {
+		if (!arg && (action == ACTION_ADD) && (temp_address.s_addr != (uint32_t)(-1))) {
 			printoutc(fd, "Error: parameter 'netmask' required.");
 			return EINVAL;
 		}
-		if ((action == ACTION_ADD) && (!inet_aton(arg, &temp_netmask) || !is_netmask(temp_netmask.s_addr))) {
+		if ((action == ACTION_ADD) && (temp_address.s_addr != (uint32_t)(-1)) &&
+			(!inet_aton(arg, &temp_netmask) || !is_netmask(temp_netmask.s_addr))) {
 			printoutc(fd, "Invalid netmask \"%s\"", arg);
 			return EINVAL;
 		}
@@ -974,13 +991,49 @@ static int stats(int fd, char *args)
 		return EINVAL;
 	iface = Router.iflist;
 	while(iface) {
-		printoutc(fd, "eth%d frame sent:%d, frame received:%d",
+		printoutc(fd, "eth%d frames sent:%d, frames received:%d",
 			iface->interface_id, iface->stats.sent, iface->stats.recvd);
 		printoutc(fd, "");
 		iface = iface->next;
 	}
 	return 0;
 }
+
+static int arp(int fd, char *args)
+{
+	struct vder_iface *iface;
+	struct rb_node *node;
+	if (strlen(args) > 0)
+		return EINVAL;
+	iface = Router.iflist;
+	while(iface) {
+		node = iface->arp_table.rb_node;
+		while (node) {
+			struct vder_arp_entry *ae = rb_entry(node, struct vder_arp_entry, rb_node);
+			char *txt_address = strdup(vder_ntoa(ae->ipaddr));
+			printoutc(fd, "%s %02x:%02x:%02x:%02x:%02x:%02x (eth%d)", txt_address,
+				ae->macaddr[0], ae->macaddr[1], ae->macaddr[2], ae->macaddr[3], ae->macaddr[4], ae->macaddr[5],
+				iface->interface_id);
+			free(txt_address);
+			node = node->rb_left;
+		}
+		node = iface->arp_table.rb_node;
+		if (node)
+			node = node->rb_right;
+		while (node) {
+			struct vder_arp_entry *ae = rb_entry(node, struct vder_arp_entry, rb_node);
+			char *txt_address = strdup(vder_ntoa(ae->ipaddr));
+			printoutc(fd, "%s %02x:%02x:%02x:%02x:%02x:%02x (eth%d)", txt_address,
+				ae->macaddr[0], ae->macaddr[1], ae->macaddr[2], ae->macaddr[3], ae->macaddr[4], ae->macaddr[5],
+				iface->interface_id);
+			free(txt_address);
+			node = node->rb_right;
+		}
+		iface = iface->next;
+	}
+	return 0;
+}
+
 
 #define DEFAULT_LEASE_TIME htonl(0xa8c0)
 static int dhcpd(int fd,char *s)
@@ -1070,6 +1123,7 @@ static struct comlist {
 } commandlist [] = {
 	{"help", help, WITHFILE},
 	{"ifconfig", ifconfig, WITHFILE},
+	{"arp", arp, WITHFILE},
 	{"route", route, WITHFILE},
 	{"connect", doconnect, 0},
 	{"stats", stats, WITHFILE},
