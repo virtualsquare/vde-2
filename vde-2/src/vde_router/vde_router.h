@@ -49,13 +49,6 @@ struct vder_filter {
 	uint32_t stats_bytes;
 };
 
-/* Interface */
-struct vder_arp_entry {
-	struct rb_node rb_node;
-	uint32_t ipaddr;
-	uint8_t macaddr[6];
-};
-
 
 
 /* route */

@@ -7,6 +7,7 @@
  *
  * For the router engine see vder_datalink.c
  */
+#include "vder_olsr.h"
 #include "vder_datalink.h"
 #include "vde_router.h"
 #include "vder_queue.h"
@@ -63,6 +64,7 @@ static int help(int fd,char *s)
 		printoutc(fd, "connect      create a new interface connect it to vde socket");
 		printoutc(fd, "ifconfig     show/change interface addresses configuration");
 		printoutc(fd, "dhcpd	    start/stop dhcp server on a specific interface");
+		printoutc(fd, "olsr 	    start/stop OLSR");
 		printoutc(fd, "route        show/change routing table");
 		printoutc(fd, "arp			show neighbors ip/mac associations");
 		printoutc(fd, "queue        show/change outgoing frames queues");
@@ -116,6 +118,18 @@ static int help(int fd,char *s)
 		printoutc(fd, "Examples:");
 		printoutc(fd, "dhcpd start eth0 10.0.0.101 10.0.0.120");
 		printoutc(fd, "dhcpd stop eth0");
+		return 0;
+	} else if (match_input("olsr",arg)) {
+		printoutc(fd, "Syntax:");
+		printoutc(fd, "\tolsr start <devname> [<devname> [<devname> [<...>]]]");
+		printoutc(fd, "--or--");
+		printoutc(fd, "\tolsr stop");
+		printoutc(fd, "Start/stop olsr service on specified interface(s). Devices/machines connected to the router");
+		printoutc(fd, "will be notified about routing via OLSR messages");
+		printoutc(fd, "");
+		printoutc(fd, "Examples:");
+		printoutc(fd, "olsr start eth0 eth1");
+		printoutc(fd, "olsr stop");
 		return 0;
 	} else if (match_input("route",arg)) {
 		printoutc(fd, "Syntax:");
@@ -1114,6 +1128,59 @@ static int dhcpd(int fd,char *s)
 	return 0;
 }
 
+static int olsr(int fd,char *s)
+{
+	char *nextargs = NULL, *arg;
+	struct olsr_setup *olsr_settings;
+	struct vder_iface *selected = NULL;
+	enum command_action_enum action = -1;
+	static pthread_t olsr_thread;
+
+
+	arg = strtok_r(s, " ", &nextargs);
+	if(!arg) {
+		printoutc(fd, "Error: arguments required");
+		return EINVAL;
+	}
+	if ((!arg) || (strlen(arg) < 4) || ((strncmp(arg, "start", 5) != 0) && (strncmp(arg, "stop", 4) != 0))) {
+		printoutc(fd, "Invalid action \"%s\".", arg);
+		return EINVAL;
+	}
+	if (strncmp(arg, "start", 5) == 0)
+		action = ACTION_ADD;
+	else
+		action = ACTION_DELETE;
+
+	if (action == ACTION_ADD) {
+		olsr_settings = malloc(sizeof(struct olsr_setup));
+		memset(olsr_settings, 0, sizeof(struct olsr_setup));
+		arg = strtok_r(NULL, " ", &nextargs);
+		while (arg) {
+			if ((strlen(arg) < 4) || (strncmp(arg, "eth", 3)!= 0)) {
+				printoutc(fd, "Invalid interface \"%s\".", arg);
+				free(olsr_settings);
+				return EINVAL;
+			}
+			selected = select_interface(arg);
+			if (!selected) {
+				free(olsr_settings);
+				return ENXIO;
+			}
+			olsr_settings->ifaces[olsr_settings->n_ifaces++] = selected;
+			arg = strtok_r(NULL, " ", &nextargs);
+		}
+		if (olsr_settings->n_ifaces == 0) {
+			free(olsr_settings);
+			return EINVAL;
+		}
+		pthread_create(&olsr_thread, 0, vder_olsr_loop, olsr_settings); 
+	} else {
+		pthread_cancel(olsr_thread);
+		/* stop */
+	}
+	return 0;
+}
+
 
 #define WITHFILE 0x80
 static struct comlist {
@@ -1130,6 +1197,7 @@ static struct comlist {
 	{"ipfilter", filter, WITHFILE},
 	{"queue", queue, WITHFILE},
 	{"dhcpd", dhcpd, 0 },
+	{"olsr", olsr, 0 },
 	{"logout",logout, 0},
 	{"shutdown",doshutdown, 0}
 };

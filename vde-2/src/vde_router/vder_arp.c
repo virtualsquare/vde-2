@@ -4,6 +4,7 @@
  *
  */
 #include "vde_router.h"
+#include "vder_arp.h"
 #include "vde_headers.h"
 #include "vder_datalink.h"
 #include <unistd.h>
@@ -151,4 +152,30 @@ struct vder_arp_entry *vder_arp_get_record_by_macaddr(struct vder_iface *vif, ui
 		node = node->rb_right;
 	}
 	return found;
+}
+
+int vder_arp_get_neighbors(struct vder_iface *vif, uint32_t *neighbors, int vector_size)
+{
+	int i = 0;
+	struct rb_node *node;
+	if (vector_size <= 0)
+		return -EINVAL;
+
+	node = vif->arp_table.rb_node;
+	while(node) {
+		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
+		neighbors[i++] = entry->ipaddr;
+		if (i == vector_size)
+			return i;
+		node = node->rb_left;
+	}
+	node = vif->arp_table.rb_node;
+	while(node) {
+		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
+		neighbors[i++] = entry->ipaddr;
+		if (i == vector_size)
+			return i;
+		node = node->rb_right;
+	}
+	return i;
 }
