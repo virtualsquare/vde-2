@@ -170,6 +170,9 @@ int vder_arp_get_neighbors(struct vder_iface *vif, uint32_t *neighbors, int vect
 		node = node->rb_left;
 	}
 	node = vif->arp_table.rb_node;
+	if (!node)
+		return i;
+	node = node->rb_right;
 	while(node) {
 		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
 		neighbors[i++] = entry->ipaddr;

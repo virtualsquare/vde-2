@@ -155,13 +155,9 @@ static void olsr_make_dgram(struct vder_iface *vif)
 		hello->willingness = 0x07;
 
 		n_vec_size = vder_arp_get_neighbors(vif, neighbors, 256);
-		if (n_vec_size < 1)
-			return;
 		msg_hello->size = htons(sizeof(struct olsrmsg) +
 			sizeof(struct olsr_hmsg_hello) +  n_vec_size * ((sizeof(struct olsr_link) + sizeof(struct olsr_neighbor))));
 
-
-		printf("%d neighbors \n", n_vec_size);
 		if (n_vec_size > 0) {
 			for (i = 0; i < n_vec_size; i ++) {
 				struct olsr_neighbor *neigh; 
