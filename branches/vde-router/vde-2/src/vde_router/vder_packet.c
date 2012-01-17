@@ -141,8 +141,10 @@ int vder_packet_broadcast(struct vde_buff *vdb, struct vder_iface *iface, uint32
 	iph->protocol = protocol;
 	iph->ttl = DEFAULT_TTL;
 	iph->daddr = dst_ip;
-	//iph->saddr = vder_get_right_localip(iface, iph->daddr);
-	iph->saddr = 0;
+	if (dst_ip != (htonl((uint32_t) -1)))
+		iph->saddr = vder_get_right_localip(iface, iph->daddr);
+	else
+		iph->saddr = 0;
 	iph->check = htons(vder_ip_checksum(iph));
 	return vder_sendto(iface, vdb, bcast_macaddr);
 }
