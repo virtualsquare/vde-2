@@ -7,7 +7,7 @@
 #include <sys/time.h>
 
 
-#define OLSR_MSG_INTERVAL 6000
+#define OLSR_MSG_INTERVAL 2000
 
 struct olsr_route_entry
 {
@@ -185,13 +185,16 @@ static void olsr_make_dgram(struct vder_iface *vif)
 	ohdr->len = htons(size);
 	ohdr->seq = htons(pkt_counter++);
 
-	if ( 0 > vder_udpsocket_sendto_broadcast(udpsock, dgram, size + 8, vif, bcast, OLSR_PORT) ) {
+	if ( 0 > vder_udpsocket_sendto_broadcast(udpsock, dgram, size, vif, bcast, OLSR_PORT) ) {
 		perror("olsr send");
 	}
 }
 
 static void olsr_recv(uint8_t *buffer, int len)
 {
+	struct olsrhdr *oh = (struct olsrhdr *) buffer;
+	//printf ("Received olsr msg, size: %d (%d)\n", len, ntohs(oh->len));
+
 
 }
 

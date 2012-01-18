@@ -90,6 +90,7 @@ int vder_udpsocket_sendto(struct vder_udp_socket *sock, void *data, size_t len, 
 		errno = EINVAL;
 		return -1;
 	}
+	len += sizeof(struct udphdr);
 
 	ro = vder_get_route(dst);
 	if (!ro) {
@@ -127,6 +128,7 @@ int vder_udpsocket_sendto_broadcast(struct vder_udp_socket *sock, void *data, si
 		errno = EINVAL;
 		return -1;
 	}
+	len += sizeof(struct udphdr);
 
 	bufsize = sizeof(struct vde_buff) + sizeof(struct vde_ethernet_header) + sizeof(struct iphdr) + sizeof(struct udphdr) + len;
 	b = malloc(bufsize);
@@ -176,7 +178,7 @@ int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len
 	uh = (struct udphdr *) payload(b);
 	datagram = (uint8_t *)(payload(b) + sizeof(struct udphdr));
 	if (ntohs(uh->len) < len)
-		len = ntohs(uh->len);
+		len = ntohs(uh->len) - sizeof (struct udphdr);
 	memcpy(data, datagram, len);
 	*fromport = uh->sport;
 	return len;
