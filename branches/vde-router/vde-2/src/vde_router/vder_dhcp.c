@@ -70,7 +70,7 @@ static int is_options_valid(uint8_t *opt_buffer, int len)
 	return 0;
 }
 
-#define DHCP_DATAGRAM_SIZE 308
+#define DHCP_DATAGRAM_SIZE 300
 #define OPENDNS (htonl(0xd043dede))
 
 static void dhcpd_make_reply(struct vder_dhcp_negotiation *dn, uint8_t reply_type)
