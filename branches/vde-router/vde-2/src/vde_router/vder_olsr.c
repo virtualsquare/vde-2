@@ -70,7 +70,7 @@ static void refresh_neighbors(struct vder_iface *iface)
 			e->iface = iface;
 			e->metric = 1;
 			e->next = Routes[1];
-			Routes[1]->next = e;
+			Routes[1] = e;
 		}
 	}
 }
@@ -122,9 +122,10 @@ static void refresh_routes(void)
 				e->iface = icur;
 				e->metric = 0;
 				e->next = Routes[0];
-				Routes[0]->next = e;
+				Routes[0] = e;
 			}
 			refresh_neighbors(icur);
+			addr = addr->next;
 		}
 	}
 
@@ -151,16 +152,13 @@ static void refresh_routes(void)
 
 static void olsr_make_dgram(struct vder_iface *vif)
 {
-	uint32_t orig, dest;
 	uint8_t dgram[2000];
 	int size = 0;
 	struct vder_ip4address *ep;
-	struct olsr_mid_entry *mlist, *mp;
 	struct olsrhdr *ohdr;
 	uint32_t netmask, bcast;
 	struct olsrmsg *msg_hello, *msg_mid;
 	struct olsr_hmsg_hello *hello;
-	struct olsr_hmsg_mid *mid;
 
 	struct olsr_link *hlink;
 	struct olsr_route_entry *entry;
@@ -230,28 +228,31 @@ static void olsr_make_dgram(struct vder_iface *vif)
 	msg_mid->ttl = 0xFF;
 	msg_mid->hop = 0;
 
-	mid = (struct olsr_hmsg_mid *)(dgram + size);
-	size += sizeof(struct olsr_hmsg_mid);
 	while(entry) {
+		uint32_t mid_address;
 		if (entry->iface != vif) {
-			memcpy(dgram + size, entry->destination, sizeof(uint32_t));
+			mid_address = entry->destination;
+			memcpy(dgram + size, &mid_address, sizeof(uint32_t));
 			size += sizeof(uint32_t);
 			mid_count++;
 		}
 		entry = entry->next;
 	}
 	if (mid_count == 0) {
-		size -= (sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_mid));
+		size -= (sizeof(struct olsrmsg));
 	} else {
-		mid->seq = htons(mid_counter++);
-		msg_mid->size = htons(sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_mid) + sizeof(uint32_t) * mid_count);
+		msg_mid->seq = htons(mid_counter++);
+		msg_mid->size = htons(sizeof(struct olsrmsg) + sizeof(uint32_t) * mid_count);
 	}
 
 	/* TODO: Add TC msg */
 
+
+	/* Finalize olsr packet */
 	ohdr->len = htons(size);
 	ohdr->seq = htons(pkt_counter++);
 
+	/* Send the thing out */
 	if ( 0 > vder_udpsocket_sendto_broadcast(udpsock, dgram, size, vif, bcast, OLSR_PORT) ) {
 		perror("olsr send");
 	}
@@ -264,7 +265,6 @@ static void olsr_recv(uint8_t *buffer, int len)
 		/* Invalid packet size, silently discard */
 		return;
 	}
-	//printf ("Received olsr msg, size: %d (%d)\n", len, ntohs(oh->len));
 	/* TODO: Implement parser. */
 }
 
@@ -301,6 +301,7 @@ void *vder_olsr_loop(void *olsr_settings)
 		sleep(1);
 		gettimeofday(&now, NULL);
 		if ((now.tv_sec - last_out.tv_sec) >= (OLSR_MSG_INTERVAL / 1000)) {
+			refresh_routes();
 			for (i = 0; i < settings->n_ifaces; i++)
 				olsr_make_dgram(settings->ifaces[i]);
 			last_out = now;
