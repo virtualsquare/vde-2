@@ -8,117 +8,164 @@
 
 
 #define OLSR_MSG_INTERVAL 2000
+#define HOST_NETMASK (htonl(0xFFFFFFFF))
+#define MAX_HOPS 256
 
 struct olsr_route_entry
 {
 	struct olsr_route_entry *next;
-	unsigned long 	time_left;
-	uint32_t		destination;
-	uint32_t		gateway;
-	struct vder_iface *iface;
-	uint16_t		metric;
+	unsigned long 		time_left;
+	uint32_t			destination;
+	struct olsr_route 	*gateway;
+	struct vder_iface 	*iface;
+	uint16_t			metric;
 };
 
-struct olsr_mid_entry
-{
-	struct olsr_mid_entry *next;
-	struct vder_iface *iface;
-	uint32_t	addr;
-};
-
-struct olsr_hello_entry
-{
-	struct olsr_hello_entry *next;
-	struct vder_iface *iface;
-	uint32_t	addr;
-};
-
-static struct olsr_route_entry *or_list = NULL;
-
+static struct olsr_route_entry *Routes[MAX_HOPS] = {};
 static struct vder_udp_socket *udpsock;
 static struct olsr_setup *settings;
 
-/* return a list of other interfaces local ip addresses */
-static struct olsr_mid_entry *mid_list_alloc(struct vder_iface *dst_if)
+static struct olsr_route_entry *get_route_by_address(uint32_t ip)
 {
-	struct olsr_mid_entry *list = NULL, *p;
+	struct olsr_route_entry *cur;
 	int i;
 
-	for (i = 0; i < settings->n_ifaces; i++) {
-		struct vder_iface *cur = settings->ifaces[i];
-		if (cur != dst_if) {
-			struct vder_ip4address *addr = cur->address_list;
-			while (addr) {
-				p = malloc(sizeof(struct olsr_mid_entry));
-				if (!p)
-					return list;
-				p->next = list;
-				p->iface = cur;
-				p->addr = addr->address;
-				list = p;
-				addr = addr->next;
-			}
+	for (i = 0; i < MAX_HOPS; i++) {
+		cur = Routes[i];
+		while(cur) {
+			if (cur->destination == ip)
+				return cur;
+			cur = cur->next;
 		}
 	}
-	return list;
+	return NULL;
 }
 
-static struct olsr_hello_entry *hello_list_alloc(struct vder_iface *dst_if)
+static void refresh_neighbors(struct vder_iface *iface)
 {
-
-	struct olsr_hello_entry *list = NULL, *p;
+	struct olsr_route_entry *cur;
+	uint32_t neighbors[256];
 	int i;
-
-	for (i = 0; i < settings->n_ifaces; i++) {
-		struct vder_iface *cur = settings->ifaces[i];
-		if (cur == dst_if) {
-			struct vder_ip4address *addr = cur->address_list;
-			while (addr) {
-				p = malloc(sizeof(struct olsr_hello_entry));
-				if (!p)
-					return list;
-				p->next = list;
-				p->iface = cur;
-				p->addr = addr->address;
-				list = p;
-				addr = addr->next;
+	unsigned char found = 0;
+	int n_vec_size = vder_arp_get_neighbors(iface, neighbors, 256);
+	for (i = 0; i < n_vec_size; i++) {
+		cur = Routes[1];
+		while(cur) {
+			if (cur->destination == neighbors[i]) {
+				cur->time_left = (OLSR_MSG_INTERVAL << 2);
+				found = 1;
+				break;
 			}
+			cur = cur->next;
+		}
+		if (!found) {
+			struct olsr_route_entry *e = malloc(sizeof (struct olsr_route_entry));
+			if (!e) {
+				perror("olsr: adding local route entry");
+				return;
+			}
+			e->destination = neighbors[i];
+			e->time_left = (OLSR_MSG_INTERVAL << 2);
+			e->gateway = NULL;
+			e->iface = iface;
+			e->metric = 1;
+			e->next = Routes[1];
+			Routes[1]->next = e;
 		}
 	}
-	return list;
 }
 
-static void hello_list_free(struct olsr_hello_entry *l)
+
+static void refresh_routes(void)
 {
-	struct olsr_hello_entry *p;
-	while(l) {
-		p = l;
-		l = p->next;
-		free(p);
+	int i;
+	struct olsr_route_entry *cur, *prev = NULL;
+
+	/* Refresh local entries */
+
+	/* Step 1: set zero expire time for local addresses and neighbors*/
+	for (i = 0; i < 2; i++) {
+		cur = Routes[i];
+		while(cur) {
+			cur->time_left = (OLSR_MSG_INTERVAL << 2);
+			cur = cur->next;
+		}
+	}
+
+
+	/* Step 2: refresh timer for entries that are still valid. 
+	 * Add new entries.
+	 */
+	for (i = 0; i < settings->n_ifaces; i++) {
+		struct vder_iface *icur = settings->ifaces[i];
+		struct vder_ip4address *addr = icur->address_list;
+		while (addr) {
+			unsigned char found = 0;
+			cur = Routes[0];
+			while(cur) {
+				if (cur->destination == addr->address) {
+					cur->time_left = (OLSR_MSG_INTERVAL << 2);
+					found = 1;
+					break;
+				}
+				cur = cur->next;
+			}
+			if (!found) {
+				struct olsr_route_entry *e = malloc(sizeof (struct olsr_route_entry));
+				if (!e) {
+					perror("olsr: adding local route entry");
+					return;
+				}
+				e->destination = addr->address;
+				e->time_left = (OLSR_MSG_INTERVAL << 2);
+				e->gateway = NULL;
+				e->iface = icur;
+				e->metric = 0;
+				e->next = Routes[0];
+				Routes[0]->next = e;
+			}
+			refresh_neighbors(icur);
+		}
+	}
+
+	/* Remove expired entries */
+
+	for (i = 0; i < MAX_HOPS; i++) {
+		cur = Routes[i], prev = NULL; 
+		while(cur) {
+			if (cur->time_left < OLSR_MSG_INTERVAL) {
+				if (!prev)
+					Routes[i] = cur->next;
+				else
+					prev->next = cur->next;
+				if (i > 1)
+					vder_route_del(cur->destination, HOST_NETMASK, i);
+				free(cur);
+			} else {
+				prev = cur;
+			}
+			cur = cur->next;
+		}
 	}
 }
-
-static void mid_list_free(struct olsr_mid_entry *l)
-{
-	struct olsr_mid_entry *p;
-	while(l) {
-		p = l;
-		l = p->next;
-		free(p);
-	}
-}
-
 
 static void olsr_make_dgram(struct vder_iface *vif)
 {
-
 	uint32_t orig, dest;
 	uint8_t dgram[2000];
 	int size = 0;
-	struct olsr_hello_entry *elist, *ep;
+	struct vder_ip4address *ep;
 	struct olsr_mid_entry *mlist, *mp;
 	struct olsrhdr *ohdr;
 	uint32_t netmask, bcast;
+	struct olsrmsg *msg_hello, *msg_mid;
+	struct olsr_hmsg_hello *hello;
+	struct olsr_hmsg_mid *mid;
+
+	struct olsr_link *hlink;
+	struct olsr_route_entry *entry;
+	uint32_t neighbors[256];
+	int n_vec_size, i, mid_count = 0;
 
 	static uint8_t hello_counter = 0, mid_counter = 0, tc_counter = 0;
 	static uint16_t pkt_counter = 0;
@@ -126,59 +173,79 @@ static void olsr_make_dgram(struct vder_iface *vif)
 	ohdr = (struct olsrhdr *)dgram;
 	size += sizeof(struct olsrhdr);
 
-	elist = hello_list_alloc(vif);
-	ep = elist;
+	ep = vif->address_list; /* Take first address */
 	if (!ep)
 		return;
-	netmask = vder_get_netmask(vif, ep->addr);
-	bcast = vder_get_broadcast(ep->addr, netmask);
-	while (ep) {
-		struct olsrmsg *msg_hello;
-		struct olsr_hmsg_hello *hello;
-		struct olsr_link *hlink;
-		uint32_t neighbors[256];
-		int n_vec_size, i;
+	netmask = vder_get_netmask(vif, ep->address);
+	bcast = vder_get_broadcast(ep->address, netmask);
 
-		msg_hello = (struct olsrmsg *) (dgram + size);
-		size += sizeof(struct olsrmsg);
-		msg_hello->type = OLSRMSG_HELLO;
-		msg_hello->vtime = 60; /* one hot minute */
-		msg_hello->orig = ep->addr;
-		msg_hello->ttl = 1;
-		msg_hello->hop = 0;
-		msg_hello->seq = htons(hello_counter++);
 
-		hello = (struct olsr_hmsg_hello *)(dgram + size);
-		size += sizeof(struct olsr_hmsg_hello);
-		hello->reserved = 0;
-		hello->htime = 0x05; /* Todo: find and define values */
-		hello->willingness = 0x07;
 
-		n_vec_size = vder_arp_get_neighbors(vif, neighbors, 256);
-		msg_hello->size = htons(sizeof(struct olsrmsg) +
-			sizeof(struct olsr_hmsg_hello) +  n_vec_size * ((sizeof(struct olsr_link) + sizeof(struct olsr_neighbor))));
+	/* HELLO Message */
 
-		if (n_vec_size > 0) {
-			for (i = 0; i < n_vec_size; i ++) {
-				struct olsr_neighbor *neigh; 
-				hlink = (struct olsr_link *) (dgram + size);
-				size += (sizeof(struct olsr_link));
-				hlink->reserved = 0;
-				hlink->link_code = OLSRLINK_SYMMETRIC;
-				hlink->link_msg_size = htons(sizeof(struct olsr_link) + sizeof(struct olsr_neighbor));
-				neigh = (struct olsr_neighbor *) (dgram + size);
-				size += (sizeof(struct olsr_neighbor));
-				neigh->addr = neighbors[i];
-				neigh->lq = 0xFF;
-				neigh->nlq = 0xFF;
-			}
+	msg_hello = (struct olsrmsg *) (dgram + size);
+	size += sizeof(struct olsrmsg);
+	msg_hello->type = OLSRMSG_HELLO;
+	msg_hello->vtime = 60; /* one hot minute */
+	msg_hello->orig = ep->address;
+	msg_hello->ttl = 1;
+	msg_hello->hop = 0;
+	msg_hello->seq = htons(hello_counter++);
+
+	hello = (struct olsr_hmsg_hello *)(dgram + size);
+	size += sizeof(struct olsr_hmsg_hello);
+	hello->reserved = 0;
+	hello->htime = 0x05; /* Todo: find and define values */
+	hello->willingness = 0x07;
+
+	n_vec_size = vder_arp_get_neighbors(vif, neighbors, 256);
+	msg_hello->size = htons(sizeof(struct olsrmsg) +
+		sizeof(struct olsr_hmsg_hello) +  n_vec_size * ((sizeof(struct olsr_link) + sizeof(struct olsr_neighbor))));
+
+	if (n_vec_size > 0) {
+		for (i = 0; i < n_vec_size; i ++) {
+			struct olsr_neighbor *neigh;
+			hlink = (struct olsr_link *) (dgram + size);
+			size += (sizeof(struct olsr_link));
+			hlink->reserved = 0;
+			hlink->link_code = OLSRLINK_SYMMETRIC;
+			hlink->link_msg_size = htons(sizeof(struct olsr_link) + sizeof(struct olsr_neighbor));
+			neigh = (struct olsr_neighbor *) (dgram + size);
+			size += (sizeof(struct olsr_neighbor));
+			neigh->addr = neighbors[i];
+			neigh->lq = 0xFF; /* Todo: Read quality from node */
+			neigh->nlq = 0xFF;
 		}
-		ep = ep->next;
 	}
-	hello_list_free(elist);
-	mlist = mid_list_alloc(vif);
-	/* TODO: Add MID msg */
-	mid_list_free(mlist);
+
+
+	/* MID Message */
+
+	entry = Routes[0];
+	msg_mid = (struct olsrmsg *)(dgram + size);
+	size += sizeof(struct olsrmsg);
+	msg_mid->type = OLSRMSG_MID;
+	msg_mid->vtime = 60; /* one hot minute */
+	msg_mid->orig = ep->address;
+	msg_mid->ttl = 0xFF;
+	msg_mid->hop = 0;
+
+	mid = (struct olsr_hmsg_mid *)(dgram + size);
+	size += sizeof(struct olsr_hmsg_mid);
+	while(entry) {
+		if (entry->iface != vif) {
+			memcpy(dgram + size, entry->destination, sizeof(uint32_t));
+			size += sizeof(uint32_t);
+			mid_count++;
+		}
+		entry = entry->next;
+	}
+	if (mid_count == 0) {
+		size -= (sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_mid));
+	} else {
+		mid->seq = htons(mid_counter++);
+		msg_mid->size = htons(sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_mid) + sizeof(uint32_t) * mid_count);
+	}
 
 	/* TODO: Add TC msg */
 
@@ -193,9 +260,12 @@ static void olsr_make_dgram(struct vder_iface *vif)
 static void olsr_recv(uint8_t *buffer, int len)
 {
 	struct olsrhdr *oh = (struct olsrhdr *) buffer;
+	if (len != oh->len) {
+		/* Invalid packet size, silently discard */
+		return;
+	}
 	//printf ("Received olsr msg, size: %d (%d)\n", len, ntohs(oh->len));
-
-
+	/* TODO: Implement parser. */
 }
 
 
@@ -215,8 +285,9 @@ void *vder_olsr_loop(void *olsr_settings)
 		udpsock = vder_udpsocket_open(OLSR_PORT);
 	if (!udpsock)
 		return NULL;
-	gettimeofday(&last_out, NULL);
 
+
+	gettimeofday(&last_out, NULL);
 
 	while(1) {
 		len = vder_udpsocket_recvfrom(udpsock, buffer, OLSR_MSG_INTERVAL, &from_ip, &from_port, -1);

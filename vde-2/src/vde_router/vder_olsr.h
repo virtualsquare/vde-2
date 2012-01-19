@@ -47,7 +47,6 @@ struct __attribute__((packed)) olsr_hmsg_tc
 struct __attribute__((packed)) olsr_hmsg_mid
 {
 	uint16_t seq;
-	uint32_t addr;
 };
 
 struct __attribute__((packed)) olsrmsg
