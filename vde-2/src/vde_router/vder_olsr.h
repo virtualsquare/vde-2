@@ -44,10 +44,6 @@ struct __attribute__((packed)) olsr_hmsg_tc
 	uint16_t reserved;
 };
 
-struct __attribute__((packed)) olsr_hmsg_mid
-{
-	uint16_t seq;
-};
 
 struct __attribute__((packed)) olsrmsg
 {
@@ -58,7 +54,6 @@ struct __attribute__((packed)) olsrmsg
 	uint8_t ttl;
 	uint8_t hop;
 	uint16_t seq;
-	uint8_t data[0];
 };
 
 struct __attribute__((packed)) olsrhdr
