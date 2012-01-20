@@ -290,7 +290,7 @@ void *vder_olsr_loop(void *olsr_settings)
 	gettimeofday(&last_out, NULL);
 
 	while(1) {
-		len = vder_udpsocket_recvfrom(udpsock, buffer, OLSR_MSG_INTERVAL, &from_ip, &from_port, -1);
+		len = vder_udpsocket_recvfrom(udpsock, buffer, (OLSR_MSG_INTERVAL >> 1), &from_ip, &from_port, -1);
 		if (len < 0) {
 			perror("udp recv");
 			return NULL;
