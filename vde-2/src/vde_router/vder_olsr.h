@@ -11,7 +11,7 @@
 #define OLSRMSG_TC		0xca
 
 #define OLSRLINK_SYMMETRIC 0x06
-#define OLSRLINK_MPR	0x10
+#define OLSRLINK_MPR	0x0a
 
 struct __attribute__((packed)) olsr_link
 {
