@@ -102,6 +102,8 @@ int vder_packet_send(struct vde_buff *vdb, uint32_t dst_ip, uint8_t protocol)
 	struct vder_route *ro;
 	struct vder_arp_entry *ae;
 
+	uint32_t destination = dst_ip;
+
 	eth->buftype = htons(PTYPE_IP);
 
 	memset(iph,0x45,1);
@@ -115,11 +117,15 @@ int vder_packet_send(struct vde_buff *vdb, uint32_t dst_ip, uint8_t protocol)
 	ro = vder_get_route(dst_ip);
 	if (!ro)
 		return -1;
-	iph->saddr = vder_get_right_localip(ro->iface, iph->daddr);
+
+	if (ro->gateway != 0) {
+		destination = ro->gateway;
+	}
+	iph->saddr = vder_get_right_localip(ro->iface, destination);
 	iph->check = htons(vder_ip_checksum(iph));
-	ae = vder_get_arp_entry(ro->iface, iph->daddr);
+	ae = vder_get_arp_entry(ro->iface, destination);
 	if (!ae) {
-		vder_arp_query(ro->iface, iph->daddr);
+		vder_arp_query(ro->iface, destination);
 		return -1;
 	}
 	return vder_sendto(ro->iface, vdb, ae->macaddr);

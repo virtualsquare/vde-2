@@ -82,6 +82,12 @@ size_t vder_arp_query(struct vder_iface *oif, uint32_t tgt)
 	ah->opcode = htons(ARP_REQUEST);
 	memcpy(ah->s_mac, oif->macaddr,6);
 	ah->s_addr = vder_get_right_localip(oif, tgt); 
+	if (ah->s_addr == 0) {
+		if (oif->address_list) 
+			ah->s_addr = oif->address_list->address;
+		else
+			return -1;
+	}
 	memset(ah->d_mac,0,6);
 	ah->d_addr = tgt;
 	vdb->priority = PRIO_ARP;

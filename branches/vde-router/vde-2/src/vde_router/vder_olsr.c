@@ -16,9 +16,10 @@ struct olsr_route_entry
 	struct olsr_route_entry *next;
 	unsigned long 		time_left;
 	uint32_t			destination;
-	struct olsr_route 	*gateway;
+	uint32_t			gateway;
 	struct vder_iface 	*iface;
 	uint16_t			metric;
+	uint8_t				link_type;
 };
 
 static struct olsr_route_entry *Routes[MAX_HOPS] = {};
@@ -41,6 +42,38 @@ static struct olsr_route_entry *get_route_by_address(uint32_t ip)
 	return NULL;
 }
 
+static void route_change_metric(struct olsr_route_entry *r, int new_metric, uint32_t new_gateway)
+{
+	struct olsr_route_entry *cur, *prev;
+	cur = Routes[r->metric], prev = NULL;
+	while(cur) {
+		if (cur == r) {
+			/* found */
+			if (!prev)
+				Routes[r->metric] = cur->next;
+			else
+				prev->next = cur->next;
+
+			if (r->metric > 1)
+				vder_route_del(cur->destination, HOST_NETMASK, r->metric);
+
+			r->metric = new_metric;
+			r->gateway = new_gateway;
+
+			if (r->metric > 1) {
+				vder_route_add(cur->destination, HOST_NETMASK, new_gateway, new_metric, NULL);
+				r->next = Routes[r->metric];
+				Routes[r->metric] = r;
+			}
+			return;
+		}
+
+		prev = cur;
+		cur = cur->next;
+	}
+}
+
+
 static void refresh_neighbors(struct vder_iface *iface)
 {
 	struct olsr_route_entry *cur;
@@ -59,14 +92,21 @@ static void refresh_neighbors(struct vder_iface *iface)
 			cur = cur->next;
 		}
 		if (!found) {
-			struct olsr_route_entry *e = malloc(sizeof (struct olsr_route_entry));
-			if (!e) {
-				perror("olsr: adding local route entry");
-				return;
+			/* look on bigger metrics */
+			struct olsr_route_entry *e = get_route_by_address(neighbors[i]);
+			if (e) {
+				route_change_metric(e, 0U, 1);
+			} else {
+				e = malloc(sizeof (struct olsr_route_entry));
+				if (!e) {
+					perror("olsr: adding local route entry");
+					return;
+				}
 			}
 			e->destination = neighbors[i];
+			e->link_type = OLSRLINK_SYMMETRIC;
 			e->time_left = (OLSR_MSG_INTERVAL << 2);
-			e->gateway = NULL;
+			e->gateway = 0U;
 			e->iface = iface;
 			e->metric = 1;
 			e->next = Routes[1];
@@ -118,7 +158,7 @@ static void refresh_routes(void)
 				}
 				e->destination = addr->address;
 				e->time_left = (OLSR_MSG_INTERVAL << 2);
-				e->gateway = NULL;
+				e->gateway = 0U;
 				e->iface = icur;
 				e->metric = 0;
 				e->next = Routes[0];
@@ -139,6 +179,7 @@ static void refresh_routes(void)
 					Routes[i] = cur->next;
 				else
 					prev->next = cur->next;
+				printf("Route expired!\n");
 				if (i > 1)
 					vder_route_del(cur->destination, HOST_NETMASK, i);
 				free(cur);
@@ -258,14 +299,79 @@ static void olsr_make_dgram(struct vder_iface *vif)
 	}
 }
 
+static inline void arp_storm(uint32_t addr)
+{
+	int i;
+	for (i = 0; i < settings->n_ifaces; i++) {
+		vder_arp_query(settings->ifaces[i], addr);
+	}
+}
+
+static void recv_hello(uint8_t *buffer, int len, uint32_t origin)
+{
+	struct olsr_link *li;
+	uint32_t *address;
+	struct olsr_route_entry *e;
+	int parsed = 0;
+
+	while (len > parsed) {
+		li = (struct olsr_link *) buffer;
+		address = (uint32_t *)(buffer + parsed + sizeof(struct olsr_link));
+		parsed += ntohs(li->link_msg_size);
+		e = get_route_by_address(*address);
+		if (!e) {
+			e = malloc(sizeof(struct olsr_route_entry));
+			if (!e) {
+				perror("olsr allocating route");
+				return;
+			}
+			e->time_left = (OLSR_MSG_INTERVAL << 2);
+			e->destination = *address;
+			e->gateway = origin;
+			e->iface = NULL;
+			e->metric = 2;
+			e->next = Routes[2];
+			Routes[2] = e;
+			arp_storm(e->destination);
+			vder_route_add(*address, HOST_NETMASK, origin, 2, NULL);
+		} else if (e->metric > 2) {
+			route_change_metric(e, origin, 2);
+		}
+	}
+}
+
 static void olsr_recv(uint8_t *buffer, int len)
 {
 	struct olsrhdr *oh = (struct olsrhdr *) buffer;
-	if (len != oh->len) {
-		/* Invalid packet size, silently discard */
+	int parsed = 0;
+	if (len != ntohs(oh->len)) {
 		return;
 	}
-	/* TODO: Implement parser. */
+	parsed += sizeof(struct olsrhdr);
+
+	struct olsrmsg *msg;
+	while (len > parsed) {
+		struct olsr_route_entry *origin;
+		msg = (struct olsrmsg *) (buffer + parsed);
+		origin = get_route_by_address(msg->orig);
+		if (!origin) {
+			arp_storm(msg->orig);
+		}
+		switch(msg->type) {
+			case OLSRMSG_HELLO:
+				recv_hello(buffer + parsed + sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_hello),
+					ntohs(msg->size) - (sizeof(struct olsrmsg)) - sizeof(struct olsr_hmsg_hello),
+					msg->orig);
+				break;
+			case OLSRMSG_MID:
+				break;
+			case OLSRMSG_TC:
+				break;
+			default:
+				return;
+		}
+		parsed += ntohs(msg->size);
+	}
 }
 
 
@@ -288,6 +394,7 @@ void *vder_olsr_loop(void *olsr_settings)
 
 
 	gettimeofday(&last_out, NULL);
+	refresh_routes();
 
 	while(1) {
 		len = vder_udpsocket_recvfrom(udpsock, buffer, (OLSR_MSG_INTERVAL >> 1), &from_ip, &from_port, -1);
