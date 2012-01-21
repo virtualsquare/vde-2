@@ -203,7 +203,6 @@ static void olsr_make_dgram(struct vder_iface *vif)
 
 	struct olsr_link *hlink;
 	struct olsr_route_entry *entry;
-	uint32_t neighbors[256];
 	int n_vec_size, i, mid_count = 0;
 
 	static uint8_t hello_counter = 0, mid_counter = 0, tc_counter = 0;
@@ -237,25 +236,27 @@ static void olsr_make_dgram(struct vder_iface *vif)
 	hello->htime = 0x05; /* Todo: find and define values */
 	hello->willingness = 0x07;
 
-	n_vec_size = vder_arp_get_neighbors(vif, neighbors, 256);
+
+	entry = Routes[1];
+	n_vec_size = 0;
+	while(entry) {
+		struct olsr_neighbor *neigh;
+		hlink = (struct olsr_link *) (dgram + size);
+		size += (sizeof(struct olsr_link));
+		hlink->reserved = 0;
+		hlink->link_code = entry->link_type;
+		hlink->link_msg_size = htons(sizeof(struct olsr_link) + sizeof(struct olsr_neighbor));
+		neigh = (struct olsr_neighbor *) (dgram + size);
+		size += (sizeof(struct olsr_neighbor));
+		neigh->addr = entry->destination;
+		neigh->lq = 0xFF;
+		neigh->nlq = 0xFF;
+		n_vec_size++;
+		entry = entry->next;
+	}
 	msg_hello->size = htons(sizeof(struct olsrmsg) +
 		sizeof(struct olsr_hmsg_hello) +  n_vec_size * ((sizeof(struct olsr_link) + sizeof(struct olsr_neighbor))));
 
-	if (n_vec_size > 0) {
-		for (i = 0; i < n_vec_size; i ++) {
-			struct olsr_neighbor *neigh;
-			hlink = (struct olsr_link *) (dgram + size);
-			size += (sizeof(struct olsr_link));
-			hlink->reserved = 0;
-			hlink->link_code = OLSRLINK_SYMMETRIC;
-			hlink->link_msg_size = htons(sizeof(struct olsr_link) + sizeof(struct olsr_neighbor));
-			neigh = (struct olsr_neighbor *) (dgram + size);
-			size += (sizeof(struct olsr_neighbor));
-			neigh->addr = neighbors[i];
-			neigh->lq = 0xFF; /* Todo: Read quality from node */
-			neigh->nlq = 0xFF;
-		}
-	}
 
 
 	/* MID Message */
@@ -287,6 +288,7 @@ static void olsr_make_dgram(struct vder_iface *vif)
 	}
 
 	/* TODO: Add TC msg */
+	
 
 
 	/* Finalize olsr packet */
@@ -356,6 +358,8 @@ static void olsr_recv(uint8_t *buffer, int len)
 		origin = get_route_by_address(msg->orig);
 		if (!origin) {
 			arp_storm(msg->orig);
+		} else {
+			origin->link_type = OLSRLINK_MPR;
 		}
 		switch(msg->type) {
 			case OLSRMSG_HELLO:
@@ -397,7 +401,7 @@ void *vder_olsr_loop(void *olsr_settings)
 	refresh_routes();
 
 	while(1) {
-		len = vder_udpsocket_recvfrom(udpsock, buffer, (OLSR_MSG_INTERVAL >> 1), &from_ip, &from_port, -1);
+		len = vder_udpsocket_recvfrom(udpsock, buffer, 100, &from_ip, &from_port, -1);
 		if (len < 0) {
 			perror("udp recv");
 			return NULL;
@@ -405,14 +409,12 @@ void *vder_olsr_loop(void *olsr_settings)
 		if ((len > 0) && (from_port == OLSR_PORT)) {
 			olsr_recv(buffer, len);
 		}
-		sleep(1);
+		usleep(500000);
 		gettimeofday(&now, NULL);
-		if ((now.tv_sec - last_out.tv_sec) >= (OLSR_MSG_INTERVAL / 1000)) {
-			refresh_routes();
-			for (i = 0; i < settings->n_ifaces; i++)
-				olsr_make_dgram(settings->ifaces[i]);
-			last_out = now;
-		}
+		refresh_routes();
+		last_out = now;
+		for (i = 0; i < settings->n_ifaces; i++)
+			olsr_make_dgram(settings->ifaces[i]);
 	}
 }
 
