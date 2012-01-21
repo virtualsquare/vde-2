@@ -197,7 +197,16 @@ int vder_route_add(uint32_t address, uint32_t netmask, uint32_t gateway, uint16_
 	ro->netmask = netmask;
 	ro->gateway = gateway;
 	ro->metric = metric;
-	ro->iface = dst;
+	if (dst) 
+		ro->iface = dst;
+	else {
+		struct vder_route *next_hop = vder_get_route(gateway);
+		if (!next_hop) {
+			errno = EHOSTUNREACH;
+			goto out_unlock;
+		}
+		ro->iface = next_hop->iface; 
+	}
 
 	/* Is this route already there? */
 	cur = Router.routing_table;
