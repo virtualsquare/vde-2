@@ -498,12 +498,12 @@ static void web_create_page(char *path,int fd,int vdefd,char *postdata)
 	if ((tail=strstr(path,".html")) != NULL)
 		*tail=0;
 	if (*path==0 || ((this=vde_findmenu(menuhead,path)) != NULL)) {
-		lwip_write(fd,okmsg,sizeof(okmsg));
+		lwip_write(fd,okmsg,sizeof(okmsg)-1);
 		lwip_printf(fd,
 				"<HTML><HEAD>\r\n"
 				"<TITLE>%s %s</TITLE>\r\n",
 				prompt, (*path==0)?"Home Page":path);
-		lwip_write(fd,css,sizeof(css));
+		lwip_write(fd,css,sizeof(css)-1);
 		lwip_printf(fd,
 				"</HEAD><BODY class=core>\r\n"
 				"<H1>%s %s</H1>\r\n"
@@ -536,7 +536,7 @@ static void web_create_page(char *path,int fd,int vdefd,char *postdata)
 				"<hr>VDE 2.0 WEB MGMT INTERFACE\r\n"
 				"</BODY></HTML>\r\n");
 	} else
-		lwip_write(fd,errmsg,sizeof(errmsg));
+		lwip_write(fd,errmsg,sizeof(errmsg)-1);
 }
 
 static char authmsg[]= 
@@ -600,9 +600,9 @@ int web_core(int fn,int fd,int vdefd)
 	} else if (st->linebuf[0]=='\n' || st->linebuf[0]=='\r') {
 		switch (st->status) {
 			case WEB_IDENTIFY:
-				lwip_write(fd,authmsg,sizeof(authmsg));
+				lwip_write(fd,authmsg,sizeof(authmsg)-1);
 				lwip_write(fd,prompt,strlen(prompt));
-				lwip_write(fd,authmsg2,sizeof(authmsg2));
+				lwip_write(fd,authmsg2,sizeof(authmsg2)-1);
 				return 1;
 				break;
 			case WEB_AUTHORIZED:
