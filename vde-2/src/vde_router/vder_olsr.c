@@ -13,9 +13,12 @@
 # define MIN(a,b) (a<b?a:b)
 #endif
 
+#define fresher(a,b) ((a>b) || ((b - a) > 32768))
+
 static struct vder_udp_socket *udpsock;
 static struct olsr_setup *settings;
 uint16_t my_ansn = 0;
+uint16_t fresh_ansn = 0;
 
 struct olsr_route_entry
 {
@@ -59,6 +62,12 @@ static struct olsr_route_entry *get_next_hop(struct olsr_route_entry *dst)
 static inline void olsr_route_add(struct olsr_route_entry *el)
 {
 	struct olsr_route_entry *nexthop;
+
+	if (fresher(fresh_ansn, my_ansn))
+		my_ansn = fresh_ansn + 1;
+	else
+		my_ansn++;
+
 	if (el->gateway) {
 		/* 2-hops route or more */
 		el->next = el->gateway->children;
@@ -80,6 +89,8 @@ static inline void olsr_route_add(struct olsr_route_entry *el)
 static inline void olsr_route_del(struct olsr_route_entry *r)
 {
 	struct olsr_route_entry *cur, *prev = NULL, *lst;
+	if (fresher(fresh_ansn, my_ansn))
+		my_ansn = fresh_ansn + 1;
 	if (r->gateway) {
 		lst = r->gateway->children;
 	} else if (r->iface) {
@@ -309,6 +320,7 @@ static int olsr_build_mid(uint8_t *buf, int size, struct vder_iface *excluded)
 	return ret;
 }
 
+static uint16_t pkt_counter = 0;
 static void olsr_make_dgram(struct vder_iface *vif)
 {
 	uint8_t dgram[2000];
@@ -320,7 +332,6 @@ static void olsr_make_dgram(struct vder_iface *vif)
 	struct olsr_hmsg_hello *hello;
 	struct olsr_hmsg_tc *tc;
 	static uint8_t hello_counter = 0, mid_counter = 0, tc_counter = 0;
-	static uint16_t pkt_counter = 0;
 
 	ohdr = (struct olsrhdr *)dgram;
 	size += sizeof(struct olsrhdr);
@@ -502,10 +513,14 @@ static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *
 	struct olsr_route_entry *rt;
 	struct olsr_neighbor *n;
 
-	if (e->advertised_tc && ((new_ansn > e->ansn) || ((e->ansn - new_ansn) > 32768)))
+	if (e->advertised_tc && fresher(new_ansn, e->ansn))
 	{
 		free(e->advertised_tc);
 		e->advertised_tc = NULL;
+	}
+
+	if (fresher(new_ansn, fresh_ansn)) {
+		fresh_ansn = new_ansn;
 	}
 
 	if (!e->advertised_tc) {
@@ -537,8 +552,7 @@ static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *
 				rt->metric = e->metric + 1;
 				rt->lq = n->lq;
 				rt->nlq = n->nlq;
-				//rt->time_left = e->time_left;
-				rt->time_left = 289;
+				rt->time_left = e->time_left;
 				olsr_route_add(rt);
 			}
 		}
@@ -552,13 +566,18 @@ static void olsr_recv(uint8_t *buffer, int len)
 {
 	struct olsrmsg *msg;
 	struct olsr_hmsg_tc *msg_tc;
-	struct olsrhdr *oh = (struct olsrhdr *) buffer;
+	struct olsrhdr *outohdr, *oh = (struct olsrhdr *) buffer;
 	struct olsr_route_entry *ancestor;
 	int parsed = 0;
+	uint8_t outmsg[2000];
+	int outsize = 0;
 	if (len != ntohs(oh->len)) {
 		return;
 	}
 	parsed += sizeof(struct olsrhdr);
+
+	outohdr = (struct olsrhdr *)outmsg;
+	outsize += sizeof(struct olsrhdr);
 
 	while (len > parsed) {
 		struct olsr_route_entry *origin;
@@ -585,21 +604,51 @@ static void olsr_recv(uint8_t *buffer, int len)
 				recv_hello(buffer + parsed + sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_hello),
 					ntohs(msg->size) - (sizeof(struct olsrmsg)) - sizeof(struct olsr_hmsg_hello),
 					origin);
+				msg->ttl = 0;
 				break;
 			case OLSRMSG_MID:
 				recv_mid(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin);
 				break;
 			case OLSRMSG_TC:
 				msg_tc = (struct olsr_hmsg_tc *) (buffer + parsed);
-				reconsider_topology(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin);
+				if (reconsider_topology(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin) < 1)
+					msg->ttl = 0;
+				else {
+					msg->hop = origin->metric;
+				}
 				break;
 			default:
 				return;
 		}
 		if ((--msg->ttl) > 0) {
-			/*TODO: Fwd */
+			memcpy(outmsg + outsize, msg, ntohs(msg->size));
+			outsize += ntohs(msg->size);
 		}
 		parsed += ntohs(msg->size);
+	}
+
+	if (outsize > sizeof(struct olsrhdr)) {
+		int j;
+		uint32_t netmask, bcast;
+		struct vder_ip4address *addr;
+		struct vder_iface *vif;
+		/* Finalize FWD packet */
+		outohdr->len = htons(outsize);
+		outohdr->seq = htons(pkt_counter++);
+
+
+		/* Send the thing out */
+		for (j = 0; j < settings->n_ifaces; j++) {
+			vif = settings->ifaces[j];
+			addr = vif->address_list; /* Take first address */
+			if (!addr)
+				continue;
+			netmask = vder_get_netmask(vif, addr->address);
+			bcast = vder_get_broadcast(addr->address, netmask);
+			if ( 0 > vder_udpsocket_sendto_broadcast(udpsock, outmsg, outsize, vif, bcast, OLSR_PORT) ) {
+				perror("olsr send");
+			}
+		}
 	}
 }
 
