@@ -1,3 +1,9 @@
+/* VDE_ROUTER (C) 2007:2012 Daniele Lacamera
+ *
+ * Licensed under the GPLv2
+ * OLSR implementation loosely based on RFC3626 :)
+ *
+ */
 #include "vder_udp.h"
 #include "vder_arp.h"
 #include "vder_olsr.h"
