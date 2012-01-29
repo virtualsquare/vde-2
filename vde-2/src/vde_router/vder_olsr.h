@@ -11,6 +11,7 @@
 #define OLSRMSG_TC		0xca
 
 #define OLSRLINK_SYMMETRIC 0x06
+#define OLSRLINK_UNKNOWN 0x08
 #define OLSRLINK_MPR	0x0a
 
 struct __attribute__((packed)) olsr_link
@@ -38,9 +39,6 @@ struct __attribute__((packed)) olsr_hmsg_hello
 struct __attribute__((packed)) olsr_hmsg_tc
 {
 	uint16_t ansn;
-	uint32_t addr;
-	uint8_t  lq;
-	uint8_t  nlq;
 	uint16_t reserved;
 };
 
