@@ -1,4 +1,4 @@
-static_mans = dpipe.1 slirpvde.1 unixterm.1 vde_plug.1 vdeq.1 vde_switch.1 wirefilter.1 vde_cryptcab.1 vde_plug2tap.1 vde_over_ns.1 vde_l3.1 vde_tunctl.8 vde_autolink.1 unixcmd.1 vdeterm.1
+static_mans = dpipe.1 slirpvde.1 unixterm.1 vde_plug.1 vdeq.1 vde_switch.1 wirefilter.1 vde_cryptcab.1 vde_plug2tap.1 vde_over_ns.1 vde_l3.1 vde_tunctl.8 vde_autolink.1 unixcmd.1 vdeterm.1 vde_router.1
 if ENABLE_PCAP
   static_mans += vde_pcapplug.1
 endif
