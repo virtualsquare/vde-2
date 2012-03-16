@@ -245,7 +245,6 @@ int main(int argc, char **argv)
 	static char *sockname=NULL;
 	static char *tapname=NULL;
 	int daemonize=0;
-	int result;
 	int tapfd;
 	register ssize_t nx;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
@@ -345,9 +344,11 @@ int main(int argc, char **argv)
 	pollv[0].fd=tapfd;
 
 	if (sockname==NULL || strcmp(sockname,"-") != 0) {
-		conn=vde_open(sockname,"vde_plug:",&open_args);
-		if (conn == NULL)
+		conn=vde_open(sockname,"vde_plug2tap:",&open_args);
+		if (conn == NULL) {
+			printlog(LOG_ERR,"vde_open %s: %s",sockname?sockname:"DEF_SWITCH",strerror(errno));
 			exit(1);
+		}
 		pollv[1].fd=vde_datafd(conn);
 		pollv[2].fd=vde_ctlfd(conn);
 		npollv=3;
@@ -360,7 +361,7 @@ int main(int argc, char **argv)
 	}
 
 	for(;;) {
-		result=poll(pollv,3,-1);
+		poll(pollv,3,-1);
 		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
 				(npollv > 2 && pollv[2].revents & POLLIN)) 
 			break;
