@@ -696,8 +696,9 @@ int vde_close(VDECONN *conn)
 }
 
 /* vdestream */
-
-#define MAXPACKET 1521
+/* "baby giant" packets allowed
+   potential support for nested VLAN 802.1ad, TRILL, VTRILL, MPCS*/
+#define MAXPACKET 1600
 
 struct vdestream {
 	void *opaque;
