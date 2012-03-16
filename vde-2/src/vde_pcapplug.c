@@ -259,7 +259,6 @@ int main(int argc, char **argv)
 	static char *sockname=NULL;
 	static char *ifname=NULL;
 	int daemonize=0;
-	int result;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	int pcapfd;
 	register ssize_t nx;
@@ -332,6 +331,13 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	strcat(pidfile_path, "/");
+
+	conn=vde_open(sockname,"vde_pcapplug:",&open_args);
+	if (conn == NULL) {
+		printlog(LOG_ERR,"vde_open %s: %s",sockname?sockname:"DEF_SWITCH",strerror(errno));
+		exit(1);
+	}
+
 	if (daemonize && daemon(0, 0)) {
 		printlog(LOG_ERR,"daemon: %s",strerror(errno));
 		exit(1);
@@ -365,16 +371,12 @@ int main(int argc, char **argv)
 	}
 	setup_fd(pcapfd);
 
-	conn=vde_open(sockname,"vde_pcapplug:",&open_args);
-	if (conn == NULL)
-		exit(1);
-
 	pollv[0].fd=pcapfd;
 	pollv[1].fd=vde_datafd(conn);
 	pollv[2].fd=vde_ctlfd(conn);
 
 	for(;;) {
-		result=poll(pollv,3,-1);
+		poll(pollv,3,-1);
 		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
 				pollv[2].revents & POLLIN) 
 			break;

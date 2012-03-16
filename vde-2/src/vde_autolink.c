@@ -1316,7 +1316,7 @@ static void usage(void)
 int main(int argc,char **argv)
 {
 
-	int n, npfd=0, option_index;
+	int npfd=0, option_index;
 	int mgmtfd, mgmtindex=-1, vdemgindex=-1, consoleindex=-1;
 	struct job *j; time_t now;
 
@@ -1433,7 +1433,7 @@ int main(int argc,char **argv)
 
 	while(1){
 
-		n=poll(pfd,npfd,polltimeout);
+		poll(pfd,npfd,polltimeout);
 
 		/* Handle async output from switch */
 		if(pfd[vdemgindex].revents & POLLHUP){

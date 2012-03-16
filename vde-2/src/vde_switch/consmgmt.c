@@ -391,6 +391,7 @@ static void handle_io(unsigned char type,int fd,int revents,void *private_data)
 			n = read(fd, buf, sizeof(buf));
 			if(n < 0){
 				printlog(LOG_WARNING,"Reading from mgmt %s",strerror(errno));
+				return;
 			}
 		}
 		if (n==0) { /*EOF || POLLHUP*/

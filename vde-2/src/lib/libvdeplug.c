@@ -46,6 +46,8 @@
 /* Per-User standard switch definition */
 /* This will be prefixed by getenv("HOME") */
 /* it can be a symbolic link to the switch dir */
+#define STDSWITCH "/.vde2/default.switch"
+/* deprecated old name */
 #define STDSOCK "/.vde2/stdsock"
 
 #ifdef USE_IPN
@@ -176,9 +178,14 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		given_sockname = NULL;
 		if (homedir) {
 			struct stat statbuf;
-			snprintf(std_sockname, PATH_MAX, "%s%s", homedir, STDSOCK);
+			snprintf(std_sockname, PATH_MAX, "%s%s", homedir, STDSWITCH);
 			if (lstat(std_sockname,&statbuf)==0)
 				given_sockname = std_sockname;
+			else {
+				snprintf(std_sockname, PATH_MAX, "%s%s", homedir, STDSOCK);
+				if (lstat(std_sockname,&statbuf)==0)
+					given_sockname = std_sockname;
+			}
 		}
 	} else {
 		char *split;

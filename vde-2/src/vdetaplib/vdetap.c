@@ -29,10 +29,7 @@ static struct pollfd pollv[]={{0,POLLIN|POLLHUP,0},{0,POLLIN|POLLHUP,0}};
 int main(int argc,char *argv[])
 {
 	int fd,fddata;
-	struct sockaddr_un datain;
-	/*struct sockaddr_un dataout;*/
-	socklen_t datainsize;
-	int result,nx;
+	int nx;
 	register int i;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 	char *descr;
@@ -66,17 +63,15 @@ int main(int argc,char *argv[])
 	pollv[0].fd=fd;
 	pollv[1].fd=vde_datafd(conn);
 	for(;;) {
-		result=poll(pollv,2,-1);
+		poll(pollv,2,-1);
 		if (pollv[0].revents & POLLHUP || pollv[1].revents & POLLHUP)
 			break;
 		if (pollv[0].revents & POLLIN) {
 			nx=read(fd,bufin,sizeof(bufin));
 			/*fprintf(stderr,"RX from pgm %d\n",nx);*/
-			//send(connected_fd,bufin,nx,0);
 			vde_send(conn,bufin,nx,0);
 		}
 		if (pollv[1].revents & POLLIN) {
-			datainsize=sizeof(datain);
 			nx=vde_recv(conn,bufin,BUFSIZE,0);
 			/*fprintf(stderr,"TX to pgm %d\n",nx);*/
 			write(fd,bufin,nx);
