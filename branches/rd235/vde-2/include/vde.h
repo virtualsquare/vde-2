@@ -18,6 +18,4 @@
 #define DO_SYSLOG
 #define VDE_IP_LOG
 
-#define VDE_PQ2
-
 #endif

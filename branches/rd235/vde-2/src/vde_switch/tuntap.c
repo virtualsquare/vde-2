@@ -214,7 +214,7 @@ static struct endpoint *newtap(char *dev)
 	int tap_fd;
 	tap_fd = open_tap(dev);
 	if (tap_fd>0) {
-		struct endpoint *ep=setup_ep(0,tap_fd,tap_fd,-1,&modfun);
+		struct endpoint *ep=setup_ep(0,tap_fd,tap_fd,-1,&modfun,NULL);
 		if (ep != NULL) {
 			setup_description(ep,dev);
 			add_fd(tap_fd,tap_type,ep);

@@ -21,9 +21,8 @@
 #include "qtimer.h"
 #include "hash.h"
 #include "port.h"
-#ifdef FSTP
 #include "fstp.h"
-#endif
+#include "vtrill.h"
 #include "consmgmt.h"
 #include <sys/time.h>
 #include <time.h>
@@ -230,6 +229,14 @@ void mainloop_set_private_data(int fd,void *private_data)
 {
 	if (fd >=0  && fd < fdpermsize)
 		fdpp[fdperm[fd]]->private_data = private_data;
+}
+
+/* change file type */
+void mainloop_set_type(int fd,unsigned char type)
+{
+	type &= TYPEMASK;
+	if (fd >=0  && fd < fdpermsize)
+		fdpp[fdperm[fd]]->type = type;
 }
 
 short mainloop_pollmask_get(int fd)
@@ -584,10 +591,11 @@ void set_switchmac()
 	register int i;
 	gettimeofday(&v,NULL);
 	srand48(v.tv_sec ^ v.tv_usec ^ getpid());
+	val=lrand48();
+	switchmac[0]=(val & ~0x1) | 0x2;
+	switchmac[1]=val>>8;;
 	for(i=0,val=lrand48();i<4; i++,val>>=8)
 		switchmac[i+2]=val;
-	switchmac[0]=0;
-	switchmac[1]=0xff;
 }
 
 static void start_modules(void);
@@ -602,6 +610,9 @@ int main(int argc, char **argv)
 	hash_init(hash_size);
 #ifdef FSTP
 	fst_init(numports);
+#endif
+#ifdef VDE_VTRILL
+	vtrill_init(numports);
 #endif
 	port_init(numports);
 	init_mods();

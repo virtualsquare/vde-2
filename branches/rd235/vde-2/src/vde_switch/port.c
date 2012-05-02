@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -30,6 +31,7 @@
 #include "consmgmt.h"
 #include "bitarray.h"
 #include "fstp.h"
+#include "vtrill.h"
 
 #include "packetq.h"
 
@@ -37,6 +39,9 @@ static int pflag=0;
 static int numports;
 #ifdef VDE_PQ2
 static int stdqlen=128;
+#endif
+#ifdef VDE_VTRILL
+static int vtrillvlan=4095;
 #endif
 
 static struct port **portv;
@@ -62,7 +67,7 @@ static struct dbgcl dl[]= {
 
 // for dedugging if needed
 
-/*
+#if 0
 	 void packet_dump (struct packet *p)
 	 {
 	 register int i;
@@ -76,7 +81,8 @@ static struct dbgcl dl[]= {
 	 for (i=0;i<2;i++)
 	 printf(":%02x",p->header.proto[i]);
 	 printf("\n");
-	 }*/
+	 }
+#endif
 
 struct endpoint {
 	int port;
@@ -105,6 +111,9 @@ struct port {
 	uid_t curuser;
 #ifdef FSTP
 	int cost;
+#endif
+#ifdef VDE_VTRILL
+	void *vtrilldata;
 #endif
 #ifdef PORTCOUNTERS
 	long long pktsin,pktsout,bytesin,bytesout;
@@ -168,6 +177,9 @@ static int alloc_port(unsigned int portno)
 				port->sender=NULL;
 				port->vlanuntag=0;
 				ba_set(vlant[0].table,i);
+#ifdef VDE_VTRILL
+				port->vtrilldata=NULL;
+#endif
 			}
 		}
 		return i;
@@ -237,9 +249,11 @@ static int checkport_ac(struct port *port, uid_t user)
 	}
 }
 
+static int portsetup(int portno, char *setup);
+
 /* initialize a new endpoint */
 struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
-		struct mod_support *modfun)
+		struct mod_support *modfun, char *setup)
 {
 	struct port *port;
 	struct endpoint *ep;
@@ -254,6 +268,9 @@ struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
 			EVENTOUT(DBGEPNEW,portno,fd_ctl);
 			port->ms=modfun;
 			port->sender=modfun->sender;
+			if (setup) {
+				portsetup(portno, setup);
+			}
 			ep->port=portno;
 			ep->fd_ctl=fd_ctl;
 			ep->fd_data=fd_data;
@@ -280,7 +297,12 @@ struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
 					ba_set(vlant[port->vlanuntag].bcuntag,portno);
 					ba_clr(vlant[port->vlanuntag].bctag,portno);
 				}
-				ba_clr(vlant[port->vlanuntag].notlearning,portno);
+				if (port->vlanuntag != 4095)
+					ba_clr(vlant[port->vlanuntag].notlearning,portno);
+#ifdef VDE_VTRILL
+				if (ba_check(vlant[vtrillvlan].bctag,portno))
+					port->vtrilldata=vtrill_newport(portno);
+#endif
 			} else {
 				ep->next=port->ep;
 				port->ep=ep;
@@ -347,6 +369,10 @@ static int close_ep_port_fd(int portno, int fd_ctl)
 				port->ms=NULL;
 				port->sender=NULL;
 				port->curuser=-1;
+#ifdef VDE_VTRILL
+				if (ba_check(vlant[vtrillvlan].bctag,portno))
+					vtrill_delport(portno,port->vtrilldata);
+#endif
 				register int i;
 				/* inactivate port: all active vlan defs cleared */
 				bac_FORALL(validvlan,NUMOFVLAN,({
@@ -356,6 +382,8 @@ static int close_ep_port_fd(int portno, int fd_ctl)
 #endif
 							}),i);
 				if (port->vlanuntag < NOVLAN) ba_clr(vlant[port->vlanuntag].bcuntag,portno);
+				if (!(port->flag & NOTINPOOL))
+					free_port(portno);
 			}
 			return rv;	
 		} else
@@ -448,7 +476,7 @@ int portflag(int op,int f)
 	 })
 #endif
 
-#ifdef FSTP
+#if defined(FSTP) || defined(VDE_VTRILL)
 
 /* functions for FSTP */
 void port_send_packet(int portno, void *packet, int len)
@@ -473,8 +501,9 @@ void portset_send_packet(bitarray portset, void *packet, int len)
 			SEND_PACKET_PORT(portv[i],i,packet,len,&tmpbuf), i);
 #endif
 }
+#endif
 
-
+#ifdef FSTP
 void port_set_status(int portno, int vlan, int status)
 {
 	if (ba_check(vlant[vlan].table,portno)) {
@@ -513,7 +542,40 @@ int port_getcost(int port)
 {
 	return portv[port]->cost;
 }
+
+void forallports(int vlan, void (*f)(int vlan, int port, int tagged))
+{
+	int port;
+	if (bac_check(validvlan,vlan)) {
+		ba_FORALL(vlant[vlan].bcuntag,numports, f(vlan,port,0),port);
+		ba_FORALL(vlant[vlan].bctag,numports, f(vlan,port,1),port);
+	}
+}
+
 #endif
+
+#ifdef VDE_VTRILL
+void *port_getvtrill(int portno)
+{
+	if (portno > 0 && portno < numports) {
+		struct port *port=portv[portno];
+		if (port != NULL)
+			return port->vtrilldata;
+		else
+			return NULL;
+	} else
+		return NULL;
+}
+#endif
+
+/************************************ CORE PACKET MGMT *****************************/
+
+/* TAG2UNTAG packet:
+ * +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ *             | Destination     |    Source       |81 00|pvlan| L/T | data
+ * +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ *
+ */
 
 /************************************ CORE PACKET MGMT *****************************/
 
@@ -556,7 +618,6 @@ int port_getcost(int port)
 	 (P)->header.src[4]=(VLAN >> 8); (P)->header.src[5]=(VLAN);\
 	 (struct packet *)((char *)(P)-4); })
 
-
 #ifdef VDE_PQ2
 static int trysendfun(struct endpoint *ep, void *packet, int len)
 {
@@ -578,6 +639,9 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 	int tarport;
 	int vlan,tagged;
 	int port=ep->port;
+#ifdef VDE_VTRILL
+	int fromvtrill;
+#endif
 
 	if(PACKETFILTER(PKTFILTIN,port,packet,len)) {
 
@@ -610,18 +674,112 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 			}
 
 #ifdef FSTP
-			/* when it works as a HUB or FSTP is off, MST packet must be forwarded */
-			if (ISBPDU(packet) && fstflag(P_GETFLAG, FSTP_TAG)) {
+			/* when FSTP is off, MST packet must be forwarded */
+			if (ISBPDU(packet) && FSTVLAN(vlan)) {
 				fst_in_bpdu(port,packet,len,vlan,tagged);
 				return; /* BPDU packets are not forwarded */
 			}
 #endif
+#ifdef VDE_VTRILL
+			if (tagged && vlan==vtrillvlan) {
+				if (ISISIS(packet)) {
+					/* manage isis request */
+					if (ISVISIS(packet))
+						vtrill_in_isis(port, packet, len);
+					return;
+				}
+				if (ISTRILL(packet)) {
+					struct vtrillh *vt_packet = (struct vtrillh *)packet;
+					if (VT_MULTI(vt_packet->vtrilldata)) {
+						/* BROADCAST */
+						/* forward the packets along all the tree branches but the receiving one */
+						/* unpack the header (drop vtrill header) and continue */
+						/* set port to ingress nickname | VTRILLNICKNAME! */
+						/*
+							printf("VTRILL Recv Broadcast \n");
+							packet_dump(packet);
+							*/
+						int ttl;
+						if ((ttl=VT_GETTTL(vt_packet->vtrilldata)) > 0) {
+							unsigned char oldmac[6];
+							ttl--;
+							VT_SETTTL(vt_packet->vtrilldata, ttl);
+							memcpy(oldmac, vt_packet->header.src, ETH_ALEN);
+							memcpy(vt_packet->header.src, switchmac, ETH_ALEN);
+							struct nextmultivtrill *nmvt=broadcast_vtrill(vt_packet->egress);
+							if (nmvt) {
+								int i;
+								for (i=0; i<nmvt->ndst; i++) {
+									if (memcmp(nmvt->dst[i].mac, oldmac, ETH_ALEN) != 0) {
+										int port=nmvt->dst[i].port;
+										if (port > 0) {
+											memcpy(vt_packet->header.dest, nmvt->dst[i].mac, ETH_ALEN);
+#ifndef VDE_PQ2
+											SEND_PACKET_PORT(portv[port],port,packet,len);
+#else
+											void *tmpbuf=NULL;
+											SEND_PACKET_PORT(portv[port],port,packet,len,&tmpbuf);
+#endif
+										}
+									}
+								}
+							}
+						}
+						packet = VTRILL2UNVTRILL(packet,len);
+						vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
+						port = INTNICK(vt_packet->igress) | VTRILLNICKNAME;
+					} else {
+						/* UNICAST */
+						/* if this switch is egress unpack the packet (drop vtrill header) and continue */
+						/* set port to ingress nickname | VTRILLNICKNAME ! */
+						if (memcmp(vt_packet->egress,mynickname,2) == 0) {
+							packet = VTRILL2UNVTRILL(packet,len);
+							port = INTNICK(vt_packet->igress) | VTRILLNICKNAME;
+							vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
+						} else {
+							/* else this not egress forward the packet (delete if TTL is 0) */
+							/* and return */
+							int ttl;
+							if ((ttl=VT_GETTTL(vt_packet->vtrilldata)) == 0)
+								return;
+							else {
+								int myttl;
+								int port = unicast_vtrill_port(INTNICK(vt_packet->egress), 
+										vt_packet->header.dest, &myttl);
+								if (port > 0) {
+									ttl--;
+									VT_SETTTL(vt_packet->vtrilldata, ttl);
+									memcpy(vt_packet->header.src, switchmac, 6);
+#ifndef VDE_PQ2
+									SEND_PACKET_PORT(portv[port],port,packet,len);
+#else
+									void *tmpbuf=NULL;
+									SEND_PACKET_PORT(portv[port],port,packet,len,&tmpbuf);
+#endif
+								}
+								return;
+							}
+						}
+					}
+					fromvtrill=1;
+				} else {
+					fromvtrill=0;
+					/* Mixed vtrill/nonvtrill traffic
+						 has not been implemented yet */
+					return;
+				}
+			} else {
+				fromvtrill=0;
+				/* The port is in blocked status, no packet received */
+				if (ba_check(vlant[vlan].notlearning,port)) return; 
+			}
+#else
 			/* The port is in blocked status, no packet received */
 			if (ba_check(vlant[vlan].notlearning,port)) return; 
+#endif
 
 			/* We don't like broadcast source addresses */
 			if(! (IS_BROADCAST(packet->header.src))) {
-
 				int last = find_in_hash_update(packet->header.src,vlan,port);
 				/* old value differs from actual input port */
 				if(last >=0 && (port != last)){
@@ -631,10 +789,10 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 			/* static void send_dst(int port,struct packet *packet, int len) */
 			if(IS_BROADCAST(packet->header.dest) || 
 					(tarport = find_in_hash(packet->header.dest,vlan)) < 0 ){
-				/* FST HERE! broadcast only on active ports*/
 				/* no cache or broadcast/multicast == all ports *except* the source port! */
 				/* BROADCAST: tag/untag. Broadcast the packet untouched on the ports
 				 * of the same tag-ness, then transform it to the other tag-ness for the others*/
+				/* TODO optimize if none is tagged or untagged */
 				if (tagged) {
 					register int i;
 #ifndef VDE_PQ2
@@ -670,12 +828,74 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len,&tmpbuft);}),i);
 #endif
 				}
-			}
-			else {
+#ifdef VDE_VTRILL
+				/* if this broadcast does not come from vtrill */
+				if (fromvtrill==0 && nreachable>1) {
+					/* choose a tree and send the packet along the adjacent branches */
+					struct vtrillh *vt_packet;
+					/* if untag UNTAG->TAG */
+					if (tagged) /* tagged reverse its logic for the broadcast above */
+						packet = UNTAG2TAG(packet,vlan,len);
+					packet=UNVTRILL2VTRILL(packet,len);
+					vt_packet = (struct vtrillh *)packet;
+					VTRILLH_SETEGRESS(vt_packet, 0xffffU);
+					struct nextmultivtrill *nmvt=broadcast_vtrill(vt_packet->egress);
+					if (nmvt) {
+						int i;
+						memcpy(vt_packet->header.src, switchmac, ETH_ALEN);
+						SETUP_VTRILLH(vt_packet, vtrillvlan, 1, nmvt->ttl);
+						for (i=0; i<nmvt->ndst; i++) {
+							int port=nmvt->dst[i].port;
+							if (port > 0) {
+								memcpy(vt_packet->header.dest, nmvt->dst[i].mac, ETH_ALEN);
+								//printf("VTRILL Send broadcast\n");
+								//packet_dump(packet);
+#ifndef VDE_PQ2
+								SEND_PACKET_PORT(portv[port],port,packet,len);
+#else
+								void *tmpbuf=NULL;
+								SEND_PACKET_PORT(portv[port],port,packet,len,&tmpbuf);
+#endif
+							}
+						}
+					}
+				}
+#endif
+			} else {
 				/* the hash table should not generate tarport not in vlan 
 				 * any time a port is removed from a vlan, the port is flushed from the hash */
 				if (tarport==port)
 					return; /*do not loop!*/
+#ifdef VDE_VTRILL
+				if (tarport & VTRILLNICKNAME) {
+					//printf("SEND UNICAST VTRILL %p %d\n", packet, len);
+					/* do not reinsert packet from vtrill in vtrill again! */
+					if (fromvtrill==0) {
+						struct vtrillh *vt_packet;
+						int port;
+						int ttl;
+						/* if untag UNTAG->TAG */
+						if (!(tagged))
+							packet = UNTAG2TAG(packet,vlan,len);
+						/* wrap the packet by the vtrill header and send it to the first hop */
+						packet=UNVTRILL2VTRILL(packet,len);
+						vt_packet = (struct vtrillh *)packet;
+						port = unicast_vtrill_port(get_vtrillnickname(tarport), 
+								vt_packet->header.dest, &ttl);
+						if (port > 0) {
+							SETUP_VTRILLH(vt_packet, vtrillvlan, 0, ttl);
+							VTRILLH_SETEGRESS(vt_packet, get_vtrillnickname(tarport));
+#ifndef VDE_PQ2
+							SEND_PACKET_PORT(portv[port],port,packet,len);
+#else
+							void *tmpbuf=NULL;
+							SEND_PACKET_PORT(portv[port],port,packet,len,&tmpbuf);
+						}
+#endif
+					}
+					return;
+				}
+#endif
 #ifndef VDE_PQ2
 				if (tagged) {
 					if (portv[tarport]->vlanuntag==vlan) { /* TAG->UNTAG */
@@ -735,7 +955,7 @@ static int showinfo(FILE *fd)
 
 static int portsetnumports(int val)
 {
-	if(val > 0) {
+	if(val > 0 && val < MAXPORT) {
 		/*resize structs*/
 		int i;
 		for(i=val;i<numports;i++)
@@ -781,13 +1001,16 @@ static int portsetnumports(int val)
 #ifdef FSTP
 		fstsetnumports(val);
 #endif
+#ifdef VDE_VTRILL
+		vtrillsetnumports(val);
+#endif
 		numports=val;
 		return 0;
 	} else 
 		return EINVAL;
 }
 
-static int portallocatable(char *arg)
+static int portpreconfigure(char *arg)
 {
 	int port,value;
 	if (sscanf(arg,"%i %i",&port,&value) != 2)
@@ -797,9 +1020,9 @@ static int portallocatable(char *arg)
 	if (portv[port] == NULL)
 		return ENXIO;
 	if (value)
-		portv[port]->flag &= ~NOTINPOOL;
-	else
 		portv[port]->flag |= NOTINPOOL;
+	else
+		portv[port]->flag &= ~NOTINPOOL;
 	return 0;
 }
 
@@ -959,10 +1182,10 @@ static int print_port(FILE *fd,int i,int inclinactive)
 {
 	struct endpoint *ep;
 	if (portv[i] != NULL && (inclinactive || portv[i]->ep!=NULL)) {
-		printoutc(fd,"Port %04d untagged_vlan=%04d %sACTIVE - %sUnnamed Allocatable",
+		printoutc(fd,"Port %04d untagged_vlan=%04d %sACTIVE - %s",
 				i,portv[i]->vlanuntag,
 				portv[i]->ep?"":"IN",
-				(portv[i]->flag & NOTINPOOL)?"NOT ":"");
+				(portv[i]->flag & NOTINPOOL)?"preconfigured":"");
 		printoutc(fd," Current User: %s Access Control: (User: %s - Group: %s)", 
 				port_getuser(portv[i]->curuser),
 				port_getuser(portv[i]->user), 
@@ -1059,36 +1282,44 @@ static int portsethub(int val)
 	return 0;
 }
 
-static int portsetvlan(char *arg)
+static int portsetvlan_nocheck(int port,int vlan)
 {
-	int port,vlan;
-	if (sscanf(arg,"%i %i",&port,&vlan) != 2)
-		return EINVAL;
 	/* port NOVLAN is okay here, it means NO untagged traffic */
 	if (vlan <0 || vlan > NUMOFVLAN || port < 0 || port >= numports) 
 		return EINVAL;
 	if ((vlan != NOVLAN && !bac_check(validvlan,vlan)) || portv[port] == NULL)
 		return ENXIO;
 	int oldvlan=portv[port]->vlanuntag;
-	portv[port]->vlanuntag=NOVLAN;
-	hash_delete_port(port);
-	if (portv[port]->ep != NULL) {
-		/*changing active port*/
-		if (oldvlan != NOVLAN) 
-			ba_clr(vlant[oldvlan].bcuntag,port);
-		if (vlan != NOVLAN) {
-			ba_set(vlant[vlan].bcuntag,port);
-			ba_clr(vlant[vlan].bctag,port);
-		}
+	/* if the user redefines the same untagged vlan there is nothing to do. */
+	if (oldvlan != vlan) {
+		portv[port]->vlanuntag=NOVLAN;
+		hash_delete_port(port);
+		if (portv[port]->ep != NULL) {
+			/*changing active port*/
+			if (oldvlan != NOVLAN) 
+				ba_clr(vlant[oldvlan].bcuntag,port);
+			if (vlan != NOVLAN) {
+				ba_set(vlant[vlan].bcuntag,port);
+				ba_clr(vlant[vlan].bctag,port);
+			}
 #ifdef FSTP
-		if (oldvlan != NOVLAN) fstdelport(oldvlan,port);
-		if (vlan != NOVLAN) fstaddport(vlan,port,0);
+			if (oldvlan != NOVLAN) fstdelport(oldvlan,port);
+			if (vlan != NOVLAN) fstaddport(vlan,port,0);
 #endif
+		}
+		if (oldvlan != NOVLAN) ba_clr(vlant[oldvlan].table,port);
+		if (vlan != NOVLAN) ba_set(vlant[vlan].table,port);
+		portv[port]->vlanuntag=vlan;
 	}
-	if (oldvlan != NOVLAN) ba_clr(vlant[oldvlan].table,port);
-	if (vlan != NOVLAN) ba_set(vlant[vlan].table,port);
-	portv[port]->vlanuntag=vlan;
 	return 0;
+}
+
+static int portsetvlan(char *arg)
+{
+	int port,vlan;
+	if (sscanf(arg,"%i %i",&port,&vlan) != 2)
+		return EINVAL;
+	return portsetvlan_nocheck(port,vlan);
 }
 
 static int vlancreate_nocheck(int vlan)
@@ -1103,7 +1334,8 @@ static int vlancreate_nocheck(int vlan)
 		return ENOMEM;
 	else {
 #ifdef FSTP
-		rv=fstnewvlan(vlan);
+		if (vlan == 0 && fstflag(P_GETFLAG,FSTP_TAG))
+			rv=fstnewvlan(vlan);
 #endif
 		if (rv == 0) {
 			bac_set(validvlan,NUMOFVLAN,vlan);
@@ -1128,7 +1360,7 @@ static int vlanremove(int vlan)
 	if (vlan >= 0 && vlan < NUMOFVLAN) {
 		if (bac_check(validvlan,vlan)) {
 			register int i,used=0;
-			ba_FORALL(vlant[vlan].table,numports,used++,i);
+			ba_FORALL(vlant[vlan].table,numports,({used++;i;}),i);
 			if (used)
 				return EADDRINUSE;
 			else {
@@ -1152,24 +1384,36 @@ static int vlanremove(int vlan)
 		return EINVAL;
 }
 
-static int vlanaddport(char *arg)
+static int vlanaddport_nocheck(int port, int vlan)
 {
-	int port,vlan;
-	if (sscanf(arg,"%i %i",&vlan,&port) != 2)
-		return EINVAL;
 	if (vlan <0 || vlan >= NUMOFVLAN-1 || port < 0 || port >= numports)
 		return EINVAL;
 	if (!bac_check(validvlan,vlan) || portv[port] == NULL)
 		return ENXIO;
 	if (portv[port]->ep != NULL && portv[port]->vlanuntag != vlan) {
-		/* changing active port*/
-		ba_set(vlant[vlan].bctag,port);
+		/* if the port is already untagged for that vlan there is nothing to do */ 
+		if (!bac_check(vlant[vlan].bctag,port)) {
+			/* changing active port*/
+			ba_set(vlant[vlan].bctag,port);
 #ifdef FSTP
-		fstaddport(vlan,port,1);
+			fstaddport(vlan,port,1);
 #endif
+#ifdef VDE_VTRILL
+			if (ba_check(vlant[vtrillvlan].bctag,port))
+				portv[port]->vtrilldata=vtrill_newport(port);
+#endif
+		}
 	}
 	ba_set(vlant[vlan].table,port);
 	return 0;
+}
+
+static int vlanaddport(char *arg)
+{
+	int port,vlan;
+	if (sscanf(arg,"%i %i",&vlan,&port) != 2)
+		return EINVAL;
+	return vlanaddport_nocheck(port,vlan);
 }
 
 static int vlandelport(char *arg)
@@ -1189,10 +1433,77 @@ static int vlandelport(char *arg)
 #ifdef FSTP
 		fstdelport(vlan,port);
 #endif
+#ifdef VDE_VTRILL
+		if (ba_check(vlant[vtrillvlan].bctag,port)) {
+			vtrill_delport(port,portv[port]->vtrilldata);
+			portv[port]->vtrilldata=NULL;
+		}
+#endif
 	}
 	ba_clr(vlant[vlan].table,port);
 	hash_delete_port(port);
 	return 0;
+}
+
+#ifdef VDE_VTRILL
+
+static int vlanvtrill(int vlan)
+{
+	if (vlan > 0 && vlan < NUMOFVLAN) { /*vlan NOVLAN (0xfff a.k.a. 4095) means no vtrill */
+		if (!bac_check(validvlan,vlan))
+			return ENXIO;
+		if (vlan != vtrillvlan) {
+			if (vtrillvlan != 0xfff)
+				vtrill_disable();
+			vtrillvlan=vlan;
+			vtrill_enable(vlant[vlan].bctag,vtrillvlan);
+		}
+		return 0;
+	} else if (vlan == 0xfff) {
+		vtrill_disable();
+		vtrillvlan=vlan;
+		return 0;
+	} else
+		return EINVAL;
+}
+
+static int showvtrill(FILE *fd)
+{
+	printoutc(fd,"vtrill is %sabled",(vtrillvlan==4095)?"dis":"en");
+	printoutc(fd,"vtrill vlan=%d",vtrillvlan);
+	return 0;
+}
+
+#endif
+
+static int portsetup(int portno, char *setup)
+{
+	int rv=0;
+	while (*setup) {
+		if (*setup == ',') setup++;
+		switch (*setup) {
+			case 'u':
+				rv=portsetvlan_nocheck(portno,atoi(++setup));
+				break;
+			case 't':
+				rv=vlanaddport_nocheck(portno,atoi(++setup));
+				break;
+		}
+		if (rv != 0) break;
+		while (*setup && (*setup == ',' || isdigit(*setup)))
+			setup++;
+	}
+	return rv;
+}
+
+static int portvlansetup(char *arg)
+{
+	char *setup;
+	setup=strchr(arg,' ');
+	if (setup == NULL)
+		return EINVAL;
+	setup++;
+	return portsetup(atoi(arg),setup);
 }
 
 #define STRSTATUS(PN,V) \
@@ -1204,41 +1515,12 @@ static void vlanprintactive(int vlan,FILE *fd)
 {
 	register int i;
 	printoutc(fd,"VLAN %04d",vlan);
-#ifdef FSTP
-	if (pflag & FSTP_TAG) {
-#if 0
-		printoutc(fd," ++ FST root %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x \n"
-				"        designated %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x port %d cost %d age %d",
-				fsttab[vlan]->root[0], fsttab[vlan]->root[1], fsttab[vlan]->root[2], fsttab[vlan]->root[3],
-				fsttab[vlan]->root[4], fsttab[vlan]->root[5], fsttab[vlan]->root[6], fsttab[vlan]->root[7],
-				fsttab[vlan]->desbr[0], fsttab[vlan]->desbr[1], fsttab[vlan]->desbr[2], fsttab[vlan]->desbr[3],
-				fsttab[vlan]->desbr[4], fsttab[vlan]->desbr[5], fsttab[vlan]->desbr[6], fsttab[vlan]->desbr[7],
-				fsttab[vlan]->rootport, 
-				ntohl(*(u_int32_t *)(&(fsttab[vlan]->rootcost))),
-				qtime()-fsttab[vlan]->roottimestamp);
-		ba_FORALL(vlant[vlan].table,numports,
-				({ int tagged=portv[i]->vlanuntag != vlan;
-				 if (portv[i]->ep)
-				 printoutc(fd," -- Port %04d tagged=%d act=%d learn=%d forw=%d cost=%d role=%s",
-					 i, tagged, 1, !(NOTLEARNING(i,vlan)),
-					 (tagged)?(ba_check(vlant[vlan].bctag,i) != 0):(ba_check(vlant[vlan].bcuntag,i) != 0),
-					 portv[i]->cost,
-					 (fsttab[vlan]->rootport==i?"Root":
-						((ba_check(fsttab[vlan]->backup,i)?"Alternate/Backup":"Designated")))
-					 ); 0;
-				 }) ,i);
-#endif
-	} else {
-#endif
-		ba_FORALL(vlant[vlan].table,numports,
-				({ int tagged=portv[i]->vlanuntag != vlan;
-				 if (portv[i]->ep)
-				 printoutc(fd," -- Port %04d tagged=%d active=1 status=%s", i, tagged, 
-					 STRSTATUS(i,vlan));
-				 }), i);
-#ifdef FSTP
-	}
-#endif
+	ba_FORALL(vlant[vlan].table,numports,
+			({ int tagged=portv[i]->vlanuntag != vlan;
+			 if (portv[i]->ep)
+			 printoutc(fd," -- Port %04d tagged=%d active=1 status=%s", i, tagged, 
+				 STRSTATUS(i,vlan));
+			 }), i);
 }
 
 static int vlanprint(FILE *fd,char *arg)
@@ -1339,11 +1621,11 @@ static struct comlist cl[]={
 	{"port/setnumports","N","set the number of ports",portsetnumports,INTARG},
 	/*{"port/setmacaddr","MAC","set the switch MAC address",setmacaddr,STRARG},*/
 	{"port/sethub","0/1","1=HUB 0=switch",portsethub,INTARG},
-	{"port/setvlan","N VLAN","set port VLAN (untagged)",portsetvlan,STRARG},
+	{"port/setvlan","N VLAN","set port VLAN (untagged, 4095 for none)",portsetvlan,STRARG},
 	{"port/createauto","","create a port with an automatically allocated id (inactive|notallocatable)",portcreateauto,NOARG|WITHFILE},
-	{"port/create","N","create the port N (inactive|notallocatable)",portcreate,INTARG},
+	{"port/create","N","create port N for preconfiguration",portcreate,INTARG},
 	{"port/remove","N","remove the port N",portremove,INTARG},
-	{"port/allocatable","N 0/1","Is the port allocatable as unnamed? 1=Y 0=N",portallocatable,STRARG},
+	{"port/preconfigure","N 0/1","Is the port allocatable as unnamed? 1=Y 0=N",portpreconfigure,STRARG},
 	{"port/setuser","N user","access control: set user",portsetuser,STRARG},
 	{"port/setgroup","N user","access control: set group",portsetgroup,STRARG},
 	{"port/epclose","N ID","remove the endpoint port N/id ID",epclose,STRARG},
@@ -1354,6 +1636,7 @@ static struct comlist cl[]={
 #ifdef PORTCOUNTERS
 	{"port/resetcounter","[N]","reset the port (N) counters",portresetcounters,STRARG},
 #endif
+	{"port/vlansetup","N SETUPSTR","fast vlan def (see manual)",portvlansetup,STRARG},
 	{"port/print","[N]","print the port/endpoint table",print_ptable,STRARG|WITHFILE},
 	{"port/allprint","[N]","print the port/endpoint table (including inactive port)",print_ptableall,STRARG|WITHFILE},
 	{"vlan","============","VLAN MANAGEMENT MENU",NULL,NOARG},
@@ -1361,6 +1644,10 @@ static struct comlist cl[]={
 	{"vlan/remove","N","remove the VLAN with tag N",vlanremove,INTARG},
 	{"vlan/addport","N PORT","add port to the vlan N (tagged)",vlanaddport,STRARG},
 	{"vlan/delport","N PORT","add port to the vlan N (tagged)",vlandelport,STRARG},
+#ifdef VDE_VTRILL
+	{"vlan/vtrill","","show vtrill status/vlan",showvtrill,NOARG|WITHFILE},
+	{"vlan/setvtrill","N","set the vtrill vlan (4095 for none)",vlanvtrill,INTARG},
+#endif
 	{"vlan/print","[N]","print the list of defined vlan",vlanprint,STRARG|WITHFILE},
 	{"vlan/allprint","[N]","print the list of defined vlan (including inactive port)",vlanprintall,STRARG|WITHFILE},
 };
@@ -1369,6 +1656,10 @@ void port_init(int initnumports)
 {
 	if((numports=initnumports) <= 0) {
 		printlog(LOG_ERR,"The switch must have at least 1 port\n");
+		exit(1);
+	}
+	if(numports > MAXPORT) {
+		printlog(LOG_ERR,"Max # of ports (%d) exceeded\n",MAXPORT);
 		exit(1);
 	}
 	portv=calloc(numports,sizeof(struct port *));

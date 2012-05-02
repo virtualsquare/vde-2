@@ -19,12 +19,41 @@ vde_plug \- Virtual Distributed Ethernet plug (two plugs creates a vde cable)
 .I socketdir
 ]
 .br
+.B vde_plug
+[
+.B \-p
+.I port
+]
+[
+.B \-g
+.I group
+]
+[
+.B \-m
+.I mode
+]
+[
+.B \-P
+.I port
+]
+[
+.B \-G
+.I group
+]
+[
+.B \-M
+.I mode
+]
+.I socketdir1 socketdir2
+.br
+
 .SH DESCRIPTION
 A
 \fBvde_plug\fP 
 is a plug to be connected into a VDE switch.
 All the data that is catched by the plug is written in its stdout and
 everything from stdin is injected in the switch.
+The syntax using two socketdirs connects two switches together.
 
 This tool has been designed to be used together with 
 .B dpipe (1)
@@ -37,8 +66,13 @@ The command
 .B dpipe vde_plug = vde_plug /tmp/vde2.ctl
 .RE
 connects two local switches: the former is using the standard control socket /tmp/vde.ctl
-while the latter is using /tmp/vde2.ctl.
+(or /var/run/vde.ctl) while the latter is using /tmp/vde2.ctl.
 
+This command is equivalent to:
+.RS
+.br
+.B vde_plug /tmp/vde.ctl /tmp/vde2.ctl
+.RE
 
 The command
 .RS
@@ -89,9 +123,14 @@ octal chmod like permissions for the comm sockets
 The default value is "/tmp/vde.ctl", which corresponds to the socket
 "/tmp/vde.ctl/ctl" (or /var/run/vde.ctl when the vde_switch runs as a 
 shared daemon).
-It is possible for users to redefine their default switch as ".vde-2/stdsock"
-in their home directory. If exist, this directory (or symbolic link to
-the actual directory) is used as the default value for the user.
+It is possible for users to redefine their default switch. The file ".vde-2/default.switch"
+in a user's home directory is used as his/her standard switch. If it exists, this directory 
+(or symbolic link to the actual directory) is used as the default value for the user.
+.TP
+.B \-P \-G \-M
+These options, valid in the syntax with two socketdirs, have the the same meaning of \-p \-g \-m.
+The uppercase options refer to the second socketdir.
+
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"

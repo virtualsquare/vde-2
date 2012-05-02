@@ -17,14 +17,18 @@ struct ethheader {
 	unsigned char src[ETH_ALEN];
 	unsigned char proto[2];
 };
+/* space for extra headers */
+/* 4 for 802.1Q + 4 for 802.1ad + 10+14 for TRILL or VTRILL */
+
+#define OPTHEADERS_SIZE 32 
 
 struct packet {
 	struct ethheader header;
-  unsigned char data[1504]; /*including trailer, IF ANY */
+  unsigned char data[1500 + OPTHEADERS_SIZE];
 };
 
 struct bipacket {
-	char filler[4];
+	char filler[OPTHEADERS_SIZE];
 	struct packet p;
 };
 
@@ -46,7 +50,8 @@ struct mod_support {
 extern struct endpoint *setup_ep(int portno, int fd_ctl,
 		int fd_data,
 		uid_t user,
-		struct mod_support *modfun);
+		struct mod_support *modfun,
+		char *setup);
 
 extern int ep_get_port(struct endpoint *ep);
 
@@ -71,18 +76,30 @@ int portflag(int op, int f);
 
 void port_init(int numports);
 
-
 #define DISCARDING 0
 #define LEARNING   1
 /* forwarding implies learning */
 #define FORWARDING 3
 
-#ifdef FSTP
+#if defined(FSTP) || defined(VDE_VTRILL)
 void port_send_packet(int portno, void *packet, int len);
 void portset_send_packet(bitarray portset, void *packet, int len);
+#endif
+#ifdef FSTP
 void port_set_status(int portno, int vlan, int status);
 int port_get_status(int portno, int vlan);
 int port_getcost(int port);
+void forallports(int vlan, void (*f)(int vlan, int port, int tagged));
+#endif
+
+#ifdef VDE_VTRILL
+void *port_getvtrill(int portno);
+
+#define VTRILLNICKNAME 0x40000000
+#define MAXPORT 0x40000000
+#define get_vtrillnickname(X) ((X) & ~MAXPORT)
+#else
+#define MAXPORT 0x80000000
 #endif
 
 #endif

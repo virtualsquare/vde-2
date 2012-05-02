@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include <vde.h>
+#include <switch.h>
 #include <vdecommon.h>
 
 #include "consmgmt.h"

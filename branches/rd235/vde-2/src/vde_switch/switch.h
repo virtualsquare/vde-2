@@ -11,6 +11,11 @@ typedef unsigned char uchar;
 #define FSTP
 /* POLL Main LOOP Optimization */
 #define OPTPOLL
+/* PQ2  Optimized Packet Queueing */
+#define VDE_PQ2
+/* VTRILL vtrill support */
+#define VDE_VTRILL
+
 
 #ifdef _MALLOC_DEBUG
 #define free(X) ({ printf("MDBG-FREE %p %s %d\n",(X),__FILE__,__LINE__); \
@@ -49,6 +54,7 @@ void add_fd(int fd,unsigned char type,void *private_data);
 void remove_fd(int fd);
 void *mainloop_get_private_data(int fd);
 void mainloop_set_private_data(int fd,void *private_data);
+void mainloop_set_type(int fd,unsigned char type);
 short mainloop_pollmask_get(int fd);
 void mainloop_pollmask_add(int fd, short events);
 void mainloop_pollmask_del(int fd, short events);
