@@ -24,6 +24,7 @@
 #include <net/if.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <ctype.h>
 #include <grp.h>
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -41,10 +42,11 @@ static struct swmodule swmi;
 static struct mod_support modfun;
 static unsigned int ctl_type;
 static unsigned int wd_type;
+static unsigned int wd_pg_type;
 static unsigned int data_type;
 
-static char *rel_ctl_socket = NULL;
-static char ctl_socket[PATH_MAX];
+static char *rel_ctl_socketdir = NULL;
+static char ctl_socketdir[PATH_MAX];
 
 static int mode = -1;
 static int dirmode = -1;
@@ -55,6 +57,14 @@ static gid_t grp_owner = -1;
 #define DATA_BUF_SIZE 131072
 #define SWITCH_MAGIC 0xfeedface
 #define REQBUFLEN 256
+
+struct portgroup {
+	int fd;
+	char *name;
+	char *defs;
+	struct portgroup *next;
+};
+struct portgroup *portgroups;
 
 enum request_type { REQ_NEW_CONTROL, REQ_NEW_PORT0 };
 
@@ -102,7 +112,7 @@ static int send_datasock(int fd_ctl, int fd_data, void *packet, int len, int por
 		})
 
 static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
-		struct sockaddr_un *sun_out)
+		struct sockaddr_un *sun_out, char *defs)
 {
 	int n, portno;
 	struct endpoint *ep;
@@ -158,13 +168,13 @@ static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 				return NULL;
 			}
 
-			ep = setup_ep(port_request, fd_ctl, fd_data, user, &modfun); 
+			ep = setup_ep(port_request, fd_ctl, fd_data, user, &modfun, defs); 
 			if(ep == NULL)
 				return NULL;
 			portno=ep_get_port(ep);
 			add_fd(fd_data,data_type,ep);
 			sun_in.sun_family = AF_UNIX;
-			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d.%d",ctl_socket,portno,fd_data);
+			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d.%d",ctl_socketdir,portno,fd_data);
 
 			if ((unlink(sun_in.sun_path) < 0 && errno != ENOENT) ||
 					bind(fd_data, (struct sockaddr *) &sun_in, sizeof(struct sockaddr_un)) < 0){
@@ -225,7 +235,7 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 				handle_in_packet(ep, &(packet.p), len);
 		}
 	}
-	else if (type == wd_type) {
+	else if (type == wd_type || type == wd_pg_type) {
 		char reqbuf[REQBUFLEN+1];
 		union request *req=(union request *)reqbuf;
 		int len;
@@ -241,8 +251,10 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 			reqbuf[len]=0;
 			if(req->v1.magic == SWITCH_MAGIC){
 				if(req->v3.version == 3) {
-					ep=new_port_v1_v3(fd, req->v3.type, &(req->v3.sock));
+					ep=new_port_v1_v3(fd, req->v3.type, &(req->v3.sock), arg);
 					if (ep != NULL) {
+						if (type==wd_pg_type)
+							mainloop_set_type(fd, wd_type);
 						mainloop_set_private_data(fd,ep);
 						setup_description(ep,strdup(req->v3.description));
 					}
@@ -253,8 +265,10 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 					remove_fd(fd); 
 				}
 				else {
-					ep=new_port_v1_v3(fd, req->v1.type, &(req->v1.u.new_control.name));
+					ep=new_port_v1_v3(fd, req->v1.type, &(req->v1.u.new_control.name), arg);
 					if (ep != NULL) {
+						if (type==wd_pg_type)
+							mainloop_set_type(fd, wd_type);
 						mainloop_set_private_data(fd,ep);
 						setup_description(ep,strdup(req->v1.description));
 					}
@@ -276,6 +290,7 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 		struct sockaddr addr;
 		socklen_t len;
 		int new;
+		struct portgroup *pg=arg;
 
 		len = sizeof(addr);
 		new = accept(fd, &addr, &len);
@@ -290,8 +305,96 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 			return;
 		}*/
 
-		add_fd(new,wd_type,NULL);
+		if (pg)
+			add_fd(new,wd_pg_type,pg->defs);
+		else
+			add_fd(new,wd_type,NULL);
 	}
+}
+
+static int addportgroup(char *name, char *defs, int mode, gid_t group)
+{
+	struct portgroup **pg=&portgroups;
+	int connect_fd;
+	struct sockaddr_un sun;
+	int one = 1;
+
+	while (*pg != NULL) {
+		if (strcmp((*pg)->name,name) == 0)
+			return EEXIST;
+		pg=&((*pg)->next);
+	}
+	if((connect_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
+		printlog(LOG_ERR,"Could not obtain a BSD socket: %s", strerror(errno));
+		return EIO;
+	}
+	if(setsockopt(connect_fd, SOL_SOCKET, SO_REUSEADDR, (char *) &one,
+				sizeof(one)) < 0){
+		printlog(LOG_ERR,"Could not set socket options on %d: %s", connect_fd, strerror(errno));
+		goto errio;
+	}
+	if(fcntl(connect_fd, F_SETFL, O_NONBLOCK) < 0){
+		printlog(LOG_ERR,"Could not set O_NONBLOCK on connection fd %d: %s", connect_fd, strerror(errno));
+		goto errio;
+	}
+	sun.sun_family = AF_UNIX;
+	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/%s",ctl_socketdir,name);
+	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
+		if((errno == EADDRINUSE) && still_used(&sun)){
+			printlog(LOG_ERR, "Could not bind to socket '%s/ctl': %s", ctl_socketdir, strerror(errno));
+			goto errio;
+		}
+		else if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
+			printlog(LOG_ERR, "Could not bind to socket '%s/ctl' (second attempt): %s", ctl_socketdir, strerror(errno));
+			goto errio;
+		}
+	}
+	chmod(sun.sun_path,mode);
+	if(chown(sun.sun_path,-1,group) < 0) {
+		printlog(LOG_ERR, "Could not chown socket '%s': %s", sun.sun_path, strerror(errno));
+		goto erriounlink;
+	}
+	if(listen(connect_fd, 15) < 0){
+		printlog(LOG_ERR,"Could not listen on fd %d: %s", connect_fd, strerror(errno));
+		goto erriounlink;
+	}
+	*pg=malloc(sizeof(struct portgroup));
+	if (*pg == NULL) {
+		close(connect_fd);
+		unlink(sun.sun_path);
+		return ENOMEM;
+	}
+	(*pg)->fd=connect_fd;
+	(*pg)->name=strdup(name);
+	(*pg)->defs=strdup(defs);
+	(*pg)->next=NULL;
+	add_fd(connect_fd,ctl_type,*pg);
+	return 0;
+erriounlink:
+	unlink(sun.sun_path);
+errio:
+	close(connect_fd);
+	return EIO;   
+}
+
+static int delportgroup(char *name)
+{ 
+	struct portgroup **pg=&portgroups;
+	struct portgroup *old;
+	while (*pg != NULL) {
+		if (strcmp((*pg)->name,name) == 0)
+			break;
+		pg=&((*pg)->next);
+	}
+	if (*pg == NULL)
+		return ENOENT;
+	old=*pg;
+	remove_fd(old->fd);
+	free(old->name);
+	free(old->defs);
+	*pg=old->next;
+	free(old);
+	return 0;
 }
 
 static void cleanup(unsigned char type,int fd,void *arg)
@@ -300,27 +403,32 @@ static void cleanup(unsigned char type,int fd,void *arg)
 	int test_fd;
 
 	if (fd < 0) {
-		if (!strlen(ctl_socket)) {
-			/* ctl_socket has not been created yet */
+		if (!strlen(ctl_socketdir)) {
+			/* ctl_socketdir has not been created yet */
 			return;
 		}
 		if((test_fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
 			printlog(LOG_ERR,"socket %s",strerror(errno));
 		}
 		clun.sun_family=AF_UNIX;
-		snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/ctl",ctl_socket);
+		snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/ctl",ctl_socketdir);
 		if(connect(test_fd, (struct sockaddr *) &clun, sizeof(clun))){
 			close(test_fd);
 			if(unlink(clun.sun_path) < 0)
-				printlog(LOG_WARNING,"Could not remove ctl socket '%s': %s", ctl_socket, strerror(errno));
-			else if(rmdir(ctl_socket) < 0)
-				printlog(LOG_WARNING,"Could not remove ctl dir '%s': %s", ctl_socket, strerror(errno));
+				printlog(LOG_WARNING,"Could not remove ctl socket '%s': %s", ctl_socketdir, strerror(errno));
+			else if(rmdir(ctl_socketdir) < 0)
+				printlog(LOG_WARNING,"Could not remove ctl dir '%s': %s", ctl_socketdir, strerror(errno));
 		}
 		else printlog(LOG_WARNING,"Cleanup not removing files");
 	} else {
+		if (type == ctl_type && arg != NULL) {
+			struct portgroup *pg=arg;
+			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%s",ctl_socketdir,pg->name);
+			unlink(clun.sun_path);
+		}
 		if (type == data_type && arg != NULL) {
 			int portno=ep_get_port(arg);
-			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d.%d",ctl_socket,portno,fd);
+			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d.%d",ctl_socketdir,portno,fd);
 			unlink(clun.sun_path);
 		}
 		close(fd);
@@ -360,7 +468,7 @@ static int parseopt(int c, char *optarg)
 	struct group *grp;
 	switch (c) {
 		case 's':
-			if (!(rel_ctl_socket = strdup(optarg))) {
+			if (!(rel_ctl_socketdir = strdup(optarg))) {
 				fprintf(stderr, "Memory error while parsing '%s'\n", optarg);
 				exit(1);
 			}
@@ -429,39 +537,39 @@ static void init(void)
 		printlog(LOG_ERR,"Could not set O_NONBLOCK on connection fd %d: %s", connect_fd, strerror(errno));
 		return;
 	}
-	/* resolve ctl_socket, eventually defaulting to standard paths */
-	if (rel_ctl_socket == NULL) {
-		rel_ctl_socket = (geteuid()==0)?VDESTDSOCK:VDETMPSOCK;
+	/* resolve ctl_socketdir, eventually defaulting to standard paths */
+	if (rel_ctl_socketdir == NULL) {
+		rel_ctl_socketdir = (geteuid()==0)?VDESTDSOCK:VDETMPSOCK;
 	}
-	if (((mkdir(rel_ctl_socket, 0777) < 0) && (errno != EEXIST))) {
+	if (((mkdir(rel_ctl_socketdir, 0777) < 0) && (errno != EEXIST))) {
 		fprintf(stderr,"Cannot create ctl directory '%s': %s\n",
-			rel_ctl_socket, strerror(errno));
+			rel_ctl_socketdir, strerror(errno));
 		exit(-1);
 	}
-	if (!vde_realpath(rel_ctl_socket, ctl_socket)) {
+	if (!vde_realpath(rel_ctl_socketdir, ctl_socketdir)) {
 		fprintf(stderr,"Cannot resolve ctl dir path '%s': %s\n",
-			rel_ctl_socket, strerror(errno));
+			rel_ctl_socketdir, strerror(errno));
 		exit(1);
 	}
 
-	if(chown(ctl_socket,-1,grp_owner) < 0) {
-		rmdir(ctl_socket);
+	if(chown(ctl_socketdir,-1,grp_owner) < 0) {
+		rmdir(ctl_socketdir);
 		printlog(LOG_ERR, "Could not chown socket '%s': %s", sun.sun_path, strerror(errno));
 		exit(-1);
 	}
-	if (chmod(ctl_socket, dirmode) < 0) {
-		printlog(LOG_ERR,"Could not set the VDE ctl directory '%s' permissions: %s", ctl_socket, strerror(errno));
+	if (chmod(ctl_socketdir, dirmode) < 0) {
+		printlog(LOG_ERR,"Could not set the VDE ctl directory '%s' permissions: %s", ctl_socketdir, strerror(errno));
 		exit(-1);
 	}
 	sun.sun_family = AF_UNIX;
-	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
+	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socketdir);
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		if((errno == EADDRINUSE) && still_used(&sun)){
-			printlog(LOG_ERR, "Could not bind to socket '%s/ctl': %s", ctl_socket, strerror(errno));
+			printlog(LOG_ERR, "Could not bind to socket '%s/ctl': %s", ctl_socketdir, strerror(errno));
 			exit(-1);
 		}
 		else if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-			printlog(LOG_ERR, "Could not bind to socket '%s/ctl' (second attempt): %s", ctl_socket, strerror(errno));
+			printlog(LOG_ERR, "Could not bind to socket '%s/ctl' (second attempt): %s", ctl_socketdir, strerror(errno));
 			exit(-1);
 	 	}
 	} 
@@ -476,13 +584,68 @@ static void init(void)
 	}
 	ctl_type=add_type(&swmi,0);
 	wd_type=add_type(&swmi,0);
+	wd_pg_type=add_type(&swmi,0);
 	data_type=add_type(&swmi,1);
 	add_fd(connect_fd,ctl_type,NULL);
 }
 
+static int dsaddportgroup(char *arg)
+{
+	char *name;
+	char *defs;
+	char *perm;
+	char *group;
+	int pgmode;
+	gid_t pggroup;
+	struct group *grp;
+	while (*arg && *arg==' ') arg++;
+	name=arg;
+	while (*arg && *arg!=' ') arg++;
+	*arg=0; arg++;
+	while (*arg && *arg==' ') arg++;
+	defs=arg;
+	while (*arg && *arg!=' ') arg++;
+	*arg=0; arg++;
+	while (*arg && *arg==' ') arg++;
+	perm=arg;
+	while (*arg && *arg!=' ') arg++;
+	*arg=0; arg++;
+	while (*arg && *arg==' ') arg++;
+	group=arg;
+	if (*name==0 || *defs==0 || isdigit(*name))
+		return EINVAL;
+	if (*perm)
+		sscanf(perm,"%o",&pgmode);
+	else
+		pgmode=mode;
+	if (*group) {
+		if (!(grp = getgrnam(group))) 
+			return EINVAL;
+		pggroup=grp->gr_gid;
+	} else 
+		pggroup=grp_owner;
+	//printf("%s %s %o %d\n",name,defs,pgmode,pggroup);
+	return addportgroup(name,defs,pgmode,pggroup);
+}
+
+static int dsdelportgroup(char *arg)
+{
+	return delportgroup(arg);
+}
+
+static int dsprintportgroup(FILE *fd)
+{
+	struct portgroup *pg=portgroups;
+	while (pg) {
+		printoutc(fd, "port group \"%s\" defs: %s",pg->name,pg->defs);
+		pg=pg->next;
+	}
+	return 0;
+}
+
 static int showinfo(FILE *fd)
 {
-	printoutc(fd,"ctl dir %s",ctl_socket);
+	printoutc(fd,"ctl dir %s",ctl_socketdir);
 	printoutc(fd,"std mode 0%03o",mode);
 	return 0;
 }
@@ -490,6 +653,10 @@ static int showinfo(FILE *fd)
 static struct comlist cl[]={
 	{"ds","============","DATA SOCKET MENU",NULL,NOARG},
 	{"ds/showinfo","","show ds info",showinfo,NOARG|WITHFILE},
+	{"portgroup","============","PORTGROUP MENU",NULL,NOARG},
+	{"portgroup/add","n def [perm[g]]","create a port group, n=name def=vlandef g=group",dsaddportgroup,STRARG},
+	{"portgroup/del","n","create a port group, n=name",dsdelportgroup,STRARG},
+	{"portgroup/list","","print port group list",dsprintportgroup,NOARG|WITHFILE},
 };
 
 static void delep (int fd_ctl, int fd_data, void *descr)

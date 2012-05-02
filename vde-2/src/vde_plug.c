@@ -44,6 +44,7 @@
 #define ETH_ALEN 6
 
 VDECONN *conn;
+VDECONN *conn2;
 VDESTREAM *vdestream;
 
 struct utsname me;
@@ -265,7 +266,8 @@ static void setsighandlers()
 			perror("Setting handler");
 }
 
-struct pollfd pollv[]={{STDIN_FILENO,POLLIN|POLLHUP},{0,POLLIN|POLLHUP},{0,POLLIN|POLLHUP}};
+struct pollfd pollv[]={{STDIN_FILENO,POLLIN|POLLHUP},{0,POLLIN|POLLHUP},
+	{0,POLLIN|POLLHUP},{0,POLLIN|POLLHUP}};
 
 static void netusage() {
 #ifdef DO_SYSLOG
@@ -283,11 +285,42 @@ static void usage(char *progname) {
 
 unsigned char bufin[BUFSIZE];
 
+int locallink(void)
+{
+	pollv[0].fd=vde_datafd(conn);
+	pollv[1].fd=vde_datafd(conn2);
+	pollv[2].fd=vde_ctlfd(conn);
+	pollv[3].fd=vde_ctlfd(conn2);
+	register ssize_t nx;
+
+	for(;;) {
+		poll(pollv,4,-1);
+		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents | pollv[2].revents) & POLLHUP ||
+				(pollv[2].revents | pollv[3].revents) & POLLIN)
+			break;
+		if (pollv[0].revents & POLLIN) {
+			nx=vde_recv(conn, bufin, BUFSIZE,0);
+			if (nx==0)
+				break;
+			vde_send(conn2, bufin, nx, 0);
+		}
+		if (pollv[1].revents & POLLIN) {
+			nx=vde_recv(conn2,bufin,BUFSIZE,0);
+			if (nx<0)
+				break;
+			vde_send(conn, bufin, nx, 0);
+		}
+	}
+	return(0);
+}
+
 int main(int argc, char **argv)
 {
 	static char *sockname=NULL;
+	static char *sockname2=NULL;
 	register ssize_t nx;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
+	struct vde_open_args open_args2={.port=0,.group=NULL,.mode=0700};
 
 	uname(&me);
 	//get the login name
@@ -305,13 +338,19 @@ int main(int argc, char **argv)
 				{"sock", 1, 0, 's'},
 				{"vdesock", 1, 0, 's'},
 				{"unix", 1, 0, 's'},
+				{"sock2", 1, 0, 'S'},
+				{"vdesock2", 1, 0, 'S'},
+				{"unix2", 1, 0, 'S'},
 				{"port", 1, 0, 'p'},
+				{"port2", 1, 0, 'P'},
 				{"help",0,0,'h'},
 				{"mod",1,0,'m'},
+				{"mod2",1,0,'M'},
 				{"group",1,0,'g'},
+				{"group2",1,0,'G'},
 				{0, 0, 0, 0}
 			};
-			c = GETOPT_LONG (argc, argv, "hc:p:s:m:g:l",
+			c = GETOPT_LONG (argc, argv, "hc:p:P:s:S:m:M:g:G:l",
 					long_options, &option_index);
 			if (c == -1)
 				break;
@@ -338,6 +377,12 @@ int main(int argc, char **argv)
 						usage(argv[0]); //implies exit
 					break;
 
+				case 'P':
+					open_args2.port=atoi(optarg);
+					if (open_args2.port <= 0)
+						usage(argv[0]); //implies exit
+					break;
+
 				case 'h':
 					usage(argv[0]); //implies exit
 					break;
@@ -346,12 +391,24 @@ int main(int argc, char **argv)
 					sockname=strdup(optarg);
 					break;
 
+				case 'S':
+					sockname2=strdup(optarg);
+					break;
+
 				case 'm': 
 					sscanf(optarg,"%o",(unsigned int *)&(open_args.mode));
 					break;
 
+				case 'M': 
+					sscanf(optarg,"%o",(unsigned int *)&(open_args2.mode));
+					break;
+
 				case 'g':
 					open_args.group=strdup(optarg);
+					break;
+
+				case 'G':
+					open_args2.group=strdup(optarg);
 					break;
 
 				case 'l':
@@ -367,8 +424,22 @@ int main(int argc, char **argv)
 			}
 		}
 
-		if (optind < argc && sockname==NULL)
+		if (optind < argc && sockname==NULL) {
 			sockname=argv[optind];
+			optind++;
+		}
+		if (optind < argc && sockname2==NULL) {
+			sockname2=argv[optind];
+			optind++;
+		}
+		if (sockname!=NULL && sockname2==NULL) {
+			char *colon;
+			if (strstr(sockname,"->") == NULL && /* NOT UDP! */
+					(colon=strchr(sockname,':')) != NULL) {
+				sockname2=colon+1;
+				*colon=0;
+			}
+		}
 	}
 	atexit(cleanup);
 	setsighandlers();
@@ -377,6 +448,15 @@ int main(int argc, char **argv)
 		fprintf(stderr,"vde_open %s: %s\n",sockname?sockname:"DEF_SWITCH",strerror(errno));
 		exit(1);
 	}
+	if (sockname2 != NULL) {
+		conn2=vde_open(sockname2,"vde_plug:",&open_args2);
+		if (conn2 == NULL) {
+			fprintf(stderr,"vde_open %s: %s\n",sockname?sockname:"DEF_SWITCH",strerror(errno));
+			exit(1);
+		}
+	}
+	if (sockname2 != NULL)
+		return locallink();
 
 	vdestream=vdestream_open(conn,STDOUT_FILENO,vdeplug_recv,vdeplug_err);
 

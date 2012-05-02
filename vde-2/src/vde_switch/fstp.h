@@ -10,8 +10,11 @@
 #ifdef FSTP
 #define FSTP_TAG 0x1
 
+struct vlst;
+extern struct vlst *fsttab[NUMOFVLAN];
 extern unsigned char bpduaddrp[];
 #define ISBPDU(P) (memcmp((P)->header.dest,bpduaddrp,ETH_ALEN)==0)
+#define FSTVLAN(V) (fsttab[V] != NULL)
 
 void fstpshutdown(void);
 int fstnewvlan(int vlan);

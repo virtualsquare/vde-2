@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -46,12 +47,12 @@ struct hash_entry {
 	struct hash_entry **prev;
 	time_t last_seen;
 	int port;
-	u_int64_t dst;
+	uint64_t dst;
 };
 
 static struct hash_entry **h;
 
-static int calc_hash(u_int64_t src)
+static int calc_hash(uint64_t src)
 {
 	register int x = src * 0x030507090b0d1113LL;
 	x = (x ^ x >> 12 ^ x >> 8 ^ x >> 4) & hash_mask;
@@ -61,18 +62,18 @@ static int calc_hash(u_int64_t src)
 
 #if BYTE_ORDER == LITTLE_ENDIAN
 #define EMAC2MAC6(X) \
-	(u_int)((X)&0xff), (u_int)(((X)>>8)&0xff), (u_int)(((X)>>16)&0xff), \
-  (u_int)(((X)>>24)&0xff), (u_int)(((X)>>32)&0xff), (u_int)(((X)>>40)&0xff)
+	(uint32_t)((X)&0xff), (uint32_t)(((X)>>8)&0xff), (uint32_t)(((X)>>16)&0xff), \
+  (uint32_t)(((X)>>24)&0xff), (uint32_t)(((X)>>32)&0xff), (uint32_t)(((X)>>40)&0xff)
 #elif BYTE_ORDER == BIG_ENDIAN
 #define EMAC2MAC6(X) \
-	(u_int)(((X)>>24)&0xff), (u_int)(((X)>>16)&0xff), (u_int)(((X)>>8)&0xff), \
-  (u_int)((X)&0xff), (u_int)(((X)>>40)&0xff), (u_int)(((X)>>32)&0xff)
+	(uint32_t)(((X)>>24)&0xff), (uint32_t)(((X)>>16)&0xff), (uint32_t)(((X)>>8)&0xff), \
+  (uint32_t)((X)&0xff), (uint32_t)(((X)>>40)&0xff), (uint32_t)(((X)>>32)&0xff)
 #else
 #error Unknown Endianess
 #endif
 
-#define EMAC2VLAN(X) ((u_int16_t) ((X)>>48))
-#define EMAC2VLAN2(X) ((u_int) (((X)>>48) &0xff)), ((u_int) (((X)>>56) &0xff))
+#define EMAC2VLAN(X) ((uint16_t) ((X)>>48))
+#define EMAC2VLAN2(X) ((uint32_t) (((X)>>48) &0xff)), ((uint32_t) (((X)>>56) &0xff))
 
 #define find_entry(MAC) \
 	({struct hash_entry *e; \
@@ -83,7 +84,7 @@ static int calc_hash(u_int64_t src)
 
 
 #define extmac(MAC,VLAN) \
-	    ((*(u_int32_t *) &((MAC)[0])) + ((u_int64_t) ((*(u_int16_t *) &((MAC)[4]))+ ((u_int64_t) (VLAN) << 16)) << 32))
+	    ((*(uint32_t *) &((MAC)[0])) + ((uint64_t) ((*(uint16_t *) &((MAC)[4]))+ ((uint64_t) (VLAN) << 16)) << 32))
 
 /* looks in global hash table 'h' for given address, and return associated
  * port */
@@ -98,7 +99,7 @@ int find_in_hash(unsigned char *dst,int vlan)
 int find_in_hash_update(unsigned char *src,int vlan,int port)
 {
 	struct hash_entry *e;
-	u_int64_t esrc=extmac(src,vlan);
+	uint64_t esrc=extmac(src,vlan);
 	int k = calc_hash(esrc);
 	int oldport;
 	time_t now;
@@ -186,7 +187,7 @@ void hash_delete_port (int port)
 static void delete_vlan_iterator (struct hash_entry *e, void *arg)
 {
 	int *vlan=(int *)arg;
-	if (EMAC2VLAN(e->dst) == (u_int16_t)(*vlan))
+	if (EMAC2VLAN(e->dst) == (uint16_t)(*vlan))
 		delete_hash_entry(e);
 }
 
@@ -202,7 +203,7 @@ struct vlanport {int vlan; int port;};
 static void delete_vlanport_iterator (struct hash_entry *e, void *arg)
 {
 	struct vlanport *vp=(struct vlanport *)arg;
-	if ((EMAC2VLAN(e->dst)) == (u_int16_t)(vp->vlan) &&
+	if ((EMAC2VLAN(e->dst)) == (uint16_t)(vp->vlan) &&
 			e->port == vp->port)
 		delete_hash_entry(e);
 }
@@ -220,7 +221,7 @@ struct vlansetofports {int vlan; bitarray setofports;};
 static void delete_vlansetofports_iterator (struct hash_entry *e, void *arg)
 {
 	struct vlansetofports *vp=(struct vlansetofports *)arg;
-	if ((EMAC2VLAN(e->dst)) == (u_int16_t)(vp->vlan) &&
+	if ((EMAC2VLAN(e->dst)) == (uint16_t)(vp->vlan) &&
 			ba_check(vp->setofports,e->port))
 		delete_hash_entry(e);
 }

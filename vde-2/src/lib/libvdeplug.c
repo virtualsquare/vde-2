@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <pwd.h>
 #include <grp.h>
 #include <sys/types.h>
@@ -121,6 +122,20 @@ struct request_v3 {
 	char description[MAXDESCR];
 } __attribute__((packed));
 
+static char *pathcleanup(char *path)
+{
+	while (*path == ' ')
+		path++;
+	if (*path == '[') {
+		char *end=rindex(path,']');
+		if (end) {
+			*end=0;
+			path++;
+		}
+	}
+	return path;
+}
+
 VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		struct vde_open_args *open_args)
 {
@@ -129,6 +144,7 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	struct request_v3 req;
 	int pid = getpid();
 	int port=0;
+	char *portgroup=NULL;
 	char *group=NULL;
 	mode_t mode=0700;
 	int sockno=0;
@@ -195,11 +211,16 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 				&& (split=rindex(given_sockname,'[')) != NULL) {
 			*split=0;
 			split++;
-			port=atoi(split);
 			if (*split==']')
 				flags |= VDEFLAG_P2P_SOCKET;
-			else if (port == 0)
-				req.type = REQ_NEW_PORT0;
+			else if (port == 0) {
+				if (isdigit(*split))
+					req.type = REQ_NEW_PORT0;
+				else {
+					portgroup=split;
+					split[strlen(split)-1] = 0;
+				}
+			}
 			if (*given_sockname==0)
 				given_sockname = NULL;
 		}
@@ -294,11 +315,16 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			srcport=src;
 			src=NULL;
 		}
+		*srcport=0;
+		srcport++;
+		src=pathcleanup(src);
+		dst=pathcleanup(dst);
 		//fprintf(stderr,"UDP!%s:%s -> %s:%s \n",src,srcport,dst,dstport);
 		hints.ai_flags = AI_PASSIVE;
 		s = getaddrinfo(src, srcport, &hints, &result);
 
 		if (s != 0) {
+			//fprintf(stderr,"%s: %s\n",src,gai_strerror(s));
 			errno=ECONNABORTED;
 			goto abort;
 		}
@@ -325,6 +351,7 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		s = getaddrinfo(dst, dstport, &hints, &result);
 
 		if (s != 0) {
+			//fprintf(stderr,"%s: %s\n",dst,gai_strerror(s));
 			errno=ECONNABORTED;
 			goto abort;
 		}
@@ -409,7 +436,10 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		 * really not be used anymore. */
 		if (given_sockname)
 		{
-			snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s/ctl", sockname);
+			if (portgroup)
+				snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s/%s", sockname, portgroup);
+			else
+				snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s/ctl", sockname);
 			res = connect(conn->fdctl, (struct sockaddr *) &sockun, sizeof(sockun));
 		}
 		/* Else try all the fallback socknames, one by one */

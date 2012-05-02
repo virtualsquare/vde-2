@@ -1,6 +1,7 @@
 /* Copyright 2005 Renzo Davoli VDE-2
  * Licensed under the GPLv2 
  */
+/* Warning: FST can process no more than 4096 ports */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,10 +107,19 @@ unsigned char bpduaddrp[]=BPDUADDR;
 static unsigned char myid[SWITCHID_LEN];
 
 #define STDHELLOPERIOD 4
-static struct vlst *fsttab[NUMOFVLAN];
+static int nfsttab;
+struct vlst *fsttab[NUMOFVLAN];
 static int helloperiod = STDHELLOPERIOD;
 static int maxage = STDHELLOPERIOD*10;
 static int fst_timerno;
+
+#define FORALLFSTPVLAN(F,X) ({\
+		int __i; \
+		for (__i=0;__i<NUMOFVLAN;__i++) { \
+		if (fsttab[__i] != NULL) \
+		(F)(__i, (X)); \
+		} \
+		})
 
 /* packet prototype for untagged ports */
 struct fstbpdu {
@@ -189,6 +199,7 @@ static struct fsttagbpdu outtagpacket = {
 	 (AGR) << 6 | \
 	 (TCACK) << 7)
 
+static void fstinitpkt(void);
 int fstnewvlan(int vlan)
 {
 	/*printf("F new vlan %d\n",vlan);*/
@@ -204,6 +215,11 @@ int fstnewvlan(int vlan)
 			 (fsttab[vlan]->backup = ba_alloc(numports)) == NULL))
 		return ENOMEM;
 	else {
+		if (newvlan) {
+			if (nfsttab == 0)
+				fstinitpkt();
+			nfsttab++;
+		}
 		memcpy(fsttab[vlan]->root,myid,SWITCHID_LEN);
 		memset(fsttab[vlan]->rootcost,0,4);
 		memset(fsttab[vlan]->dessw,0xff,SWITCHID_LEN);
@@ -243,6 +259,9 @@ int fstremovevlan(int vlan)
 		free(old->rcvhist[0]);
 		free(old->rcvhist[1]);
 		free(old);
+		nfsttab--;
+		if (nfsttab == 0)
+			qtimer_del(fst_timerno);
 		return 0;
 	}
 }
@@ -361,10 +380,10 @@ static void fst_hello(void *arg)
 	static int hellocounter;
 	hellocounter++;
 	//printf("HELLO\n");
-	bac_FORALLFUN(validvlan,NUMOFVLAN,fst_hello_vlan,now);
+	FORALLFSTPVLAN(fst_hello_vlan,now);
 	if ((hellocounter & 0x3) == 0) {
 		rcvhistindex=1-rcvhistindex;
-		bac_FORALLFUN(validvlan,NUMOFVLAN, fst_updatebackup,rcvhistindex);
+		FORALLFSTPVLAN(fst_updatebackup,rcvhistindex);
 	}
 }
 
@@ -560,37 +579,40 @@ void fst_in_bpdu(int port, struct packet *inpacket, int len, int vlan, int tagge
 void fstaddport(int vlan,int port,int tagged)
 {
 	/*printf("F addport V %d  - P %d  - T%d\n",vlan,port,tagged);*/
-
-	if (tagged) {
-		ba_set(fsttab[vlan]->tagged,port);
-	  ba_clr(fsttab[vlan]->untag,port);
-	} else {
-	  ba_set(fsttab[vlan]->untag,port);
-		ba_clr(fsttab[vlan]->tagged,port);
+	if (fsttab[vlan]) {
+		if (tagged) {
+			ba_set(fsttab[vlan]->tagged,port);
+			ba_clr(fsttab[vlan]->untag,port);
+		} else {
+			ba_set(fsttab[vlan]->untag,port);
+			ba_clr(fsttab[vlan]->tagged,port);
+		}
+		ba_clr(fsttab[vlan]->backup,port);
+		ba_clr(fsttab[vlan]->edge,port);
+		ba_clr(fsttab[vlan]->rcvhist[0],port);
+		ba_clr(fsttab[vlan]->rcvhist[1],port);
+		fst_sendbpdu(vlan,port,0,0,0);
+		topology_change(vlan,port);
 	}
-	ba_clr(fsttab[vlan]->backup,port);
-	ba_clr(fsttab[vlan]->edge,port);
-	ba_clr(fsttab[vlan]->rcvhist[0],port);
-	ba_clr(fsttab[vlan]->rcvhist[1],port);
-	fst_sendbpdu(vlan,port,0,0,0);
-	topology_change(vlan,port);
 }
 
 void fstdelport(int vlan,int port)
 {
 	/*printf("F delport V %d  - P %d\n",vlan,port);*/
-	if (FSTP_ACTIVE(vlan,port)) {
-		 DBGOUT(DBGFSTPMINUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
-		 EVENTOUT(DBGFSTPMINUS,port,vlan);
+	if (fsttab[vlan]) {
+		if (FSTP_ACTIVE(vlan,port)) {
+			DBGOUT(DBGFSTPMINUS,"Port %04d VLAN %02x:%02x",port,vlan>>8,vlan&0xff);
+			EVENTOUT(DBGFSTPMINUS,port,vlan);
+		}
+		ba_clr(fsttab[vlan]->untag,port);
+		ba_clr(fsttab[vlan]->tagged,port);
+		ba_clr(fsttab[vlan]->backup,port);
+		ba_clr(fsttab[vlan]->edge,port);
+		if (port == fsttab[vlan]->rootport) {
+			fstnewvlan(vlan);
+		}
+		topology_change(vlan,port);
 	}
-	ba_clr(fsttab[vlan]->untag,port);
-	ba_clr(fsttab[vlan]->tagged,port);
-	ba_clr(fsttab[vlan]->backup,port);
-	ba_clr(fsttab[vlan]->edge,port);
-	if (port == fsttab[vlan]->rootport) {
-		fstnewvlan(vlan);
-	}
-	topology_change(vlan,port);
 }
 
 static void fstinitpkt(void)
@@ -611,45 +633,38 @@ static int fstpshowinfo(FILE *fd)
 	printoutc(fd,"MAC %02x:%02x:%02x:%02x:%02x:%02x Priority %d (0x%x)",
 			switchmac[0], switchmac[1], switchmac[2], switchmac[3], switchmac[4], switchmac[5],
 			priority,priority);
-	printoutc(fd,"FSTP=%s",(pflag & FSTP_TAG)?"true":"false");
+	printoutc(fd,"FSTP on vlan0=%s",(pflag & FSTP_TAG)?"enabled":"disabled");
 	return 0;
 }
 
-static void fstnewvlan2(int vlan, void *arg)
+static inline void fstremovevlan2(int vlan, void *arg)
 {
-	fstnewvlan(vlan);
+	fstremovevlan(vlan);
 }
 
 void fstpshutdown(void)
 {
-	if (pflag & FSTP_TAG)
-	{
-		qtimer_del(fst_timerno);
-		fstflag(P_CLRFLAG,FSTP_TAG);
-		bac_FORALLFUN(validvlan,NUMOFVLAN,fstnewvlan2,NULL);
-	}
+	FORALLFSTPVLAN(fstremovevlan2,NULL);
 }
 
-static int fstpsetonoff(FILE *fd, int val)
+static int fstpaddvlan(int vlan)
 {
-	int oldval=((pflag & FSTP_TAG) != 0);
-	if (portflag(P_GETFLAG, HUB_TAG)){
-		printoutc(fd, "Can't use fstp in hub mode");
-		return 0;
-	}
-	val=(val != 0);
-	if (oldval != val)
-	{
-		if (val) { /* START FST */
-			fstinitpkt();
-			fstflag(P_SETFLAG,FSTP_TAG);
-		} else { /* STOP FST */
-			qtimer_del(fst_timerno);
-			fstflag(P_CLRFLAG,FSTP_TAG);
-			bac_FORALLFUN(validvlan,NUMOFVLAN,fstnewvlan2,NULL);
-		}
-	}
-	return 0;
+	if (vlan >= 0 && vlan < NUMOFVLAN-1 &&
+			bac_check(validvlan,vlan)) {
+		int rv=fstnewvlan(vlan);
+		if (rv==0)
+			forallports(vlan,fstaddport);
+		return rv;
+	} else
+		return EINVAL;
+}
+
+static int fstpdelvlan(int vlan)
+{
+	if (vlan >= 0 && vlan < NUMOFVLAN-1) {
+		return fstremovevlan(vlan);
+	} else
+		return EINVAL;
 }
 
 static char *decoderole(int vlan, int port)
@@ -693,14 +708,14 @@ static int fstprint(FILE *fd,char *arg)
 		register int vlan;
 		vlan=atoi(arg);
 		if (vlan >= 0 && vlan < NUMOFVLAN-1) {
-			if (bac_check(validvlan,vlan))
+			if (fsttab[vlan] != NULL)
 				fstprintactive(vlan,fd);
 			else
 				return ENXIO;
 		} else
 			return EINVAL;
 	} else
-		bac_FORALLFUN(validvlan,NUMOFVLAN,fstprintactive,fd);
+		FORALLFSTPVLAN(fstprintactive,fd);
 	return 0;
 }
 
@@ -711,7 +726,7 @@ static int fstsetbonus(char *arg)
 		return EINVAL;
 	if (vlan <0 || vlan >= NUMOFVLAN || port < 0 || port >= numports)
 		return EINVAL;
-	if (!bac_check(validvlan,vlan)) 
+	if (fsttab[vlan] == NULL)
 		return ENXIO;
 	fsttab[vlan]->bonusport=port;
 	fsttab[vlan]->bonuscost=cost;
@@ -725,7 +740,7 @@ static int fstsetedge(char *arg)
 		return EINVAL;
 	if (vlan <0 || vlan >= NUMOFVLAN || port < 0 || port >= numports)
 		return EINVAL;
-	if (!bac_check(validvlan,vlan))
+	if (fsttab[vlan]==NULL)
 		return ENXIO;
 	if (val) {
 		ba_set(fsttab[vlan]->edge,port);
@@ -741,7 +756,8 @@ static int fstsetedge(char *arg)
 static struct comlist cl[]={
 	{"fstp","============","FAST SPANNING TREE MENU",NULL,NOARG},
 	{"fstp/showinfo","","show fstp info",fstpshowinfo,NOARG|WITHFILE},
-	{"fstp/setfstp","0/1","Fast spanning tree protocol 1=ON 0=OFF",fstpsetonoff,INTARG|WITHFILE},
+	{"fstp/addvlan","N","Enable FSTP on a Vlan",fstpaddvlan,INTARG},
+	{"fstp/delvlan","N","Disable FSTP on a Vlan",fstpdelvlan,INTARG},
 	{"fstp/setedge","VLAN PORT 1/0","Define an edge port for a vlan 1=Y 0=N",fstsetedge,STRARG},
 	{"fstp/bonus","VLAN PORT COST","set the port bonus for a vlan",fstsetbonus,STRARG},
 	{"fstp/print","[N]","print fst data for the defined vlan",fstprint,STRARG|WITHFILE},
@@ -763,8 +779,6 @@ void fst_init(int initnumports)
 {
 	numports=initnumports;
 	SETFSTID(myid,switchmac,priority);
-	if (pflag & FSTP_TAG)
-		fstinitpkt();
 	ADDCL(cl);
 #ifdef DEBUGOPT
 	ADDDBGCL(dl);

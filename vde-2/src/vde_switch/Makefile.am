@@ -16,6 +16,8 @@ vde_switch_SOURCES = \
 	consmgmt.h \
 	fstp.c \
 	fstp.h \
+	vtrill.c \
+	vtrill.h \
 	packetq.c \
 	packetq.h \
 	bitarray.h \
@@ -25,7 +27,7 @@ vde_switch_SOURCES = \
 vde_switch_LDADD = $(top_builddir)/src/common/libvdecommon.la
 
 AM_CPPFLAGS = -I$(top_srcdir)/include
-AM_CFLAGS = -Wall
+AM_CFLAGS = -Wall -ggdb -g
 
 if ENABLE_PROFILE
   AM_CFLAGS += -pg --coverage

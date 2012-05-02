@@ -45,6 +45,8 @@ typedef int (*intfun)();
 #define D_PORT 020
 #define D_EP 030
 #define D_FSTP 040
+#define D_VTRILL_NODE 0110
+#define D_VTRILL_NEIGH 0120
 #define D_HUP 01
 struct dbgcl {
 	char *path; /* debug path for add/del */
