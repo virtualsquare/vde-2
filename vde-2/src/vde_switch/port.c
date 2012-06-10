@@ -1205,10 +1205,11 @@ static int print_port(FILE *fd,int i,int inclinactive)
 {
 	struct endpoint *ep;
 	if (portv[i] != NULL && (inclinactive || portv[i]->ep!=NULL)) {
-		printoutc(fd,"Port %04d untagged_vlan=%04d %sACTIVE - %s",
+		printoutc(fd,"Port %04d untagged_vlan=%04d %sACTIVE - %s %s",
 				i,portv[i]->vlanuntag,
 				portv[i]->ep?"":"IN",
-				(portv[i]->flag & NOTINPOOL)?"preconfigured":"");
+				(portv[i]->flag & NOTINPOOL)?"preconfigured":"",
+				(portv[i]->flag & ALLOWQINQ)?"qinq":"");
 		printoutc(fd," Current User: %s Access Control: (User: %s - Group: %s)", 
 				port_getuser(portv[i]->curuser),
 				port_getuser(portv[i]->user), 
