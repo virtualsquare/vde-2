@@ -98,6 +98,7 @@ struct endpoint {
 };
 
 #define NOTINPOOL 0x8000
+#define ALLOWQINQ 0x4000
 
 struct port {
 	struct endpoint *ep;
@@ -665,8 +666,14 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 			if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00) {
 				tagged=1;
 				vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
-				if (! ba_check(vlant[vlan].table,port))
-					return; /*discard unwanted packets*/
+				if (! ba_check(vlant[vlan].table,port)) {
+					if (portv[port]->flag & ALLOWQINQ) {
+						if ((vlan=portv[port]->vlanuntag) == NOVLAN)
+							return; /*discard unwanted packets*/
+						tagged=0;
+					} else
+						return; /*discard unwanted packets*/
+				}
 			} else {
 				tagged=0;
 				if ((vlan=portv[port]->vlanuntag) == NOVLAN)
@@ -1023,6 +1030,22 @@ static int portpreconfigure(char *arg)
 		portv[port]->flag |= NOTINPOOL;
 	else
 		portv[port]->flag &= ~NOTINPOOL;
+	return 0;
+}
+
+static int portallowqinq(char *arg)
+{
+	int port,value;
+	if (sscanf(arg,"%i %i",&port,&value) != 2)
+		return EINVAL;
+	if (port < 0 || port >= numports)
+		return EINVAL;
+	if (portv[port] == NULL)
+		return ENXIO;
+	if (value)
+		portv[port]->flag |= ALLOWQINQ;
+	else
+		portv[port]->flag &= ~ALLOWQINQ;
 	return 0;
 }
 
@@ -1488,6 +1511,10 @@ static int portsetup(int portno, char *setup)
 			case 't':
 				rv=vlanaddport_nocheck(portno,atoi(++setup));
 				break;
+			case 'q':
+				portv[portno]->flag |= ALLOWQINQ;
+				++setup;
+				break;
 		}
 		if (rv != 0) break;
 		while (*setup && (*setup == ',' || isdigit(*setup)))
@@ -1626,6 +1653,7 @@ static struct comlist cl[]={
 	{"port/create","N","create port N for preconfiguration",portcreate,INTARG},
 	{"port/remove","N","remove the port N",portremove,INTARG},
 	{"port/preconfigure","N 0/1","Is the port allocatable as unnamed? 1=Y 0=N",portpreconfigure,STRARG},
+	{"port/qinq","N 0/1","Allow QinQ (802.1ad) conversion? 1=Y 0=N",portallowqinq,STRARG},
 	{"port/setuser","N user","access control: set user",portsetuser,STRARG},
 	{"port/setgroup","N user","access control: set group",portsetgroup,STRARG},
 	{"port/epclose","N ID","remove the endpoint port N/id ID",epclose,STRARG},
