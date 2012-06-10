@@ -32,11 +32,11 @@ static struct dbgcl dl[]= {
 static int dump(char *arg)
 {
 	int active=atoi(arg);
-	int rv;
+	//int rv;
 	if (active)
-		rv=eventadd(testevent,"packet",dl);
+		/*rv=*/eventadd(testevent,"packet",dl);
 	else
-		rv=eventdel(testevent,"packet",dl);
+		/*rv=*/eventdel(testevent,"packet",dl);
 	return 0;
 }
 
