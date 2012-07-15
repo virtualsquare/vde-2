@@ -1,0 +1,45 @@
+=== -1. WARNING ===
+This experimental version of IPN is borrowing from AF_NETBEUI address family
+and from bridge hooks to make life easier to developers.
+
+
+=== 0. REQUIREMENTS ===
+In order to run it you need a modular bridge support in your kernel:
+
+CONFIG_BRIDGE=m
+
+
+=== 1. IPN ===
+To build ipn kernel modules:
+
+make
+
+To install:
+
+sudo make modules_install
+
+If you want to build for a specific kernel version don't forget to append
+KERNELDIR variable after the commands, like:
+make KERNELDIR=/path/to/your/kernel/version
+sudo make modules_install KERNELDIR=/path/to/your/kernel/version
+
+
+
+=== 2. KVDE_SWITCH ===
+After you've built and installed ipn you can build kvde_switch kernel module:
+
+cp Module.symvers kvde_switch/
+cd kvde_switch
+make                            # Use KERNELDIR= to build and install
+sudo make modules_install       # for a specific kernel version
+
+To use kvde_switch kernel module you have to recompile vde2 adding
+"--enable-kernel-switch" to configure options, e.g.:
+./configure --enable-experimental --enable-kernel-switch
+
+
+=== 3. USAGE REMINDER ===
+Please remind that this version of IPN is sharing hooks with linux bridging,
+this means you cannot have ipn.ko and bridge.ko loaded at the same time.
+
+

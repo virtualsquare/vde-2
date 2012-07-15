@@ -1,0 +1,22 @@
+This patch defines and manages the syntax:
+
+<domain ....>
+ <device>
+   <interface type='vde'>
+	 ...
+	 	<switch path='/tmp/vde.ctl'/>
+	 </interface>
+ </device>
+</domain>
+
+the switch tag can be omitted: vde uses the default switch.
+qemu/kvm support: tested.
+user-mode linux support is included but not tested yet.
+libvirt vde support for virtualbox has not been coded yet.
+
+INSTALL:
+download libvirt-0.8.7
+..../libvirt-0.8.7$ patch -p 1 < libvirt-0.8.7.vde.patch
+..../libvirt-0.8.7$ configure
+..../libvirt-0.8.7$ make
+..../libvirt-0.8.7$ sudo make install

@@ -1,0 +1,178 @@
+VDE 2.3.2, 2011-11-23
+	* dpipe: new daemon mode
+	* [vde_switch] new mainloop management
+	* [vde_switch] hash table based on 64bits integers
+	* [vde_switch] new priority queue for packets
+	* wirefilter: capacity renamed as "channel buffer size"
+
+VDE 2.3.1, 2010-07-25
+	* [vde_switch] Fix control socket path resolution regression.
+
+VDE 2.3.0, 2010-05-29
+	* Remove some hardcoded paths and use SYSCONFDIR/LOCALSTATEDIR instead.
+	* [vde_switch] Fix multiple vlan tagging when packetfilter is used.
+	* Build system fixes.
+	* Ship README and patch to add VDE support in VirtualBox (included in
+	  VirtualBox since 3.2.0).
+	* Ship an updated version of slirp taken from QEMU and include VDE support.
+	* [vde_cryptcab] Remove SIGALRM-based timers.
+	* [vde_l3] Fix unicast test (sourceforge: #2726725)
+	* [libvdeplug] Add vdestream abstraction to send/receive bytes (previously in
+	  vde_plug)
+	* [vde_switch] New command "port/createauto" to create a new port with an
+	  automatically allocated ID
+
+VDE 2.2.3, 2009-05-05
+	* [vdeterm] Moved history management in a separate library.
+	* [vde_switch] Console bug fixes.
+	* Added vde_pcapplug (connect a vde_switch to a real interface using pcap)
+	* Added missing includes of limits.h/ctype.h
+	* [vde_switch] Added option --mgmtgroup to consmgmt module to specify the
+	  group of the management socket.
+	* [vde_switch] Added option --dirmode to datasock module to specify the mode
+	  of the socket directory.
+	* [vdetaplib] Added specification of port, mode and group.
+	* [kvde_switch] Bugfixes.
+	* [vde_switch] pdump plugin: add fifo support and buffered/unbuffered choice.
+	* [common] Fix '#include <limits.h>' for PATH_MAX. (Closes: #2023790)
+	* [vdetaplib] Manpage: added an example to override default port, group and
+	  mode. (Closes: #2066885)
+	* [vde_switch] Resize untagged ports bitarray while changing number of ports
+	  (Thanks to Michael Sallaway). Closes: #2115547.
+	* [vde_switch] Fix memory reset in BA_REALLOC and BAC_REALLOC (by rd235).
+	  (Closes: #2123601)
+	* [kvde_switch] By default kvde_switch is now not compiled in.
+	* [vdeq] Fixed loop if an unknow parameter is specified. Thanks to tfero.
+	  (Closes: #2134438)
+	* [slirpvde] Imported patch from <ludwig.nussel@suse.de> to fix static buffer
+	  overflow (Closes: #2138410).
+	* [vde_switch] Fixed compatibility with armel architecture using "attribute
+	  packet" on registration message structures (thanks to Michele Cucchi).
+	* [vde_cryptcap] Some modifications to allow the client to work on the
+	  OpenMoko freerunner.
+	* [vde_switch] Added port access control.
+	* [vde_switch] Changed regular user standard switch to ~/.vde2/stdsock.
+	* [libvdeplug] Downsize vde_open_real() and vde_realpath() stack to fit in
+	  User-Mode Linux.
+	* [common] Add pkg-config files for VDE libraries.
+	* [common] Add '--disable-pcap' configure option, thanks to Wulf C. Krueger
+	  (Closes: #2600817).
+	* [common] Fix bad malloc replacement (Closes: #2631581), thanks to Michele
+	  Cucchi.
+	* [vde_cryptcab] Added support for daemonization.
+	* [vde_cryptcab] Fixed server side disconnections (thanks to Brendan Grieve).
+	* [wirefilter] Added rc file.
+
+VDE 2.2.2, 2008-07-08
+	* Added --enable-profile to configure (for profiling)
+	* Added cleanup() in vdeq on successfull termination (thanks huslu)
+	* Added --mod to new syntax in vdeq man page
+	* Fixed fd leak in runscript() (Closes: #2009311 on SF)
+	* wirefilter man and code cleanup
+	* wirefilter option for blinking added.
+	* Gaussian distribution for range values, Gilbert bursty model for packet loss.
+	* Bugfix on mgmt sessions.
+	* Poor's man hub implemented. (patch by Luca Saiu)
+
+VDE 2.2.1, 2008-06-17
+	* New contact email address: <info@v2.cs.unibo.it>
+	* Code cleanup (some more warnings removed)
+	* [vde_crytcab] Cleared large memory leak due to missing
+	  EVP_CIPHER_CTX_cleanup() after encryption/decryption
+	* [vde_cryptcab] Cleared (very small) memory leak in crc32 calls
+	* [vde_cryptcab] Fixed bug on handover after session timeout: now client
+	  re-establishes the connection when it sees some traffic, after session
+	  timeout.
+	* Heavy directories reorganization, all source code moved under src and
+	  include
+	* New internal library libvdecommon.la with common utilities and LIBOBJ
+	  replacement/compatibility functions
+	* [common] Fix in poll emulation management
+	* Fix to distclean problem due to wrong LIBOBJ management
+	* [vde_switch] hash/setsize 0 was not recognized as an error and caused vde_switch
+	  to hang due to an infinite loop
+	* Don't compile cryptcab if configure detects not to.
+	* Fix for autotools in Slackware
+	* [vde_cryptcab] refactoring:
+	  - simplified protocol (though keeping it back-compatible)
+	  - fixed some bugs and memory leaks
+	  - added some new features
+	* [vde_switch] fix on BPDU generation/handling: do not generate BPDU if FSTP is not active
+	  or we are HUB, forward BPDU if FSTP is not active (Closes #1943973 on SF).
+	* [slirpvde] include limits.h on linux as well.
+	* [vde_switch] Applied patch from Bjorn Mork to remove 32/64 bit confusion from bitarray.h
+	  (Closes #1984460 on SF).
+	* [vde_switch] do not update last_seen in hash entry if data arrives from
+	  a new port and entry still contains old port (Closes #469098 debian).
+	* [vde_cryptcab] server side:
+	  - Added feature: cleanup key files on exit
+	  - Bugfix: avoid using several switch ports for the same client
+	* [vde_switch][libvdeplug] fixed path management: as paths are sent between
+	  different processes with potentially different CWDs, we must assure that the
+	  exchanged paths are always absolute ones.
+	  - added vde_realpath (similar to realpath(3) but with the resulting path
+	    well-defined also in case of partial resolution), taken from xmview's
+	    canonicalize. vde_realpath is now part of libvdecommon.
+	  - [vde_switch, kvde_switch] socket name in datasock gets canonicalized
+	  - [vde_switch, kvde_switch] restored CWD of the switch after each module
+	    initialization (so each module initializes with the same CWD. consmgmt
+	    called daemon(0, 0) which changed the CWD to /, so the behavior was
+	    different when the switch ran in background or in foreground.
+	  - [vde_switch] clarified some error messages
+	  - [libvdeplug] improved the fallback mechanism in case of no socket
+	    specified on the command line and for data socket directory. Now the
+	    default positions for the ctlfd are tried only if socket is specified.
+	  - [libvdeplug] socket names get canonicalized
+	  - [libvdeplug] added a missing / in datasock name
+	* [kvde_switch] added a missing include
+	* [slirpvde] added some checks for successful connection to the VDE switch.
+	* integrations and corrections to some manual pages
+	* [libvdemgmt] fixed memory leaks (Closes: #1948369 on SF)
+
+VDE 2.2.0-pre2, 2008-01-31
+	* [vde_autolink][unixcmd] Added man pages
+	* Code cleanup (removed warnings, added missing prototypes to header
+	  files, etc.)
+	* Debian cleanup (in order to make lintian happier)
+	* [slirpvde] Fix for 64 bit architectures (thanks to Andrea Arcangeli)
+	* Added very very very experimental kvde_switch (using IPN)
+	* Minor fixes
+
+VDE 2.2.0-pre1, 2007-11-02
+	* Fixes in vde_cryptcab, libvdeplug, vdeq, slirpvde
+	* wirefilter can connect directly to two local plugs
+	* libvdeplug_dyn is a variant of libvdeplug that allows dynamic
+	  loading at runtime
+	* Added vde_switch debug menu for asyncronous notifications
+	  [experimental]
+	* Added plugins support to vde_switch [experimental]
+	* New sample plugins: dump and pdump (based on libpcap)
+	* Added debug menu for asynchronous notifications in vde_switch
+	  [experimental]
+	* Added KVM symlink to vdeq
+	* Enabled features summary at end of ./configure
+	* Configuration files moved from /etc/ to /etc/vde2/ (and ~/.vde2/)
+	* Ported to FreeBSD
+	* Added vde_tunctl (imported from uml_utilities to avoid useless
+	  dependencies
+	* New tools and libraries: libvdemgmt, unixcmd, vde_over_ns, vde_l3,
+	  vde_autolink, vde_snmp
+
+VDE 2.1.6, 2006-12-21
+	* Creation of changelog
+	* vde_switch and slirpvde didn't detach from terminal when in daemon mode
+	  (thanks: Piotr Roszatycki)
+	* Patch for group-level privileges; -m option added to vdeq and vdetap
+	  (thanks: Piotr Roszatycki)
+	* Added #ifdefs for some signals, for better portability (thanks: Piotr
+	  Roszatycki)
+	* Fixed LD_PRELOAD examples in vdetaplib help and man page (thanks:
+	  Piotr Roszatycki)
+	* Typos in vde_switch man page
+	* Typos in wirefilter man page (thanks: Helmut Grohne)
+	* Missing cleanups in vdeq (thanks: Piotr Roszatycki)
+	* Various fixes in vde_cryptcab source code; added callback to prevent
+	  direct calling of vde_cryptcab.c functions from within blowfish.c;
+	  added prototypes for some functions (thanks: Dann Frazier)
+	* libvdetap should not use system calls but the next function in the
+	  dynamic library symbol list (thanks: Piotr Roszatycki)
