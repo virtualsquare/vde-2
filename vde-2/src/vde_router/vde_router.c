@@ -6,6 +6,11 @@
  * configuration, etc.
  *
  * For the router engine see vder_datalink.c
+ *
+ * Copyright (c) 2012, Juniper Networks, Inc. All rights reserved.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2, as published by the Free Software Foundation.
  */
 #include "vder_olsr.h"
 #include "vder_datalink.h"
@@ -709,7 +714,7 @@ static int filter(int fd,char *s)
 			arg = strtok_r(NULL, " ", &nextargs);
 			if (!arg)
 				return EINVAL;
-			if ((sport < 0) || not_a_number(arg)) {
+			if (((int16_t)sport < 0) || not_a_number(arg)) {
 				printoutc(fd, "Invalid sport %s", arg);
 				return EINVAL;
 			}
@@ -731,7 +736,7 @@ static int filter(int fd,char *s)
 			if (!arg)
 				return EINVAL;
 			priority = atoi(arg);
-			if ((priority < 0) || (priority >= PRIO_NUM) || not_a_number(arg)) {
+			if (((int8_t)priority < 0) || (priority >= PRIO_NUM) || not_a_number(arg)) {
 				printoutc(fd, "Invalid priority %s", arg);
 				return EINVAL;
 			}

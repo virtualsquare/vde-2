@@ -1,12 +1,18 @@
 /* Copyright 2005 Renzo Davoli
  * Copyright 2002 Jeff Dike
  * Licensed under the GPLv2
+ *
+ * Copyright (c) 2012, Juniper Networks, Inc. All rights reserved.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2, as published by the Free Software Foundation.
  */
 
 #ifndef __PORT_H__
 #define __PORT_H__
 
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include "switch.h"
 #include "bitarray.h"
 
@@ -61,6 +67,10 @@ extern void handle_out_packet(struct endpoint *ep);
 extern void handle_in_packet(struct endpoint *ep, struct packet *packet, int len);
 
 extern bitarray validvlan;
+extern void fd2ip (int fd, struct sockaddr_in *sock);
+extern void get_port_ip_info (int port, struct sockaddr_in *sock);
+extern void setup_destination(struct endpoint *ep, int fd_data);
+
 int portflag(int op, int f);
 #define P_GETFLAG 0
 #define P_SETFLAG 1
@@ -68,6 +78,7 @@ int portflag(int op, int f);
 #define P_CLRFLAG 3
 
 #define HUB_TAG 0x1
+#define TRUNK_TAG 0x2
 
 void port_init(int numports);
 

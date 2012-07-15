@@ -1,5 +1,10 @@
 /* Copyright 2005 Renzo Davoli VDE-2
  * Licensed under the GPLv2 
+ *
+ * Copyright (c) 2012, Juniper Networks, Inc. All rights reserved.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2, as published by the Free Software Foundation.
  */
 
 #include <stdio.h>
@@ -11,6 +16,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h> /*ntoh conversion*/
+#include <linux/if_ether.h>
 
 #include <config.h>
 #include <vde.h>
@@ -162,7 +168,7 @@ static struct fstbpdu outpacket = {
 
 static struct fsttagbpdu outtagpacket = {
 	.header.dest=BPDUADDR,
-	.header.proto={0x81,0x00},
+	.header.proto={((ETH_P_8021Q >> 8) & 0xFF), (ETH_P_8021Q & 0xFF)},
 	.tag_proto={0x00,0x27},
 	.llc={0x42,0x42,0x3},
 	.stp_protocol={0,0},

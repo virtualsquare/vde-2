@@ -10,6 +10,7 @@ bin_PROGRAMS = \
 	dpipe \
 	unixcmd \
 	unixterm \
+	vde_cli \
 	vde_autolink \
 	vde_plug2tap \
 	vde_plug \

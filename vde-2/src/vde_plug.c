@@ -1,6 +1,11 @@
 /* Copyright 2002 Renzo Davoli 
  * Licensed under the GPL
  * Modified by Ludovico Gardenghi 2005
+ *
+ * Copyright (c) 2012, Juniper Networks, Inc. All rights reserved.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2, as published by the Free Software Foundation.
  */
 
 #include <stdio.h>
@@ -21,6 +26,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <stdarg.h>
+#include <linux/if_ether.h>
 
 #include <config.h>
 #include <vde.h>
@@ -135,7 +141,7 @@ static void vde_ip_check(const unsigned char *buf,int rnx)
 	union body *pb;
 
 	pb=(union body *)(ph+1);
-	if (ph->proto[0]==0x81 && ph->proto[1]==0x00) { /*VLAN*/
+	if (*((uint16_t *)&(ph->proto)) == ntohs(ETH_P_8021Q)) { /* VLAN */
 		vlan=((pb->vlan.priovlan[0] << 8) + pb->vlan.priovlan[1]) & 0xfff;
 		pb=(union body *)(((char *)pb)+4);
 	}
