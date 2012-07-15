@@ -3,6 +3,11 @@
  * --pidfile/-p and cleanup management by Mattia Belletti.
  * some code remains from uml_switch Copyright 2001, 2002 Jeff Dike and others
  * Modified by Ludovico Gardenghi 2005
+ *
+ * Copyright (c) 2012, Juniper Networks, Inc. All rights reserved.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2, as published by the Free Software Foundation.
  */
 
 #define _GNU_SOURCE
@@ -321,6 +326,7 @@ static void Usage(void) {
 			"  -v, --version              Display informations on version and exit\n"
 			"  -n  --numports             Number of ports (default %d)\n"
 			"  -x, --hub                  Make the switch act as a hub\n"
+			"  -T, --trunk                Trunk mode (each active port is a part of all VLANS)\n"
 #ifdef FSTP
 			"  -F, --fstp                 Activate the fast spanning tree protocol\n"
 #endif
@@ -373,7 +379,18 @@ static int parse_globopt(int c, char *optarg)
 #ifdef FSTP
 			fstflag(P_CLRFLAG,FSTP_TAG);
 #endif
+			if (portflag(P_GETFLAG, TRUNK_TAG)) {
+				printlog(LOG_ERR, "trunk & hub options are mutually exclusive");
+				exit(1);
+			}
 			portflag(P_SETFLAG,HUB_TAG);
+			break;
+		case 'T':
+			if (portflag(P_GETFLAG, HUB_TAG)) {
+				printlog(LOG_ERR, "hub & trunk options are mutually exclusive");
+				exit(1);
+			}
+			portflag(P_SETFLAG, TRUNK_TAG);
 			break;
 		case HASH_TABLE_SIZE_ARG:
 			sscanf(optarg,"%i",&hash_size);
@@ -428,6 +445,7 @@ static void parse_args(int argc, char **argv)
 	static struct option global_options[] = {
 		{"help",0 , 0, 'h'},
 		{"hub", 0, 0, 'x'},
+		{"trunk", 0, 0, 'T'},
 #ifdef FSTP
 		{"fstp",0 , 0, 'F'},
 #endif
@@ -503,8 +521,23 @@ static void init_mods(void)
 	/* Keep track of the initial cwd */
 	int cwfd = open(".", O_RDONLY);
 
+	/*
+	 * Initialize console-mgmt first since it daemonizes the process.
+	 */
 	for(swmp=swmh;swmp != NULL;swmp=swmp->next)
-		if (swmp->init != NULL)
+	{
+		if (swmp->init != NULL && (strcmp (swmp->swmname, "console-mgmt") == 0))
+		{
+			swmp->init();
+			if (cwfd >= 0)
+				/* Restore cwd so each module will be initialized with the
+				 * original cwd also if the previous one changed it. */
+				fchdir(cwfd);
+			break;
+		}
+	}
+	for(swmp=swmh;swmp != NULL;swmp=swmp->next) {
+		if (swmp->init != NULL && (strcmp (swmp->swmname, "console-mgmt") != 0))
 		{
 			swmp->init();
 			if (cwfd >= 0)
@@ -512,6 +545,7 @@ static void init_mods(void)
 				 * original cwd also if the previous one changed it. */
 				fchdir(cwfd);
 		}
+	}
 
 	close(cwfd);
 }

@@ -2,6 +2,11 @@
  * 2007 co-authors Ludovico Gardenghi, Filippo Giunchedi, Luca Bigliardi
  * --pidfile/-p and cleanup management by Mattia Belletti (C) 2004.
  * Licensed under the GPLv2
+ *
+ * Copyright (c) 2012, Juniper Networks, Inc. All rights reserved.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2, as published by the Free Software Foundation.
  */
 
 #define _GNU_SOURCE
@@ -26,6 +31,8 @@
 #include <getopt.h>
 #include <dlfcn.h>
 #include <limits.h>
+#include <arpa/inet.h>	/* inet_ntoa */
+#include <pthread.h>
 
 #include <config.h>
 #include <vde.h>
@@ -39,6 +46,7 @@
 #include "packetq.h"
 
 #define MAXCMD 128
+#define	MGMT_DIR_MOD	0777	/* Octal 777 (drwxrwxrwx) */
 
 static struct swmodule swmi;
 
@@ -52,6 +60,9 @@ static unsigned int mgmt_ctl=-1;
 static unsigned int mgmt_data=-1;
 static int mgmt_mode = 0600;
 static gid_t mgmt_group = -1;
+static char console_eth_dev[ETH_DEV_LEN] = "eth0";
+
+extern int use_ip_sockets;
 
 static char *mgmt_socket = NULL;
 static char header[]="VDE switch V.%s\n(C) Virtual Square Team (coord. R. Davoli) 2005,2006,2007 - GPLv2\n";
@@ -76,6 +87,8 @@ static struct dbgcl dl[]= {
 static struct plugin *pluginh=NULL;
 static struct plugin **plugint=&pluginh;
 #endif
+
+static pthread_mutex_t  handle_cmd_lock;
 
 void addcl(int ncl,struct comlist *cl)
 {
@@ -264,6 +277,7 @@ static int handle_cmd(int type,int fd,char *inbuf)
 {
 	struct comlist *p;
 	int rv=ENOSYS;
+	pthread_mutex_lock(&handle_cmd_lock);
 	while (*inbuf == ' ' || *inbuf == '\t') inbuf++;
 	if (*inbuf != '\0' && *inbuf != '#') {
 		char *outbuf;
@@ -320,6 +334,7 @@ static int handle_cmd(int type,int fd,char *inbuf)
 			write(fd,outbuf,outbufsize);
 		free(outbuf);
 	}
+	pthread_mutex_unlock(&handle_cmd_lock);
 	return rv;
 }
 
@@ -498,6 +513,7 @@ static void cleanup(unsigned char type,int fd,void *private_data)
 
 static struct option long_options[] = {
 	{"daemon", 0, 0, 'd'},
+	{"consoledev", 1, 0, 'c'},
 	{"pidfile", 1, 0, 'p'},
 	{"rcfile", 1, 0, 'f'},
 	{"mgmt", 1, 0, 'M'},
@@ -515,6 +531,7 @@ static void usage(void)
 	printf(
 			"(opts from consmgmt module)\n"
 			"  -d, --daemon               Daemonize vde_switch once run\n"
+			"  -c, --consoledev DEV       eth device to use for console\n"
 			"  -p, --pidfile PIDFILE      Write pid of daemon to PIDFILE\n"
 			"  -f, --rcfile               Configuration file (overrides %s and ~/.vderc)\n"
 			"  -M, --mgmt SOCK            path of the management UNIX socket\n"
@@ -543,6 +560,15 @@ static int parseopt(int c, char *optarg)
 		case 'M':
 			mgmt_socket=strdup(optarg);
 			break;
+		case 'c':
+			strncpy(console_eth_dev, optarg, sizeof(console_eth_dev)-1);
+			console_eth_dev[sizeof(console_eth_dev)-1] = '\0';
+			if (strcmp(console_eth_dev, optarg) != 0) {
+				fprintf(stderr, "Length of console interface (%s) > maxlen: %d\n",
+					optarg, ETH_DEV_LEN);
+				exit( -1);
+			}
+			break;
 		case MGMTMODEARG:
 			sscanf(optarg,"%o",&mgmt_mode);
 			break;
@@ -561,13 +587,134 @@ static int parseopt(int c, char *optarg)
 	return outc;
 }
 
+static int init_unix_mgt_sock()
+{
+	int		mgmtconnfd;
+	struct	sockaddr_un sun;
+	int		one = 1;
+
+	if((mgmtconnfd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
+		printlog(LOG_ERR,"mgmt socket: %s",strerror(errno));
+		return(-1);
+	}
+	if(setsockopt(mgmtconnfd, SOL_SOCKET, SO_REUSEADDR, (char *) &one,
+				sizeof(one)) < 0){
+		printlog(LOG_ERR,"mgmt setsockopt: %s",strerror(errno));
+		return(-1);
+	}
+	if(fcntl(mgmtconnfd, F_SETFL, O_NONBLOCK) < 0){
+		printlog(LOG_ERR,"Setting O_NONBLOCK on mgmt fd: %s",strerror(errno));
+		return(-1);
+	}
+	sun.sun_family = PF_UNIX;
+	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",mgmt_socket);
+	if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
+		if((errno == EADDRINUSE) && still_used(&sun)) return(-1);
+		else if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
+			printlog(LOG_ERR,"mgmt bind %s (%s)",strerror(errno), mgmt_socket);
+			return(-1);
+		}
+	}
+	setmgmtperm(sun.sun_path);
+	if(listen(mgmtconnfd, 15) < 0){
+		printlog(LOG_ERR,"mgmt listen: %s",strerror(errno));
+		return(-1);
+	}
+	mgmt_ctl=add_type(&swmi,0);
+	mgmt_data=add_type(&swmi,0);
+	add_fd(mgmtconnfd,mgmt_ctl,NULL);
+	return (0);
+}
+
+static int init_ip_mgt_sock()
+{
+	int		mgmtconnfd;
+	struct	sockaddr_in sip;
+	int		one = 1;
+	struct		ifreq ifr;
+	FILE		*fp;
+
+	if((mgmtconnfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+		printlog(LOG_ERR,"mgmt socket: %s",strerror(errno));
+		return(-1);
+	}
+	if(setsockopt(mgmtconnfd, SOL_SOCKET, SO_REUSEADDR, (char *) &one,
+				sizeof(one)) < 0){
+		printlog(LOG_ERR,"mgmt setsockopt: %s",strerror(errno));
+		return(-1);
+	}
+	if(fcntl(mgmtconnfd, F_SETFL, O_NONBLOCK) < 0){
+		printlog(LOG_ERR,"Setting O_NONBLOCK on mgmt fd: %s",strerror(errno));
+		return(-1);
+	}
+
+	/* Management interface is eth0 unless specified via -c */
+	strncpy(ifr.ifr_name, console_eth_dev, IFNAMSIZ);
+
+	/* Get the IP address of the eth device specified */
+	if (ioctl(mgmtconnfd, SIOCGIFADDR, &ifr) == -1) {
+		printlog(LOG_ERR,"Could not find IP for %s\n", console_eth_dev);
+		exit( -1);
+	}
+
+
+	sip.sin_family = AF_INET;
+	sip.sin_port = 0; /* automatically fill with my PORT */
+	memcpy(&(sip.sin_addr.s_addr), (void *)&(ifr.ifr_addr.sa_data[2]), 4);
+	/* zero the rest of the struct */
+	memset(&(sip.sin_zero), '\0', 8);
+
+	if(bind(mgmtconnfd, (struct sockaddr *) &sip, sizeof(sip)) < 0){
+		if((errno == EADDRINUSE) && still_used_ipsock(&sip)) return(-1);
+		else if(bind(mgmtconnfd, (struct sockaddr *) &sip, sizeof(sip)) < 0){
+			printlog(LOG_ERR,"mgmt bind %s (%s)",strerror(errno), mgmt_socket);
+			return(-1);
+		}
+	}
+
+	/*
+	 * Get the IP and port information for this switch
+	 */
+	fd2ip(mgmtconnfd, &sip);
+	if ((fp = fopen(mgmt_socket, "w")) == NULL) {
+		printlog(LOG_ERR, "Could not open MGT file for writting: %s",
+			mgmt_socket);
+		exit(-1);
+	}
+	fprintf(fp, "IP:\t%s\n", inet_ntoa(sip.sin_addr));
+	fprintf(fp, "PORT:\t%d\n", ntohs(sip.sin_port));
+	fclose(fp);
+
+	setmgmtperm(mgmt_socket);
+	if(listen(mgmtconnfd, 15) < 0){
+		printlog(LOG_ERR,"mgmt listen: %s",strerror(errno));
+		return(-1);
+	}
+	mgmt_ctl=add_type(&swmi,0);
+	mgmt_data=add_type(&swmi,0);
+	add_fd(mgmtconnfd,mgmt_ctl,NULL);
+	return (0);
+}
+
 static void init(void)
 {
+	int i;
+
+	if (daemonize && daemon(0, 0)) {
+		printlog(LOG_ERR,"daemon: %s",strerror(errno));
+		exit(1);
+	}
+
 	if (daemonize) {
+		setsid();
+		/* close all descriptors */
+		for (i = getdtablesize(); i >= 0; --i) close(i);
+
 		openlog(basename(prog), LOG_PID, 0);
 		logok=1;
-		syslog(LOG_INFO,"VDE_SWITCH started");
 	}
+	syslog(LOG_INFO,"VDE_SWITCH Management console started");
+
 	/* add stdin (if tty), connect and data fds to the set of fds we wait for
 	 *    * input */
 	if(isatty(0) && !daemonize)
@@ -582,51 +729,35 @@ static void init(void)
 		printlog(LOG_ERR, "getcwd: %s", strerror(errno));
 		exit(1);
 	}
+
 	strcat(pidfile_path, "/");
-	if (daemonize && daemon(0, 0)) {
-		printlog(LOG_ERR,"daemon: %s",strerror(errno));
-		exit(1);
-	}
 
 	/* once here, we're sure we're the true process which will continue as a
 	 *    * server: save PID file if needed */
 	if(pidfile) save_pidfile();
 
 	if(mgmt_socket != NULL) {
-		int mgmtconnfd;
-		struct sockaddr_un sun;
-		int one = 1;
+		char	path_dup[PATH_MAX];
 
-		if((mgmtconnfd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0){
-			printlog(LOG_ERR,"mgmt socket: %s",strerror(errno));
-			return;
-		}
-		if(setsockopt(mgmtconnfd, SOL_SOCKET, SO_REUSEADDR, (char *) &one,
-					sizeof(one)) < 0){
-			printlog(LOG_ERR,"mgmt setsockopt: %s",strerror(errno));
-			return;
-		}
-		if(fcntl(mgmtconnfd, F_SETFL, O_NONBLOCK) < 0){
-			printlog(LOG_ERR,"Setting O_NONBLOCK on mgmt fd: %s",strerror(errno));
-			return;
-		}
-		sun.sun_family = PF_UNIX;
-		snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",mgmt_socket);
-		if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-			if((errno == EADDRINUSE) && still_used(&sun)) return;
-			else if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-				printlog(LOG_ERR,"mgmt bind %s",strerror(errno));
-				return;
-			}
-		}
-		setmgmtperm(sun.sun_path);
-		if(listen(mgmtconnfd, 15) < 0){
-			printlog(LOG_ERR,"mgmt listen: %s",strerror(errno));
-			return;
-		}
-		mgmt_ctl=add_type(&swmi,0);
-		mgmt_data=add_type(&swmi,0);
-		add_fd(mgmtconnfd,mgmt_ctl,NULL);
+		strcpy(path_dup, mgmt_socket); /* dirname can modify the input */
+		/* Actually Creating the mgmt directory */
+		if (((mkdir(dirname(path_dup), MGMT_DIR_MOD) < 0) && (errno != EEXIST))){
+			printlog(LOG_ERR,"Could not create the VDE mgt directory '%s': %s",
+				mgmt_socket, strerror(errno));
+			exit(-1);
+  		}
+
+		strcpy(path_dup, mgmt_socket); /* dirname can modify the input */
+		if (chmod(dirname(path_dup), MGMT_DIR_MOD) < 0) {
+			printlog(LOG_ERR,"Could not set the VDE mgmt directory '%s' "
+				"permissions: %s", mgmt_socket, strerror(errno));
+			exit(-1);
+  		}
+		pthread_mutex_init(&handle_cmd_lock, NULL);
+		if (use_ip_sockets)
+			init_ip_mgt_sock();
+		else
+			init_unix_mgt_sock();
 	}
 }
 
@@ -929,10 +1060,12 @@ static struct comlist cl[]={
 #endif
 };
 
+#ifdef DEBUGOPT
 static void sighupmgmt(int signo)
 {
 	EVENTOUT(MGMTSIGHUP, signo);
 }
+#endif
 
 void start_consmgmt(void)
 {

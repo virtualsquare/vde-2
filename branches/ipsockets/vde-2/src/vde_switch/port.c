@@ -2,6 +2,11 @@
  * 2008 Luca Saiu (Marionnet project): a better hub implementation
  * Some minor remain from uml_switch Copyright 2002 Yon Uriarte and Jeff Dike
  * Licensed under the GPLv2 
+ *
+ * Copyright (c) 2012, Juniper Networks, Inc. All rights reserved.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2, as published by the Free Software Foundation.
  */
 
 #include <stdio.h>
@@ -17,6 +22,7 @@
 #include <grp.h>
 #include <pwd.h>
 #include <ctype.h>
+#include <linux/if_ether.h>
 
 #include <config.h>
 #include <vde.h>
@@ -32,6 +38,8 @@
 #include "fstp.h"
 
 #include "packetq.h"
+
+static int vlanaddport(char *arg);
 
 static int pflag=0;
 static int numports;
@@ -131,18 +139,18 @@ bitarray validvlan;
 
 static int alloc_port(unsigned int portno)
 {
-	int i=portno;
-	if (i==0) {
+	if (portno == 0) {
 		/* take one */
-		for (i=1;i<numports && portv[i] != NULL && 
-				(portv[i]->ep != NULL || portv[i]->flag & NOTINPOOL) ;i++)
+		for (portno=1;portno<numports && portv[portno] != NULL && 
+			(portv[portno]->ep != NULL || portv[portno]->flag &
+			NOTINPOOL) ;portno++)
 			;
-	} else if (i<0) /* special case MGMT client port */
-		i=0;
-	if (i >= numports)
+	} else if (portno<0) /* special case MGMT client port */
+		portno = 0;
+	if (portno >= numports)
 		return -1;
 	else {
-		if (portv[i] == NULL) {
+		if (portv[portno] == NULL) {
 			struct port *port;
 			if ((port = malloc(sizeof(struct port))) == NULL){
 				printlog(LOG_WARNING,"malloc port %s",strerror(errno));
@@ -152,7 +160,7 @@ static int alloc_port(unsigned int portno)
 				DBGOUT(DBGPORTNEW,"%02d", i);
 				EVENTOUT(DBGPORTNEW,i);
 
-				portv[i]=port;
+				portv[portno]=port;
 				port->ep=NULL;
 				port->user=port->group=port->curuser=-1;
 #ifdef FSTP
@@ -167,10 +175,18 @@ static int alloc_port(unsigned int portno)
 				port->flag=0;
 				port->sender=NULL;
 				port->vlanuntag=0;
-				ba_set(vlant[0].table,i);
+				ba_set(vlant[0].table,portno);
+				if (pflag & TRUNK_TAG) {
+					int	vlanid;
+					for (vlanid = 0; vlanid < NUMOFVLAN; vlanid++) {
+						char	arg[32];
+						sprintf(arg, "%d %d", vlanid, portno); 
+						(void)vlanaddport(arg);
+					}
+				}
 			}
 		}
-		return i;
+		return portno;
 	}
 }
 
@@ -245,7 +261,7 @@ struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
 	struct endpoint *ep;
 
 	if ((portno = alloc_port(portno)) >= 0) {
-		port=portv[portno];	
+		port=portv[portno];
 		if (port->ep == NULL && checkport_ac(port,user)==0)
 			port->curuser=user;
 		if (port->curuser == user &&
@@ -304,6 +320,31 @@ struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
 int ep_get_port(struct endpoint *ep)
 {
 	return ep->port;
+}
+
+void fd2ip(int fd, struct sockaddr_in *sock)
+{
+	struct sockaddr sockinfo;
+	socklen_t sockinfo_sz = sizeof(sockinfo);
+
+	if (getsockname(fd, &sockinfo, &sockinfo_sz ) < 0 ) {
+		perror("in get_port_ip_info, getsockname error: ");
+		return;
+	}
+	sock->sin_port = ((struct sockaddr_in *)&sockinfo)->sin_port;
+	sock->sin_addr = ((struct sockaddr_in *)&sockinfo)->sin_addr;
+}
+
+void get_port_ip_info(int portno, struct sockaddr_in *sock)
+{
+	struct port *port = portv[portno];
+
+	return (fd2ip(port->ep->fd_data, sock));
+}
+
+void setup_destination(struct endpoint *ep, int fd_data)
+{
+	ep->fd_data = fd_data;
 }
 
 void setup_description(struct endpoint *ep, char *descr)
@@ -552,8 +593,9 @@ int port_getcost(int port)
 
 #define UNTAG2TAG(P,VLAN,LEN) \
 	({ memmove((char *)(P)-4,(P),2*ETH_ALEN); LEN += 4 ; \
-	 (P)->header.src[2]=0x81; (P)->header.src[3]=0x00;\
-	 (P)->header.src[4]=(VLAN >> 8); (P)->header.src[5]=(VLAN);\
+	 (P)->header.src[2]=((ETH_P_8021Q >> 8) & 0xFF); \
+	 (P)->header.src[3]=(ETH_P_8021Q & 0xFF); \
+	 (P)->header.src[4]=(VLAN >> 8); (P)->header.src[5]=(VLAN); \
 	 (struct packet *)((char *)(P)-4); })
 
 
@@ -598,7 +640,7 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 					SEND_PACKET_PORT(portv[i],i,packet,len,&tmpbuf);
 #endif
 		} else { /* This is a switch, not a HUB! */
-			if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00) {
+			if (*((uint16_t *)&(packet->header.proto)) == ntohs(ETH_P_8021Q)) {
 				tagged=1;
 				vlan=((packet->data[0] << 8) + packet->data[1]) & 0xfff;
 				if (! ba_check(vlant[vlan].table,port))
@@ -624,8 +666,12 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 
 				int last = find_in_hash_update(packet->header.src,vlan,port);
 				/* old value differs from actual input port */
-				if(last >=0 && (port != last)){
-					printlog(LOG_INFO,"MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d",packet->header.src[0],packet->header.src[1],packet->header.src[2],packet->header.src[3],packet->header.src[4],packet->header.src[5],last,port);
+				if(last >=0 && (port != last) && !(pflag & TRUNK_TAG)){
+					printlog(LOG_INFO,"MAC %02x:%02x:%02x:%02x:%02x:%02x "
+					"moved from port %d to port %d",packet->header.src[0],
+					packet->header.src[1],packet->header.src[2],
+					packet->header.src[3],packet->header.src[4],
+					packet->header.src[5],last,port);
 				}
 			}
 			/* static void send_dst(int port,struct packet *packet, int len) */
@@ -1385,5 +1431,11 @@ void port_init(int initnumports)
 	if (vlancreate_nocheck(0) != 0) {
 		printlog(LOG_ERR,"ALLOC vlan port data structures");
 		exit(1);
+	}
+	if (pflag & TRUNK_TAG) {
+		int i;
+		for (i = 1; i < NUMOFVLAN; i++) {
+			vlancreate_nocheck(i);
+		}
 	}
 }

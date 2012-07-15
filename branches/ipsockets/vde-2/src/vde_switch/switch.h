@@ -58,6 +58,7 @@ void mainloop_pollmask_set(int fd, short events);
 
 #define ETH_ALEN 6
 
+#define ETH_DEV_LEN 16
 #define INIT_HASH_SIZE 128
 #define DEFAULT_PRIORITY 0x8000
 #define INIT_NUMPORTS 32
