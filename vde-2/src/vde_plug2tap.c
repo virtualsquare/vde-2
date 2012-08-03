@@ -344,9 +344,11 @@ int main(int argc, char **argv)
 	pollv[0].fd=tapfd;
 
 	if (sockname==NULL || strcmp(sockname,"-") != 0) {
-		conn=vde_open(sockname,"vde_plug:",&open_args);
-		if (conn == NULL)
+		conn=vde_open(sockname,"vde_plug2tap:",&open_args);
+		if (conn == NULL) {
+			printlog(LOG_ERR,"vde_open %s: %s",sockname?sockname:"DEF_SWITCH",strerror(errno));
 			exit(1);
+		}
 		pollv[1].fd=vde_datafd(conn);
 		pollv[2].fd=vde_ctlfd(conn);
 		npollv=3;

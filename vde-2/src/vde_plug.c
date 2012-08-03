@@ -373,8 +373,10 @@ int main(int argc, char **argv)
 	atexit(cleanup);
 	setsighandlers();
 	conn=vde_open(sockname,"vde_plug:",&open_args);
-	if (conn == NULL)
+	if (conn == NULL) {
+		fprintf(stderr,"vde_open %s: %s\n",sockname?sockname:"DEF_SWITCH",strerror(errno));
 		exit(1);
+	}
 
 	vdestream=vdestream_open(conn,STDOUT_FILENO,vdeplug_recv,vdeplug_err);
 
