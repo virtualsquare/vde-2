@@ -116,6 +116,7 @@ int main(int argc,char *argv[])
 	//static int fileout[]={STDOUT_FILENO,STDOUT_FILENO};
 	struct vdehiststat *vdehst;
 	setsighandlers();
+	tcgetattr(STDIN_FILENO,&tiop);
 	atexit(cleanup);
 	sun.sun_family=PF_UNIX;
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",argv[1]);
@@ -128,7 +129,6 @@ int main(int argc,char *argv[])
 		perror("Socket connecting error");
 		exit(-1);
 	}
-	tcgetattr(STDIN_FILENO,&tiop);
 	newtiop=tiop;
 	newtiop.c_cc[VMIN]=1;
 	newtiop.c_cc[VTIME]=0;
