@@ -82,7 +82,7 @@ int
 isvalid_crc32(unsigned char *block, int len)
 {
 	unsigned char *crc=(unsigned char *)crc32(block,len-4);
-	if(strncmp((char*)block+(len-4),(char*)crc,4)==0){
+	if(memcmp((char*)block+(len-4),(char*)crc,4)==0){
 		free(crc);
 		return 1;
 	}else{
