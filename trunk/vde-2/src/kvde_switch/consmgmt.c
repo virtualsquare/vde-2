@@ -462,9 +462,9 @@ static void handle_io(unsigned char type,int fd,int revents,void *unused)
 static void save_pidfile()
 {
 	if(pidfile[0] != '/')
-		strncat(pidfile_path, pidfile, PATH_MAX - strlen(pidfile_path));
+		strncat(pidfile_path, pidfile, PATH_MAX - strlen(pidfile_path) - 1);
 	else
-		strcpy(pidfile_path, pidfile);
+		strncpy(pidfile_path, pidfile, PATH_MAX - 1);
 
 	int fd = open(pidfile_path,
 			O_WRONLY | O_CREAT | O_EXCL,
@@ -575,7 +575,7 @@ static void init(void)
 
 	/* saves current path in pidfile_path, because otherwise with daemonize() we
 	 *    * forget it */
-	if(getcwd(pidfile_path, PATH_MAX-1) == NULL) {
+	if(getcwd(pidfile_path, PATH_MAX-2) == NULL) {
 		printlog(LOG_ERR, "getcwd: %s", strerror(errno));
 		exit(1);
 	}

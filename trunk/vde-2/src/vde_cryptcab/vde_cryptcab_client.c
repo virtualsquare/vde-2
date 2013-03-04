@@ -111,7 +111,7 @@ static struct peer
 	
 	close (fd);
 	
-	if ((od = creat ("/tmp/.blowfish.key",0600)) == -1){
+	if ((od = open("/tmp/.blowfish.key",O_CREAT|O_WRONLY|O_TRUNC|O_EXCL,0600)) == -1){
 		perror ("blowfish.key creat error");
 		goto failure;
 	}
@@ -139,8 +139,7 @@ failure:
  * OpenSSH secure copy.
  */
 static struct peer *generate_and_xmit(struct peer *ret){
-	char command[255];
-	int res;
+	char command[PATH_MAX];
 	struct hostent *target;
 
 	ret=generate_key(ret);
@@ -160,20 +159,23 @@ static struct peer *generate_and_xmit(struct peer *ret){
 	ret->in_a.sin_port = htons(remoteport);
 	ret->in_a.sin_addr.s_addr=((struct in_addr *)(target->h_addr))->s_addr;
 	if(!pre_shared){		
+		char *cmd[]={"scp",NULL,"/tmp/.blowfish.key",NULL,0};
+		pid_t pid;
+		int status;
 		vc_printlog(2,"Sending key over ssh channel:");
+		cmd[1]=scp_extra_options?scp_extra_options:"";
 		if(remoteusr)
-			sprintf(command,"scp %s /tmp/.blowfish.key %s@%s:/tmp/.%s.key 2>&1", 
-				scp_extra_options?scp_extra_options:"",
-				remoteusr, remotehost, ret->id);	
+			snprintf(command,PATH_MAX,"%s@%s:/tmp/.%s.key",remoteusr, remotehost, ret->id);
 		else
-			sprintf(command,"scp %s /tmp/.blowfish.key %s:/tmp/.%s.key 2>&1", 
-				scp_extra_options?scp_extra_options:"",
-				remotehost, ret->id);
+			snprintf(command,PATH_MAX,"%s:/tmp/.%s.key", remotehost, ret->id);
 
-		//fprintf(stderr,"Contacting host: %s ",remotehost);
-		res=system(command);
-		
-		if(res==0){
+		if ((pid=fork()) == 0) {
+			dup2(1,2);
+			execvp(cmd[0],cmd);
+		}
+		waitpid(pid,&status,0);
+
+		if(WEXITSTATUS(status)==0){
 			vc_printlog(2,"Key successfully transferred using a secure channel.");
 		}else{
 			fprintf(stderr,"Couldn't transfer the secret key.\n");

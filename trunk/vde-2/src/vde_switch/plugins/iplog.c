@@ -214,7 +214,7 @@ static void ip_find_in_hash_update(int len, unsigned char *addr, unsigned char *
 				ctime_r(&ntime,stime);
 				writev(logfilefd,iov,3);
 			} else if (logfilefd != -1) 
-				syslog(LOG_INFO, msg);
+				syslog(LOG_INFO, "%s", msg);
 			DBGOUT(D_LOGIP_NEWIP,"%s",msg);
 		}
 	}
