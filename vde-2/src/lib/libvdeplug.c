@@ -586,8 +586,12 @@ abort:
 		errno=err;
 	}
 cleanup:
-	if (std_sockname) free(std_sockname);
-	if (real_sockname) free(real_sockname);
+  {
+    int err=errno;
+  	if (std_sockname) free(std_sockname);
+  	if (real_sockname) free(real_sockname);
+    errno = err;
+  }
 	return conn;
 }
 
