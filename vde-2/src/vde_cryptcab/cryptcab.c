@@ -95,7 +95,9 @@ isvalid_crc32(unsigned char *block, int len)
 
 int data_encrypt(unsigned char *src, unsigned char *dst, int len, struct peer *p)
 {
-	int tlen, olen;
+	int tlen, olen, ulen;
+
+  ulen = len - (len % 8);
 	
 	if (encryption_disabled){
 		memcpy(dst,src,len);
@@ -115,7 +117,7 @@ int data_encrypt(unsigned char *src, unsigned char *dst, int len, struct peer *p
 		goto cleanup;
 	}
 
-	if (EVP_EncryptFinal (&ctx, dst + olen, &tlen) != 1)
+	if (EVP_EncryptFinal (&ctx, dst + ulen, &tlen) != 1)
 	{
 		fprintf (stderr,"error in encrypt final\n");
 		olen = -1;
@@ -130,7 +132,9 @@ cleanup:
 
 int data_decrypt(unsigned char *src, unsigned char *dst, int len, struct peer *p)
 {
-	int tlen, olen;
+	int tlen, olen, ulen;
+
+  ulen = len - (len % 8);
 
 	if (encryption_disabled){
 		memcpy(dst,src,len);
@@ -143,16 +147,16 @@ int data_decrypt(unsigned char *src, unsigned char *dst, int len, struct peer *p
 	}
 
 	EVP_DecryptInit (&ctx, EVP_bf_cbc (), p->key, p->iv);
-	if (EVP_DecryptUpdate (&ctx, dst, &olen, src, len) != 1)
+	if (EVP_DecryptUpdate (&ctx, dst, &olen, src, ulen) != 1)
 	{
 		fprintf (stderr,"error in decrypt update\n");
 		olen = -1;
 		goto cleanup;
 	}
 
-	if (EVP_DecryptFinal (&ctx, dst + olen, &tlen) != 1)
+	if (EVP_DecryptFinal (&ctx, dst + ulen, &tlen) != 1)
 	{
-		fprintf (stderr,"error in decrypt final\n");
+		fprintf (stderr,"error in decrypt final, ulen = %d, tlen = %d\n", ulen, tlen);
 		olen = -1;
 		goto cleanup;
 	}
@@ -193,6 +197,13 @@ send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 	int olen;
 	struct sockaddr_in *destination=&(p->in_a);
 	unsigned char *crc;
+
+  if (len + 8 - 1 > MAXPKT) {
+    len = MAXPKT - 8 + 1;
+	  vc_printlog(2,"Warning: Cropping down packet size to %d", len);
+  }
+
+
 	if (encryption_disabled || (flags==CMD_CHALLENGE || flags==CMD_LOGIN || flags==CMD_DENY || flags==CMD_AUTH_OK || flags == CMD_KEEPALIVE)){
 		memcpy(outbuf,data,len);
 		olen=len;
