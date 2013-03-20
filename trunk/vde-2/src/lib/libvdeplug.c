@@ -189,10 +189,10 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		}
 	} else {
 		char *split;
-		if((split = strstr(given_sockname,"->")) != NULL && rindex(split,':') != NULL)
+		if((split = strstr(given_sockname,"->")) != NULL && strrchr(split,':') != NULL)
 			flags |= VDEFLAG_UDP_SOCKET;
 		else if(given_sockname[strlen(given_sockname)-1] == ']' 
-				&& (split=rindex(given_sockname,'[')) != NULL) {
+				&& (split=strrchr(given_sockname,'[')) != NULL) {
 			*split=0;
 			split++;
 			port=atoi(split);
@@ -282,14 +282,14 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		hints.ai_socktype=SOCK_DGRAM;
 		*dst=0;
 		dst+=2;
-		dstport=rindex(dst,':');
+		dstport=strrchr(dst,':');
 		if (dstport==NULL) {
 			errno=EINVAL;
 			goto abort;
 		}
 		*dstport=0;
 		dstport++;
-		srcport=rindex(src,':');
+		srcport=strrchr(src,':');
 		if (srcport==NULL) {
 			srcport=src;
 			src=NULL;

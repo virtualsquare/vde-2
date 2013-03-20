@@ -29,7 +29,7 @@
 
 #ifdef HAVE_TUNTAP
 
-#ifdef VDE_LINUX
+#if defined(VDE_LINUX) || defined(VDE_BIONIC)
 #include <net/if.h>
 #include <linux/if_tun.h>
 #endif
@@ -175,6 +175,29 @@ int open_tap(char *dev)
 	/* tuntap should be "fast", but if there is a packetq we can manage
 		 a tuntap which is "not fast enough" */
 	fcntl(fd, F_SETFL, O_NONBLOCK);
+	return(fd);
+}
+#endif
+
+#ifdef VDE_BIONIC
+int open_tap(char *dev)
+{
+	struct ifreq ifr;
+	int fd;
+
+	if((fd = open("/dev/tun", O_RDWR)) < 0){
+		printlog(LOG_ERR,"Failed to open /dev/tun %s",strerror(errno));
+		return(-1);
+	}
+	memset(&ifr, 0, sizeof(ifr));
+	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+	strncpy(ifr.ifr_name, dev, sizeof(ifr.ifr_name) - 1);
+	/*printf("dev=\"%s\", ifr.ifr_name=\"%s\"\n", ifr.ifr_name, dev);*/
+	if(ioctl(fd, TUNSETIFF, (void *) &ifr) < 0){
+		printlog(LOG_ERR,"TUNSETIFF failed %s",strerror(errno));
+		close(fd);
+		return(-1);
+	}
 	return(fd);
 }
 #endif

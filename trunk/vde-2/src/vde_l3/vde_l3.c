@@ -40,7 +40,7 @@
 #define MAXCMD 255
 #define DEBUG 0
 
-#if defined(VDE_FREEBSD) || defined(VDE_DARWIN)
+#if defined(VDE_FREEBSD) || defined(VDE_DARWIN) || defined(VDE_BIONIC)
 #define ICMP_DEST_UNREACH 3
 #define ICMP_PROT_UNREACH 2
 #endif

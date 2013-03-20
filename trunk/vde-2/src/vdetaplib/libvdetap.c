@@ -154,7 +154,11 @@ static char *getvdeopt(struct ifreq *ifr,char *suffix)
 		return "";
 }
 
+#ifdef VDE_BIONIC
+int ioctl(int fd, int command, ...)
+#else
 int ioctl(int fd, unsigned long int command, ...)
+#endif
 {
 	va_list ap;
 	char *data;

@@ -2,7 +2,6 @@ SUBDIRS = \
 	common \
 	lib \
 	vde_switch \
-	vde_over_ns \
 	vde_l3 \
 	slirpvde
 
@@ -29,6 +28,10 @@ endif
 
 if ENABLE_CRYPTCAB
   SUBDIRS += vde_cryptcab
+endif
+
+if ENABLE_VDE_OVER_NS
+  SUBDIRS += vde_over_ns
 endif
 
 if ENABLE_ROUTER
