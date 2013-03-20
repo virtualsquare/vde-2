@@ -188,6 +188,9 @@ static void free_port(unsigned int portno)
 	}
 }
 
+#ifdef VDE_BIONIC
+  static inline int user_belongs_to_group(uid_t uid, gid_t gid) { return 0; }
+#else
 /* 1 if user belongs to the group, 0 otherwise) */
 static int user_belongs_to_group(uid_t uid, gid_t gid)
 {
@@ -216,6 +219,7 @@ static int user_belongs_to_group(uid_t uid, gid_t gid)
 		}
 	}
 }
+#endif
 
 
 /* Access Control check:

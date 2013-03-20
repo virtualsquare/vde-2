@@ -45,6 +45,9 @@ AC_CHECK_HEADERS([syslimits.h sys/syslimits.h])
 AC_CHECK_HEADERS([openssl/blowfish.h], [],
   [add_cryptcab_support=no ; warn_cryptcab=yes])
 
+AC_CHECK_HEADERS([sysexits.h], [],
+  [add_over_ns_support=no ; warn_over_ns=yes])
+
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
 AC_C_INLINE
@@ -94,7 +97,11 @@ AC_CHECK_SIZEOF(char *)
 # Define VDE_LINUX or VDE_DARWIN
 case "$build_os" in
   linux*)
-    AC_DEFINE([VDE_LINUX], 1, [If defined, this is a Linux system])
+    if expr "$host_os" : ".*android" > /dev/null; then
+      AC_DEFINE([VDE_BIONIC], 1, [If defined, this is a Linux/bionic system])
+    else
+      AC_DEFINE([VDE_LINUX], 1, [If defined, this is a Linux system])
+    fi
   ;;
   darwin*)
     AC_DEFINE([VDE_DARWIN], 1, [If defined, this is a Darwin system])
@@ -126,6 +133,12 @@ AC_ARG_ENABLE([cryptcab],
   AS_HELP_STRING([--disable-cryptcab],
     [Disable libcrypto-dependend vde_cryptcab compilation]),
   [if test $enableval = "no" ; then add_cryptcab_support=no ; warn_cryptcab=no ; fi])
+
+# Disable vde_over_ns? (not working on android, maybe unwanted)
+AC_ARG_ENABLE([vde_over_ns],
+  AS_HELP_STRING([--disable-vde_over_ns],
+    [Disable vde_over_ns compilation]),
+  [if test $enableval = "no" ; then add_over_ns_support=no ; warn_over_ns=no ; fi])
 
 # Disable vde_router? (depends on lpthread, maybe unwanted)
 AC_ARG_ENABLE([router],
@@ -221,6 +234,7 @@ fi
 
 
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
+AM_CONDITIONAL(ENABLE_VDE_OVER_NS, test "$add_over_ns_support" = yes)
 AM_CONDITIONAL(ENABLE_ROUTER, test "$enable_router" = yes)
 AM_CONDITIONAL(ENABLE_PYTHON, test "$enable_python" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
@@ -320,6 +334,14 @@ if ! test x$add_cryptcab_support = "xyes" ; then
     AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
 not installed on your system, or because openssl/blowfish.h could not be found.
 Please install them if you want CryptCab to be compiled and installed.])
+    AS_ECHO
+  fi
+fi
+
+if ! test x$add_over_ns_support = "xyes" ; then
+  if test x$warn_over_ns = "xyes" ; then
+    AC_MSG_WARN([VDE vde_over_ns support has been disabled because your libc
+    sysexits.h could not be found.])
     AS_ECHO
   fi
 fi
