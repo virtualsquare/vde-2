@@ -283,8 +283,8 @@ struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
 				if (port->vlanuntag != NOVLAN) {
 					ba_set(vlant[port->vlanuntag].bcuntag,portno);
 					ba_clr(vlant[port->vlanuntag].bctag,portno);
+					ba_clr(vlant[port->vlanuntag].notlearning,portno);
 				}
-				ba_clr(vlant[port->vlanuntag].notlearning,portno);
 			} else {
 				ep->next=port->ep;
 				port->ep=ep;
