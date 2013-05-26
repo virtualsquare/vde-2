@@ -297,9 +297,8 @@ struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
 				if (port->vlanuntag != NOVLAN) {
 					ba_set(vlant[port->vlanuntag].bcuntag,portno);
 					ba_clr(vlant[port->vlanuntag].bctag,portno);
-				}
-				if (port->vlanuntag != 4095)
 					ba_clr(vlant[port->vlanuntag].notlearning,portno);
+				}
 #ifdef VDE_VTRILL
 				if (ba_check(vlant[vtrillvlan].bctag,portno))
 					port->vtrilldata=vtrill_newport(portno);
