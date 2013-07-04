@@ -59,6 +59,9 @@ MODULE_DESCRIPTION("IPN Kernel Module");
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0)
 #define IPN_PRE310
 #endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
+#define IPN_PRE390
+#endif
 
 /*extension of RCV_SHUTDOWN defined in include/net/sock.h
  * when the bit is set recv fails */
@@ -135,10 +138,16 @@ static inline void ipn_remove_network(struct ipn_network *ipnn)
 static struct ipn_network *ipn_find_network_byinode(struct inode *i)
 {
 	struct ipn_network *ipnn;
+#ifdef PRE390
 	struct hlist_node *node;
 
 	hlist_for_each_entry(ipnn, node,
-			&ipn_network_table[i->i_ino & (IPN_HASH_SIZE - 1)], hnode) {
+			&ipn_network_table[i->i_ino & (IPN_HASH_SIZE - 1)], hnode) 
+#else
+	hlist_for_each_entry(ipnn, 
+			&ipn_network_table[i->i_ino & (IPN_HASH_SIZE - 1)], hnode) 
+#endif
+	{
 		struct dentry *dentry = ipnn->dentry;
 
 		if(dentry && dentry->d_inode == i)
@@ -151,11 +160,17 @@ struct ipn_network *ipn_find_network_byfun(
 		int (*fun)(struct ipn_network *,void *),void *funarg)
 {
 	struct ipn_network *ipnn;
-	struct hlist_node *node;
 	int ipn_table_scan;
 
 	for (ipn_table_scan=0;ipn_table_scan<IPN_HASH_SIZE;ipn_table_scan++) {
-		hlist_for_each_entry(ipnn, node, &ipn_network_table[ipn_table_scan], hnode) {
+#ifdef PRE390
+		struct hlist_node *node;
+		hlist_for_each_entry(ipnn, node, &ipn_network_table[ipn_table_scan], hnode)
+#else
+		hlist_for_each_entry(ipnn, &ipn_network_table[ipn_table_scan], hnode)
+#endif
+
+		{
 			if(fun(ipnn,funarg))
 				return ipnn;
 		}
