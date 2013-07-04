@@ -32,6 +32,10 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("VIEW-OS TEAM");
 MODULE_DESCRIPTION("Ethernet hash table Kernel Module");
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
+#define IPN_PRE390
+#endif
+
 #undef IPN_DEBUG
 
 static struct kmem_cache *ipn_hash_elem_cache;
@@ -182,12 +186,18 @@ static void ipn_hash_timer_expired(unsigned long arg)
 void ipn_hash_add(struct ipn_hash *vdeh,u16 *key,u16 vlan,int port)
 {
 	struct ipn_hash_elem *elem=NULL;
-	struct hlist_node *node;
 	int hashvalue=hashfun(key,vlan,vdeh->mask);
 	int found=0;
 	spin_lock(&vdeh->hashlock);
+#ifdef PRE390
+	struct hlist_node *node;
 	hlist_for_each_entry(elem, node,
-			&vdeh->hashtable[hashvalue], hashnode) {
+			&vdeh->hashtable[hashvalue], hashnode) 
+#else
+	hlist_for_each_entry(elem,
+			&vdeh->hashtable[hashvalue], hashnode) 
+#endif
+	{
 		if (elem->key[0]==key[0] && elem->key[1]==key[1] &&
 				elem->key[2]==key[2] && elem->key[3]==vlan) {
 			found=1;
@@ -224,7 +234,6 @@ void ipn_hash_add(struct ipn_hash *vdeh,u16 *key,u16 vlan,int port)
 int ipn_hash_find(struct ipn_hash *vdeh,u16 *key,u16 vlan)
 {
 	struct ipn_hash_elem *elem;
-	struct hlist_node *node;
 	int rv=-1;
 	int hashvalue=hashfun(key,vlan,vdeh->mask);
 
@@ -232,8 +241,15 @@ int ipn_hash_find(struct ipn_hash *vdeh,u16 *key,u16 vlan)
 #ifdef IPN_DEBUG
 	printk("SEARCH HASH %x %x %x %x \n", key[0], key[1], key[2], vlan);
 #endif
+#ifdef PRE390
+	struct hlist_node *node;
 	hlist_for_each_entry(elem, node,
-			&vdeh->hashtable[hashvalue], hashnode) {
+			&vdeh->hashtable[hashvalue], hashnode) 
+#else
+	hlist_for_each_entry(elem,
+			&vdeh->hashtable[hashvalue], hashnode) 
+#endif
+	{
 		if (elem->key[0]==key[0] && elem->key[1]==key[1] &&
 				elem->key[2]==key[2] && elem->key[3]==vlan) {
 			rv=elem->port;
