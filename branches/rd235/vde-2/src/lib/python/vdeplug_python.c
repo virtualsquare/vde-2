@@ -16,13 +16,11 @@ static PyObject *vdeplug_open(PyObject *self, PyObject *args)
 	struct vde_open_args vde_args = {0,NULL,0777};
 	char *vde_sock = NULL, *vde_descr = NULL;
 	VDECONN *ret;
-	int e;
 
 	if (!PyArg_ParseTuple(args, "ss|isi", &vde_sock, &vde_descr, &vde_args.port, &vde_args.group, &vde_args.mode))
 		goto failure; 
 
 	ret = vde_open_real(vde_sock, vde_descr, 1, &vde_args);
-	e = errno;
 	if (!ret)
 		goto failure;
 	else

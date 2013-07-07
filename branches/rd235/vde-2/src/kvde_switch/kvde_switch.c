@@ -24,7 +24,7 @@
 #include <vde.h>
 #include <vdecommon.h>
 
-#include "../vde_switch/switch.h"
+#include "switch.h"
 #include "consmgmt.h"
 #include "datasock.h"
 
