@@ -32,7 +32,7 @@
 #include <vde.h>
 #include <vdecommon.h>
 
-#include "../vde_switch/switch.h"
+#include "switch.h"
 #include "sockutils.h"
 #include "consmgmt.h"
 
