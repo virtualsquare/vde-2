@@ -21,4 +21,4 @@ tbf_la_LIBADD = $(top_builddir)/src/common/libvdecommon.la
 
 bin_PROGRAMS = vde_l3
 vde_l3_SOURCES = vde_l3.c vde_buff.h vde_l3.h
-vde_l3_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug.la
+vde_l3_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug/libvdeplug.la
