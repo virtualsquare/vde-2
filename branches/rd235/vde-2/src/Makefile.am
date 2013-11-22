@@ -49,14 +49,14 @@ if ENABLE_PROFILE
 endif
 
 vde_autolink_LDADD = $(LDADD) lib/libvdemgmt.la
-vde_plug2tap_LDADD = $(LDADD) lib/libvdeplug.la
+vde_plug2tap_LDADD = $(LDADD) lib/libvdeplug/libvdeplug.la
 if ENABLE_PCAP
-  vde_pcapplug_LDADD = $(LDADD) lib/libvdeplug.la -lpcap
+  vde_pcapplug_LDADD = $(LDADD) lib/libvdeplug/libvdeplug.la -lpcap
 endif
-vde_plug_LDADD = $(LDADD) lib/libvdeplug.la
-vdeq_LDADD = $(LDADD) lib/libvdeplug.la
-wirefilter_LDADD = $(LDADD) lib/libvdeplug.la
-vdeterm_LDADD = $(LDADD) lib/libvdeplug.la lib/libvdehist.la
+vde_plug_LDADD = $(LDADD) lib/libvdeplug/libvdeplug.la
+vdeq_LDADD = $(LDADD) lib/libvdeplug/libvdeplug.la
+wirefilter_LDADD = $(LDADD) lib/libvdeplug/libvdeplug.la
+vdeterm_LDADD = $(LDADD) lib/libvdeplug/libvdeplug.la lib/libvdehist.la
 
 install-exec-hook:
 	rm -f $(DESTDIR)$(bindir)/vdecmd

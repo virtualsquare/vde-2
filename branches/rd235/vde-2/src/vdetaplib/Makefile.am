@@ -14,6 +14,6 @@ libvdetap_la_CFLAGS = $(AM_CFLAGS) -fno-strict-aliasing
 AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBEXECDIR=\"$(libexecdir)\"
 
 vdetap_SOURCES = vdetap.c
-vdetap_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug.la
+vdetap_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug/libvdeplug.la
 
 EXTRA_DIST = test.c

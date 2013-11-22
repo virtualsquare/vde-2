@@ -52,4 +52,4 @@ slirpvde_SOURCES = \
 		   tftp.h \
 		   slirpvde.c
 
-slirpvde_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug.la
+slirpvde_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug/libvdeplug.la
