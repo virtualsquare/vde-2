@@ -1467,7 +1467,7 @@ int main(int argc,char *argv[])
 
 	while(1) {
 		int c;
-		c = GETOPT_LONG (argc, argv, "hl:n:d:M:D:m:b:s:c:v:L:f:",
+		c = GETOPT_LONG (argc, argv, "hNl:n:d:M:D:m:b:s:c:v:L:f:",
 				long_options, &option_index);
 		if (c<0)
 			break;
