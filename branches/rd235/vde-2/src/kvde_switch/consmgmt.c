@@ -567,7 +567,7 @@ static void init(void)
 	}
 	/* add stdin (if tty), connect and data fds to the set of fds we wait for
 	 *    * input */
-	if(isatty(0) && !daemonize)
+	if(!daemonize)
 	{
 		console_type=add_type(&swmi,0);
 		add_fd(0,console_type,NULL);
