@@ -221,7 +221,7 @@ int openvdem(char *mgmt,char *progname, struct netif **nif,char *nodename)
 	if ((ctrl=rindex(buf,'\n')) != NULL)
 		*ctrl=0;
 	banner=strdup(buf);
-	write(fd,"ds/showinfo\n",13);
+	write(fd,"ds/showinfo\n",12);
 	if ((n=read(fd,buf,BUFSIZE))<=0) {
 		printlog(LOG_ERR,"Error reading ctl socket from VDE switch: %s",strerror(errno));
 		exit(-1);

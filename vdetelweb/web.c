@@ -169,6 +169,8 @@ static int vde_getanswer(voidfun f,void *arg,int vdefd)
 	int n=0,ib=0,il=0,indata=0,eoa=0;
 	do {
 		n=read(vdefd,buf,BUFSIZE);
+		if (n==0)
+			exit(0);
 		for(ib=0;ib<n;ib++)
 		{
 			linebuf[il++]=buf[ib];

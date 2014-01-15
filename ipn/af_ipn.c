@@ -1577,6 +1577,8 @@ int ipn_node_read(struct ipn_node *ipn_node, struct iovec *msg_iov, size_t len, 
 	spin_lock(&ipn_node->msglock);
 	while (ipn_node->totmsgcount == 0) {
 		spin_unlock(&ipn_node->msglock);
+		if (flags & MSG_DONTWAIT)
+			return -EWOULDBLOCK;
 		if (wait_event_interruptible(ipn_node->read_wait,
 					!(ipn_node->totmsgcount == 0)))
 			return -ERESTARTSYS;
