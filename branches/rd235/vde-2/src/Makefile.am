@@ -31,6 +31,10 @@ if ENABLE_CRYPTCAB
   SUBDIRS += vde_cryptcab
 endif
 
+if ENABLE_VXLAN
+  SUBDIRS += vde_vxlan
+endif
+
 if ENABLE_KERNEL_SWITCH
   SUBDIRS += kvde_switch
 endif

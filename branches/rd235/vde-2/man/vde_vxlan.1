@@ -1,0 +1,78 @@
+.TH VDE_VXLAN 1 "October 26, 2013" "Virtual Distributed Ethernet"
+.SH NAME
+vde_vxlan \- VXLAN tunnel endpoint for VDE
+.SH SYNOPSIS
+.B vde_vxlan
+.BI --vxlan-id
+.I vxlan_id
+.BI --vxlan-addr
+.I multicast_address
+[
+.BI --vxlan-port
+.I udp_port
+]
+[
+.BI --vxlan-mttl
+.I multicast_ttl
+]
+[
+.BI --sock
+.I vde_socket_dir
+]
+[
+.BI --port
+.I vde_port
+]
+[
+.BI --daemon
+]
+[
+.BI --verbose
+]
+.br
+.SH DESCRIPTION
+A
+\fBvde_vxlan\fP 
+is a Virtual eXtensible LAN (VXLAN) tunnel endpoint for the vde architecture,
+that can connect a \fBvde_switch (1)\fP to a VXLAN segment.
+
+.SH OPTIONS
+
+.TP
+.B --vxlan-id
+ID of the VXLAN (VNI)
+.TP
+.B --vxlan-addr
+Multicast address of the VXLAN
+.TP
+.B --vxlan-port
+Port of the VXLAN (default 4879)
+.TP
+.B --vxlan-mttl
+Multicast TTL (default 1)
+.TP
+.B --sock
+Socket directory of the VDE switch
+.TP
+.B --port
+Port of the VDE switch
+.TP
+.B --daemon
+Run in background
+.TP
+.B --verbose
+Show debug output
+
+.SH NOTICE
+Virtual Distributed Ethernet is not related in any way with
+www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
+i.e. the German "Association for Electrical, Electronic & Information
+Technologies").
+
+.SH SEE ALSO
+\fBvde_switch\fP(1),
+.br
+.SH AUTHORS
+vde_vxlan is a tool by Alessandro Ghedini <alessandro@ghedini.me>
+
+VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
