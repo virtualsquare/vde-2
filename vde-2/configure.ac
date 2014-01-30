@@ -124,6 +124,13 @@ AC_ARG_ENABLE([cryptcab],
     [Disable libcrypto-dependend vde_cryptcab compilation]),
   [if test $enableval = "no" ; then add_cryptcab_support=no ; warn_cryptcab=no ; fi])
 
+enable_vxlan=yes
+# Disable vde_vxlan?
+AC_ARG_ENABLE([vxlan],
+		AS_HELP_STRING([--disable-vxlan],
+			[Disable vde_vxlan compilation]),
+		[if test $enableval = "no" ; then enable_vxlan=no ; warn_vxlan=no ; fi])
+
 # Check of tuntap device
 AC_ARG_ENABLE([tuntap],
   AS_HELP_STRING([--disable-tuntap], [Disable tuntap compilation]), [:],
@@ -212,6 +219,7 @@ fi
 
 
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
+AM_CONDITIONAL(ENABLE_VXLAN, test "$enable_vxlan" = yes)
 AM_CONDITIONAL(ENABLE_PYTHON, test "$enable_python" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
@@ -245,6 +253,7 @@ AC_CONFIG_FILES(
   [src/vdetaplib/Makefile]
   [src/vde_l3/Makefile]
   [src/vde_cryptcab/Makefile]
+	[src/vde_vxlan/Makefile]
   [src/slirpvde/Makefile]
   [src/vde_switch/plugins/Makefile]
 )
@@ -261,12 +270,25 @@ else
   AS_ECHO " - VDE CryptCab............ disabled"
 fi
 
+if test x$enable_vxlan = "xyes" ; then
+  AS_ECHO " + VDE VXLAN............... enabled"
+else
+  AS_ECHO " - VDE VXLAN............... disabled"
+fi
+
 if test x$enable_python = "xyes" ; then
   AS_ECHO " + Python Libraries........ enabled"
 else
   AS_ECHO " - Python Libraries........ disabled"
 fi
 
+if ! test x$enable_vxlan = "xyes" ; then
+  if test x$warn_vxlan = "xyes" ; then
+    AC_MSG_WARN([VDE VXLAN support has been disabled.])
+		AS_ECHO
+	fi
+fi
+	
 if test x$warn_tuntap = "xyes" ; then
   AS_ECHO " - TAP support............. disabled"
 else
