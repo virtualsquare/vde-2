@@ -146,6 +146,13 @@ AC_ARG_ENABLE([router],
     [Disable libpthread-dependent vde_router compilation]),
   [if test $enableval = "no" ; then enable_router=no ; warn_router=no ; fi])
 
+enable_vxlan=yes
+# Disable vde_vxlan?
+AC_ARG_ENABLE([vxlan],
+  AS_HELP_STRING([--disable-vxlan],
+    [Disable vde_vxlan compilation]),
+  [if test $enableval = "no" ; then enable_vxlan=no ; warn_vxlan=no ; fi])
+
 # Check of tuntap device
 AC_ARG_ENABLE([tuntap],
   AS_HELP_STRING([--disable-tuntap], [Disable tuntap compilation]), [:],
@@ -236,6 +243,7 @@ fi
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
 AM_CONDITIONAL(ENABLE_VDE_OVER_NS, test "$add_over_ns_support" = yes)
 AM_CONDITIONAL(ENABLE_ROUTER, test "$enable_router" = yes)
+AM_CONDITIONAL(ENABLE_VXLAN, test "$enable_vxlan" = yes)
 AM_CONDITIONAL(ENABLE_PYTHON, test "$enable_python" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
@@ -269,6 +277,7 @@ AC_CONFIG_FILES(
   [src/vde_l3/Makefile]
   [src/vde_cryptcab/Makefile]
   [src/vde_router/Makefile]
+  [src/vde_vxlan/Makefile]
   [src/slirpvde/Makefile]
   [src/vde_switch/plugins/Makefile]
 )
@@ -289,6 +298,12 @@ if test x$enable_router = "xyes" ; then
   AS_ECHO " + VDE Router.............. enabled"
 else
   AS_ECHO " - VDE Router.............. disabled"
+fi
+
+if test x$enable_vxlan = "xyes" ; then
+  AS_ECHO " + VDE VXLAN............... enabled"
+else
+  AS_ECHO " - VDE VXLAN............... disabled"
 fi
 
 if test x$enable_python = "xyes" ; then
@@ -350,6 +365,13 @@ if ! test x$enable_router = "xyes" ; then
   if test x$warn_router = "xyes" ; then
     AC_MSG_WARN([VDE Router support has been disabled because libpthread is
 not installed on your system.])
+    AS_ECHO
+  fi
+fi
+
+if ! test x$enable_vxlan = "xyes" ; then
+  if test x$warn_vxlan = "xyes" ; then
+    AC_MSG_WARN([VDE VXLAN support has been disabled.])
     AS_ECHO
   fi
 fi
