@@ -42,6 +42,7 @@ src/vde_autolink
 src/vde_cryptcab/vde_cryptcab
 src/vde_l3/vde_l3
 src/vde_over_ns/vde_over_ns
+src/vde_vxlan/vde_vxlan
 src/vde_pcapplug
 src/vde_plug
 src/vde_plug2tap
