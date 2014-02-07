@@ -18,6 +18,9 @@ libvdeplug_la_SOURCES =  \
 	libvdeplug_vde.c \
 	libvdeplug_kvde.c \
 	libvdeplug_udp.c \
+	libvdeplug_vxhash.c \
+	libvdeplug_vxlan.c \
+	libvdeplug_vxvde.c \
 	libvdestream.c
 
 libvdeplug_la_LIBADD = $(LIBADD)

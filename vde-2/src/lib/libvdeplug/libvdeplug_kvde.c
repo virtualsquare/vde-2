@@ -64,15 +64,11 @@ struct vde_kvde_conn {
 static char *vde_kvde_check(char *given_sockname)
 {
 	static char tag[]="KVDE:";
-	static char atag[]="KVDE{";
-	int len;
+	static char atag[]="KVDE/";
 	if (strncmp(given_sockname,tag,strlen(tag)) == 0)
 		return given_sockname+strlen(tag);
-	len=strlen(given_sockname);
-	if (strncmp(given_sockname,atag,strlen(atag)) == 0 &&
-			given_sockname[len-1] == '}') {
+	if (strncmp(given_sockname,atag,strlen(atag)) == 0) {
 		given_sockname[strlen(atag)-1]=':';
-		given_sockname[len-1] = 0;
 		return given_sockname+strlen(atag);
 	}
 	return NULL;
