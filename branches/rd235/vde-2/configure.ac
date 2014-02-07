@@ -241,6 +241,7 @@ AC_CONFIG_FILES(
   [src/Makefile]
   [src/lib/Makefile]
   [src/lib/libvdeplug/Makefile]
+  [src/lib/libvdeplug/libvdeplug2/Makefile]
   [src/lib/vdesnmp.pc]
   [src/lib/vdemgmt.pc]
   [src/lib/libvdeplug/vdeplug.pc]
