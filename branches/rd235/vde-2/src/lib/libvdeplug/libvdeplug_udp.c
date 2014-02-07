@@ -62,16 +62,12 @@ struct vde_udp_conn {
 static char *vde_udp_check(char *given_sockname)
 {
 	static char tag[]="UDP:";
-	static char atag[]="UDP{";
-	int len;
+	static char atag[]="UDP/";
 	char *split;
 	if (strncmp(given_sockname,tag,strlen(tag)) == 0)
 		return given_sockname+strlen(tag);
-	len=strlen(given_sockname);
-	if (strncmp(given_sockname,atag,strlen(atag)) == 0 &&
-			given_sockname[len-1] == '}') {
+	if (strncmp(given_sockname,atag,strlen(atag)) == 0) {
 		given_sockname[strlen(atag)-1]=':';
-		given_sockname[len-1] = 0;
 		return given_sockname+strlen(atag);
 	}
 	if((split = strstr(given_sockname,"->")) != NULL && rindex(split,':') != NULL)

@@ -33,8 +33,6 @@
 #include "libvdeplug_mod.h"
 #include "canonicalize.h"
 
-#define USE_IPN
-
 static char *vde_ptpf_check(char *given_sockname);
 static VDECONN *vde_ptpf_open(char *given_sockname, char *descr,int interface_version,
 		struct vde_open_args *open_args);
@@ -77,25 +75,20 @@ struct vde_ptp_conn {
 static char *vde_ptpf_check(char *given_sockname)
 {
 	static char tag[]="PTPF:";
-	static char atag[]="PTPF{";
+	static char atag[]="PTPF/";
 	static char tag2[]="PTP:";
-	static char atag2[]="PTP{";
-	int len;
-	len=strlen(given_sockname);
+	static char atag2[]="PTP/";
+	int len=strlen(given_sockname);
 	if (strncmp(given_sockname,tag,strlen(tag)) == 0)
 		return given_sockname+strlen(tag);
-	if (strncmp(given_sockname,atag,strlen(atag)) == 0 &&
-			given_sockname[len-1] == '}') {
+	if (strncmp(given_sockname,atag,strlen(atag)) == 0) {
 		given_sockname[strlen(atag)-1]=':';
-		given_sockname[len-1] = 0;
 		return given_sockname+strlen(atag);
 	}
 	if (strncmp(given_sockname,tag2,strlen(tag2)) == 0)
 		return given_sockname+strlen(tag2);
-	if (strncmp(given_sockname,atag2,strlen(atag2)) == 0 &&
-			given_sockname[len-1] == '}') {
+	if (strncmp(given_sockname,atag2,strlen(atag2)) == 0) {
 		given_sockname[strlen(atag2)-1]=':';
-		given_sockname[len-1] = 0;
 		return given_sockname+strlen(atag2);
 	}
 	if (len > 2 && given_sockname[len-1] == ']' && 
@@ -109,15 +102,11 @@ static char *vde_ptpf_check(char *given_sockname)
 static char *vde_ptpm_check(char *given_sockname)
 {
 	static char tag[]="PTPM:";
-	static char atag[]="PTPM{";
-	int len;
+	static char atag[]="PTPM";
 	if (strncmp(given_sockname,tag,strlen(tag)) == 0)
 		return given_sockname+strlen(tag);
-	len=strlen(given_sockname);
-	if (strncmp(given_sockname,atag,strlen(atag)) == 0 &&
-			given_sockname[len-1] == '}') {
+	if (strncmp(given_sockname,atag,strlen(atag)) == 0) {
 		given_sockname[strlen(atag)-1]=':';
-		given_sockname[len-1] = 0;
 		return given_sockname+strlen(atag);
 	}
 	return NULL;

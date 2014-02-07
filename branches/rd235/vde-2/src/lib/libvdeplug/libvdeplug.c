@@ -40,6 +40,8 @@ extern struct vdeplug_module vdeplug_kvde;
 extern struct vdeplug_module vdeplug_udp;
 extern struct vdeplug_module vdeplug_ptpf;
 extern struct vdeplug_module vdeplug_ptpm;
+extern struct vdeplug_module vdeplug_vxlan;
+extern struct vdeplug_module vdeplug_vxvde;
 //extern struct vdeplug_module vdeplug_gvde;
 
 static struct vdeplug_module *modules[]={
@@ -48,6 +50,8 @@ static struct vdeplug_module *modules[]={
 	&vdeplug_udp,
 	&vdeplug_ptpf,
 	&vdeplug_ptpm,
+	&vdeplug_vxlan,
+	&vdeplug_vxvde,
 	//&vdeplug_gvde,
 };
 
@@ -67,6 +71,7 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 	int pid = getpid();
 
 	callerpwd=getpwuid(getuid());
+	//fprintf(stderr, "LIBVDEPLUG OPEN! %s\n",given_sockname);
 
 	descrlen=snprintf(newdescr,MAXDESCR,"%s user=%s PID=%d",
 			descr,(callerpwd != NULL)?callerpwd->pw_name:"??",
