@@ -1,0 +1,11 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: vdeplug
+Description: Virtual Distributed Ethernet connection library.
+Version: 2.2.2
+Libs: -L${libdir} -lvdeplug
+Cflags: -I${includedir}
+

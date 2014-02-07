@@ -50,7 +50,7 @@ struct hash_entry {
 	struct hash_entry *next;
 	struct hash_entry **prev;
 	time_t last_seen;
-	in_addr_t port;
+	in_addr_t ipaddr;
 	u_int64_t dst;
 };
 
@@ -92,22 +92,22 @@ static int calc_hash(u_int64_t src)
 	    ((*(u_int32_t *) &((MAC)[0])) + ((u_int64_t) ((*(u_int16_t *) &((MAC)[4]))+ ((u_int64_t) (VLAN) << 16)) << 32))
 
 /* looks in global hash table 'h' for given address, and return associated
- * port */
+ * ipaddr */
 int find_in_hash(unsigned char *dst, int vlan, in_addr_t *out)
 {
 	struct hash_entry *e = find_entry(extmac(dst,vlan));
 	*out = 0;
 	if(e == NULL) return 0;
-	*out = e->port;
+	*out = e->ipaddr;
 	return 1;
 }
 
-int find_in_hash_update(unsigned char *src, int vlan, in_addr_t port, in_addr_t *out)
+int find_in_hash_update(unsigned char *src, int vlan, in_addr_t ipaddr, in_addr_t *out)
 {
 	struct hash_entry *e;
 	u_int64_t esrc=extmac(src,vlan);
 	int k = calc_hash(esrc);
-	in_addr_t oldport;
+	in_addr_t oldipaddr;
 	time_t now;
 	for(e = h[k]; e && e->dst != esrc; e = e->next)
 		;
@@ -118,34 +118,29 @@ int find_in_hash_update(unsigned char *src, int vlan, in_addr_t port, in_addr_t 
 			return 0;
 		}
 
-		DBGOUT(DBGHASHNEW,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d",
-				EMAC2MAC6(esrc), EMAC2VLAN2(esrc), port);
-		EVENTOUT(DBGHASHNEW,esrc);
 		e->dst = esrc;
 		if(h[k] != NULL) h[k]->prev = &(e->next);
 		e->next = h[k];
 		e->prev = &(h[k]);
-		e->port = port;
+		e->ipaddr = ipaddr;
 		h[k] = e;
 	}
-	oldport=e->port;
+	oldipaddr=e->ipaddr;
 	now=time(NULL);
-	if (oldport!=port) {
+	if (oldipaddr!=ipaddr) {
 		if ((now - e->last_seen) > min_persistence) {
-			e->port=port;
+			e->ipaddr=ipaddr;
 			e->last_seen = now;
 		}
 	} else {
 		e->last_seen = now;
 	}
-	if (out != NULL) *out = oldport;
+	if (out != NULL) *out = oldipaddr;
 	return 1;
 }
 
 #define delete_hash_entry(OLD) \
 	({ \
-	 DBGOUT(DBGHASHDEL,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d", EMAC2MAC6(OLD->dst), EMAC2VLAN2(OLD->dst), OLD->port); \
-	 EVENTOUT(DBGHASHDEL,OLD->dst);\
 	 *((OLD)->prev)=(OLD)->next; \
 	 if((OLD)->next != NULL) (OLD)->next->prev = (OLD)->prev; \
 	 free((OLD)); \

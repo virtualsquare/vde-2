@@ -1,7 +1,7 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include \
               -DSYSCONFDIR="\"$(sysconfdir)\"" -DLOCALSTATEDIR="\"$(localstatedir)\""
 LIBADD = $(top_builddir)/src/common/libvdecommon.la
-SUBDIRS = libvdeplug2
+SUBDIRS = 
 
 if ENABLE_PROFILE
   AM_CFLAGS = -pg --coverage
@@ -13,18 +13,17 @@ lib_LTLIBRARIES = libvdeplug.la
 # read before touching http://www.gnu.org/software/libtool/manual/libtool.html#Updating-version-info
 
 libvdeplug_la_SOURCES =  \
-	libvdeplug.c \
-	libvdeplug_ptp.c \
-	libvdeplug_vde.c \
-	libvdeplug_kvde.c \
-	libvdeplug_udp.c \
-	libvdeplug_vxhash.c \
-	libvdeplug_vxlan.c \
-	libvdeplug_vxvde.c \
-	libvdestream.c
+	../libvdeplug.c \
+	../libvdeplug_ptp.c \
+	../libvdeplug_vde.c \
+	../libvdeplug_kvde.c \
+	../libvdeplug_udp.c \
+	../libvdeplug_vxhash.c \
+	../libvdeplug_vxlan.c \
+	../libvdeplug_vxvde.c
 
 libvdeplug_la_LIBADD = $(LIBADD)
-libvdeplug_la_LDFLAGS = $(AM_LDFLAGS) -version-number 3:0:2 -export-dynamic
+libvdeplug_la_LDFLAGS = $(AM_LDFLAGS) -version-number 2:2:2 -export-dynamic
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = vdeplug.pc
