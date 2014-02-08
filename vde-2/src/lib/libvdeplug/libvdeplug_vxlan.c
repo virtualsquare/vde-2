@@ -118,6 +118,7 @@ static VDECONN *vde_vxlan_open(char *given_sockname, char *descr,int interface_v
 	int s;
 	char *portstr;
 	char *vnistr;
+	char *sockname;
 	struct sockaddr *multiaddr=NULL;
 	int multifd=-1;
 	int ttl=STDTTL;
@@ -127,19 +128,11 @@ static VDECONN *vde_vxlan_open(char *given_sockname, char *descr,int interface_v
 	hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
 	hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
 	hints.ai_protocol = 0;          /* Any protocol */
-	vnistr=strchr(given_sockname,'/');
-	if (vnistr) {
-		*vnistr=0;
-		vnistr++;
-		portstr=strchr(vnistr,'/');
-		if (portstr) {
-			*portstr=0;
-			portstr++;
-		} else
-			portstr=STDPORTSTR;
-	} else
+	sockname=strsep(&given_sockname,":/");
+	vnistr=strsep(&given_sockname,":/");
+	if ((portstr=strsep(&given_sockname,":/")) == NULL)
 		portstr=STDPORTSTR;
-	s = getaddrinfo(given_sockname, portstr, &hints, &result);
+	s = getaddrinfo(sockname, portstr, &hints, &result);
 	if (s < 0) {
 		fprintf(stderr, "vxlan getaddrinfo: %s\n", gai_strerror(s));
 		errno=ENOENT;
