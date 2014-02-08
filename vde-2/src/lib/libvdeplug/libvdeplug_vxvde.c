@@ -25,12 +25,13 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdint.h>
+#include <time.h>
+#include <sys/epoll.h>
+#define __USE_GNU
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <time.h>
-#include <sys/epoll.h>
 #include "libvdeplug_mod.h"
 #include "libvdeplug_vxhash.h"
 
@@ -114,6 +115,37 @@ static char *vde_vxvde_check(char *given_sockname) {
 	return NULL;
 }
 
+static inline socklen_t fam2socklen(void *sockaddr)
+{
+	struct sockaddr *s=sockaddr;
+	switch (s->sa_family) {
+		case AF_INET: return sizeof(struct sockaddr_in);
+		case AF_INET6: return sizeof(struct sockaddr_in6);
+		default: return 0;
+	}
+}
+
+#if 0
+static inline void printaddr(char *msg, void *sockaddr)
+{
+	struct sockaddr *s=sockaddr;
+	struct sockaddr_in *s4=sockaddr;
+	struct sockaddr_in6 *s6=sockaddr;
+	char saddr[INET6_ADDRSTRLEN];
+	switch (s->sa_family) {
+		case AF_INET: 
+			fprintf(stderr,"%s %s\n",msg,inet_ntop(AF_INET, &s4->sin_addr, saddr, sizeof(*s4)));     
+			break;
+		case AF_INET6: 
+			fprintf(stderr,"%s %s\n",msg,inet_ntop(AF_INET6, &s6->sin6_addr, saddr, sizeof(*s6)));     
+			break;
+		default:
+			fprintf(stderr,"%s UNKNOWN FAMILY %d\n",msg,s->sa_family);     
+			break;
+	}
+}
+#endif
+
 static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_version,
 		        struct vde_open_args *open_args)
 {
@@ -136,9 +168,9 @@ static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_v
 	hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
 	hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
 	hints.ai_protocol = 0;          /* Any protocol */
-	sockname=strsep(&given_sockname,":/");
-	vnistr=strsep(&given_sockname,":/");
-	if ((portstr=strsep(&given_sockname,":/")) == NULL)
+	sockname=strsep(&given_sockname,"/");
+	vnistr=strsep(&given_sockname,"/");
+	if ((portstr=strsep(&given_sockname,"/")) == NULL)
 		portstr=STDPORTSTR;
 	s = getaddrinfo(sockname, portstr, &hints, &result);
 	if (s < 0) {
@@ -150,22 +182,76 @@ static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_v
 	/* TODO scan the list of results */
 	for (rp = result; rp != NULL; rp = rp->ai_next) {
 		switch (rp->ai_family) {
-			case AF_INET6:
+			case AF_INET6: {
 				// currently unsupported
-				continue;
+											 struct sockaddr_in6 *addr=(struct sockaddr_in6 *)(rp->ai_addr);
+											 struct ipv6_mreq mc_req;
+											 struct sockaddr_in6 bindaddr;
+											 socklen_t bindaddrlen;
+											 int one = 1;
+											 multiaddr = (struct sockaddr *) addr;
+
+											 if ((multifd=socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) < 0)
+												 goto error;
+											 if ((unifd=socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) < 0)
+												 goto error;
+											 if ((setsockopt(unifd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
+															 &ttl, sizeof(ttl))) < 0)
+												 goto error;
+											 if ((setsockopt(multifd, IPPROTO_IPV6, IPV6_RECVPKTINFO,
+															 &one, sizeof(one))) < 0)
+												 goto error;
+#ifdef SO_REUSEPORT
+											 if ((setsockopt(multifd, SOL_SOCKET, SO_REUSEPORT,
+															 &one, sizeof(one))) < 0)
+												 goto error;
+#endif
+											 memset(&bindaddr, 0, sizeof(bindaddr));
+											 bindaddr.sin6_family      = AF_INET6;
+											 memcpy(&bindaddr.sin6_addr, &in6addr_any, sizeof(in6addr_any));
+											 bindaddr.sin6_port        = addr->sin6_port;
+											 if ((bind(multifd, (struct sockaddr *) &bindaddr,
+															 sizeof(bindaddr))) < 0) {
+
+												 close(multifd);
+												 close(unifd);
+												 multifd=unifd=-1;
+												 continue;
+											 }
+											 memcpy(&mc_req.ipv6mr_multiaddr, &addr->sin6_addr, 
+													 sizeof(addr->sin6_addr));
+											 mc_req.ipv6mr_interface = 0;
+											 if ((setsockopt(multifd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
+															 &mc_req, sizeof(mc_req))) < 0)
+												 goto error;
+											 bindaddr.sin6_port        = 0;
+											 if ((bind(unifd, (struct sockaddr *) &bindaddr,
+															 sizeof(bindaddr))) < 0) {
+												 close(multifd);
+												 close(unifd);
+												 multifd=unifd=-1;
+												 continue;
+											 }
+											 bindaddrlen=sizeof(bindaddr);
+											 if (getsockname(unifd, (struct sockaddr *) &bindaddr,
+														 &bindaddrlen) < 0)
+												 goto error;
+											 uniport=bindaddr.sin6_port;
+											 break;
+										 }
 			case AF_INET: {
 											struct sockaddr_in *addr=(struct sockaddr_in *)(rp->ai_addr);
 											struct ip_mreqn mc_req;
-											multiaddr = (struct sockaddr *) addr;
 											struct sockaddr_in bindaddr;
 											socklen_t bindaddrlen;
 											int one = 1;
+											multiaddr = (struct sockaddr *) addr;
 
 											if ((multifd=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
 												goto error;
 											if ((unifd=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
 												goto error;
-											if ((setsockopt(multifd, IPPROTO_IP, IP_MULTICAST_TTL,
+											if ((setsockopt(unifd, IPPROTO_IP, IP_MULTICAST_TTL,
 													&ttl, sizeof(ttl))) < 0) 
 												goto error;
 											int loop=0;
@@ -180,7 +266,6 @@ static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_v
 													&one, sizeof(one))) < 0) 
 												goto error;
 #endif
-											memset(&bindaddr, 0, sizeof(bindaddr));
 											memset(&bindaddr, 0, sizeof(bindaddr));
 											bindaddr.sin_family      = AF_INET;
 											bindaddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -275,11 +360,12 @@ static ssize_t vde_vxvde_recv(VDECONN *conn,void *buf,size_t len,int flags) {
 	if (nfd > 0) {
 		if (events[0].data.fd == vde_conn->unifd) {
 			int retval;
-			struct sockaddr_in sender;
+			struct sockaddr_storage sender;
 			socklen_t senderlen=sizeof(sender);
 			retval = recvfrom(vde_conn->unifd, buf, len, 0, 
 					(struct sockaddr *) &sender, &senderlen);
 			//fprintf(stderr, "<- unicast packet len %d\n",retval);
+			//printaddr("recv uni",&sender);
 			if (__builtin_expect((retval > ETH_HEADER_SIZE), 1)) {
 				struct eth_hdr *ehdr=(struct eth_hdr *) buf;
 				vx_find_in_hash_update(vde_conn->table, vde_conn->hash_mask,
@@ -291,19 +377,11 @@ static ssize_t vde_vxvde_recv(VDECONN *conn,void *buf,size_t len,int flags) {
 			struct vxvde_hdr vhdr;
 			struct iovec iov[]={{&vhdr, sizeof(vhdr)},{buf, len}};
 			struct msghdr msg;
-			struct sockaddr_in sender;
-
-			char cmsg[CMSG_SPACE(sizeof(struct in_pktinfo))+1024];
+			struct sockaddr_storage sender;
+			char cmsg[CMSG_SPACE(sizeof(struct in6_pktinfo)+sizeof(struct in_pktinfo))];
 			int retval;
 			msg.msg_name=&sender;
-			switch (vde_conn->multiaddr.vx.sa_family) {
-				case AF_INET: msg.msg_namelen = sizeof(struct sockaddr_in);
-											break;
-				case AF_INET6: msg.msg_namelen = sizeof(struct sockaddr_in6);
-											 break;
-				default:
-											 msg.msg_namelen = 0;
-			}
+			msg.msg_namelen = fam2socklen(&vde_conn->multiaddr.vx);
 			msg.msg_iov=iov;
 			msg.msg_iovlen=2;
 			msg.msg_control=cmsg;
@@ -311,28 +389,47 @@ static ssize_t vde_vxvde_recv(VDECONN *conn,void *buf,size_t len,int flags) {
 			msg.msg_flags=0;
 			retval=recvmsg(vde_conn->multifd, &msg, 0)-sizeof(struct vxvde_hdr);
 			//fprintf(stderr, "<- multicast packet len %d\n",retval);
+			//printaddr("recv multi",&sender);
 			if (__builtin_expect((retval > ETH_HEADER_SIZE), 1)) {
 				struct eth_hdr *ehdr=(struct eth_hdr *) buf;
-				if (sender.sin_port == vde_conn->uniport) {
-					struct cmsghdr *cmsgptr=CMSG_FIRSTHDR(&msg);
-					struct in_pktinfo *pki=(struct in_pktinfo*)(CMSG_DATA(cmsgptr));
-					if (sender.sin_addr.s_addr == pki->ipi_spec_dst.s_addr) {
-						//fprintf(stderr,"self packet, rejected \n");
-						goto error;
-					}
+				switch (sender.ss_family) {
+					case AF_INET: {
+													struct sockaddr_in *sender4=(struct sockaddr_in *)&sender;
+													if (sender4->sin_port == vde_conn->uniport) {
+														struct cmsghdr *cmsgptr=CMSG_FIRSTHDR(&msg);
+														struct in_pktinfo *pki=(struct in_pktinfo *)(CMSG_DATA(cmsgptr));
+														if (sender4->sin_addr.s_addr == pki->ipi_spec_dst.s_addr) {
+															//fprintf(stderr,"self packet, rejected \n");
+															goto error;
+														}
+													}
+												}
+					case AF_INET6: {
+													struct sockaddr_in6 *sender6=(struct sockaddr_in6 *)&sender;
+#if 0
+													{
+														struct cmsghdr *cmsgptr=CMSG_FIRSTHDR(&msg);
+														struct in6_pktinfo *pki=(struct in6_pktinfo *)(CMSG_DATA(cmsgptr));
+														char saddr[INET6_ADDRSTRLEN];
+														fprintf(stderr,"CMPCMP %s %d\n",inet_ntop(AF_INET6, &pki->ipi6_addr, saddr, sizeof(pki->ipi6_addr)),pki->ipi6_ifindex);    
+													}
+#endif
+													/* XXX this fails to recognize self sent packets */
+													if (sender6->sin6_port == vde_conn->uniport) {
+														struct cmsghdr *cmsgptr=CMSG_FIRSTHDR(&msg);
+														struct in6_pktinfo *pki=(struct in6_pktinfo *)(CMSG_DATA(cmsgptr));
+														if (memcmp(&sender6->sin6_addr, &pki->ipi6_addr, sizeof(struct in6_addr)) == 0) {
+															//fprintf(stderr,"self packet, rejected \n");
+															goto error;
+														}
+													}
+												 }
 				}
 				if (vhdr.flags != (1<<0) || ntoh24(vhdr.id) != vde_conn->vni)
 					vx_find_in_hash_update(vde_conn->table, vde_conn->hash_mask,
 							ehdr->src, 1, msg.msg_name, time(NULL));
 				return retval;
 			}
-			/*
-			struct cmsghdr *cmsgptr=CMSG_FIRSTHDR(&msg);
-			struct in_pktinfo *pki=(struct in_pktinfo*)(CMSG_DATA(cmsgptr));
-			fprintf(stderr,"%d %s ",msg.msg_controllen, inet_ntoa(pki->ipi_spec_dst));
-			fprintf(stderr,"%s- ",inet_ntoa(pki->ipi_addr));
-			fprintf(stderr,"%s port %d\n",inet_ntoa(sender.sin_addr),ntohs(sender.sin_port));
-			*/
 			goto error;
 		}
 	} 
@@ -361,14 +458,8 @@ static ssize_t vde_vxvde_send(VDECONN *conn,const void *buf, size_t len,int flag
 		msg.msg_iov=iov;
 		msg.msg_iovlen=2;
 		msg.msg_name = destaddr;
-		switch (destaddr->sa_family) {
-			case AF_INET: msg.msg_namelen = sizeof(struct sockaddr_in);
-										break;
-			case AF_INET6: msg.msg_namelen = sizeof(struct sockaddr_in6);
-										 break;
-			default:
-										 msg.msg_namelen = 0;
-		}
+		msg.msg_namelen = fam2socklen(destaddr);
+		//printaddr("send multi",destaddr);
 		memset(&vhdr, 0, sizeof(vhdr));
 		vhdr.flags = (1 << 3);
 
@@ -381,15 +472,8 @@ static ssize_t vde_vxvde_send(VDECONN *conn,const void *buf, size_t len,int flag
 			retval = 0;
 		return retval;
 	} else {
-		socklen_t destlen;
-		switch (destaddr->sa_family) {
-			case AF_INET: destlen = sizeof(struct sockaddr_in);
-										break;
-			case AF_INET6: destlen = sizeof(struct sockaddr_in6);
-										 break;
-			default:
-										 destlen = 0;
-		}
+		socklen_t destlen = fam2socklen(destaddr);
+		//printaddr("send uni",destaddr);
 		return sendto(vde_conn->unifd, buf, len, 0, destaddr, destlen);
 	}
 }
