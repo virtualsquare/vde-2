@@ -34,7 +34,7 @@
 #include "libvdeplug_mod.h"
 #include "libvdeplug_vxhash.h"
 
-#define STDPORTSTR "4879"
+#define STDPORTSTR "14879"
 #define STDTTL 1
 #define STDVNI 1
 #define STDHASHSIZE 1023
@@ -342,36 +342,6 @@ error:
 	return 1;
 }
 
-static ssize_t vde_vxvde_vxsend(struct vde_vxvde_conn *vde_conn,
-		struct sockaddr *destaddr, const void *buf, size_t len,int flags) {
-	struct vxvde_hdr vhdr;
-	struct iovec iov[]={{&vhdr, sizeof(vhdr)},{(char *)buf, len}};
-	static struct msghdr msg;
-	int retval;
-	msg.msg_iov=iov;
-	msg.msg_iovlen=2;
-	msg.msg_name = destaddr;
-	switch (destaddr->sa_family) {
-		case AF_INET: msg.msg_namelen = sizeof(struct sockaddr_in);
-									break;
-		case AF_INET6: msg.msg_namelen = sizeof(struct sockaddr_in6);
-									 break;
-		default:
-									 msg.msg_namelen = 0;
-	}
-	memset(&vhdr, 0, sizeof(vhdr));
-	vhdr.flags = (1 << 3);
-
-	hton24(vhdr.id, vde_conn->vni);
-
-	if ((retval=sendmsg(vde_conn->unifd, &msg, 0)) < 0)
-		return -1;
-	retval -= sizeof(struct vxvde_hdr);
-	if (retval < 0)
-		retval = 0;
-	return retval;
-}
-
 static ssize_t vde_vxvde_send(VDECONN *conn,const void *buf, size_t len,int flags) {
 	struct vde_vxvde_conn *vde_conn = (struct vde_vxvde_conn *)conn;
 	struct eth_hdr *ehdr=(struct eth_hdr *) buf;
@@ -383,26 +353,44 @@ static ssize_t vde_vxvde_send(VDECONN *conn,const void *buf, size_t len,int flag
 			(destaddr=vx_find_in_hash(vde_conn->table, vde_conn->multiaddr.vx.sa_family,
 				vde_conn->hash_mask, ehdr->dest, 1, time(NULL)- vde_conn->expiretime)) == NULL),
 			 0))	{
-		return vde_vxvde_vxsend(vde_conn, &(vde_conn->multiaddr.vx), buf, len, flags);
+		struct vxvde_hdr vhdr;
+		struct iovec iov[]={{&vhdr, sizeof(vhdr)},{(char *)buf, len}};
+		static struct msghdr msg;
+		int retval;
+		destaddr=&(vde_conn->multiaddr.vx);
+		msg.msg_iov=iov;
+		msg.msg_iovlen=2;
+		msg.msg_name = destaddr;
+		switch (destaddr->sa_family) {
+			case AF_INET: msg.msg_namelen = sizeof(struct sockaddr_in);
+										break;
+			case AF_INET6: msg.msg_namelen = sizeof(struct sockaddr_in6);
+										 break;
+			default:
+										 msg.msg_namelen = 0;
+		}
+		memset(&vhdr, 0, sizeof(vhdr));
+		vhdr.flags = (1 << 3);
+
+		hton24(vhdr.id, vde_conn->vni);
+
+		if ((retval=sendmsg(vde_conn->unifd, &msg, 0)) < 0)
+			return -1;
+		retval -= sizeof(struct vxvde_hdr);
+		if (retval < 0)
+			retval = 0;
+		return retval;
 	} else {
 		socklen_t destlen;
-		in_port_t destport;
 		switch (destaddr->sa_family) {
 			case AF_INET: destlen = sizeof(struct sockaddr_in);
-										destport = ((struct sockaddr_in *) destaddr)->sin_port;
 										break;
 			case AF_INET6: destlen = sizeof(struct sockaddr_in6);
-										destport = ((struct sockaddr_in6 *) destaddr)->sin6_port;
 										 break;
 			default:
 										 destlen = 0;
-										 destport = 0;
 		}
-		if (__builtin_expect(destport != vde_conn->multiport, 1)) {
-			return sendto(vde_conn->unifd, buf, len, 0, destaddr, destlen);
-		} else { /* compatibility with vxlan! */
-			return vde_vxvde_vxsend(vde_conn, destaddr, buf, len, flags);
-		}
+		return sendto(vde_conn->unifd, buf, len, 0, destaddr, destlen);
 	}
 }
 
