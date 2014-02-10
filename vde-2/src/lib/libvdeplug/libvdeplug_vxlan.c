@@ -128,9 +128,9 @@ static VDECONN *vde_vxlan_open(char *given_sockname, char *descr,int interface_v
 	hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
 	hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
 	hints.ai_protocol = 0;          /* Any protocol */
-	sockname=strsep(&given_sockname,":/");
-	vnistr=strsep(&given_sockname,":/");
-	if ((portstr=strsep(&given_sockname,":/")) == NULL)
+	sockname=strsep(&given_sockname,"/");
+	vnistr=strsep(&given_sockname,"/");
+	if ((portstr=strsep(&given_sockname,"/")) == NULL)
 		portstr=STDPORTSTR;
 	s = getaddrinfo(sockname, portstr, &hints, &result);
 	if (s < 0) {
@@ -142,9 +142,39 @@ static VDECONN *vde_vxlan_open(char *given_sockname, char *descr,int interface_v
 	/* TODO scan the list of results */
 	for (rp = result; rp != NULL; rp = rp->ai_next) {
 		switch (rp->ai_family) {
-			case AF_INET6:
-				// currently unsupported
-				continue;
+			case AF_INET6: {
+											 struct sockaddr_in6 *addr=(struct sockaddr_in6 *)(rp->ai_addr);
+											 struct ipv6_mreq mc_req;
+											 multiaddr = (struct sockaddr *) addr;
+											 struct sockaddr_in6 bindaddr;
+											 int loop = 0;
+
+											 if ((multifd=socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) < 0)
+												 goto error;
+											 if ((setsockopt(multifd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
+															 &ttl, sizeof(ttl))) < 0)
+												 goto error;
+											 if ((setsockopt(multifd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
+															 &loop, sizeof(loop))) < 0)
+												 goto error;
+
+											 memset(&bindaddr, 0, sizeof(bindaddr));
+											 bindaddr.sin6_family      = AF_INET6;
+											 memcpy(&bindaddr.sin6_addr, &in6addr_any, sizeof(in6addr_any));
+											 bindaddr.sin6_port        = addr->sin6_port;
+											 if ((bind(multifd, (struct sockaddr *) &bindaddr,
+															 sizeof(bindaddr))) < 0) {
+												 close(multifd);
+												 multifd=-1;
+												 continue;
+											 }
+											 memcpy(&mc_req.ipv6mr_multiaddr, &addr->sin6_addr,
+													 sizeof(addr->sin6_addr));
+											 mc_req.ipv6mr_interface = 0;
+											 if ((setsockopt(multifd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
+															 &mc_req, sizeof(mc_req))) < 0)
+												 goto error;
+										 }
 			case AF_INET: {
 											struct sockaddr_in *addr=(struct sockaddr_in *)(rp->ai_addr);
 											struct ip_mreq mc_req;
@@ -154,19 +184,13 @@ static VDECONN *vde_vxlan_open(char *given_sockname, char *descr,int interface_v
 
 											multifd=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 											if (multifd < 0)
-												return NULL;
+												goto error;
 											if ((setsockopt(multifd, IPPROTO_IP, IP_MULTICAST_TTL,
-													&ttl, sizeof(ttl))) < 0) {
-												close(multifd);
-												multifd=-1;
-												return NULL;
-											}
+															&ttl, sizeof(ttl))) < 0) 
+												goto error;
 											if ((setsockopt(multifd, IPPROTO_IP, IP_MULTICAST_LOOP,
-													&loop, sizeof(loop))) < 0) {
-												close(multifd);
-												multifd=-1;
-												return NULL;
-											}
+															&loop, sizeof(loop))) < 0) 
+												goto error;
 											memset(&bindaddr, 0, sizeof(bindaddr));
 											bindaddr.sin_family      = AF_INET;
 											bindaddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -180,11 +204,8 @@ static VDECONN *vde_vxlan_open(char *given_sockname, char *descr,int interface_v
 											mc_req.imr_multiaddr.s_addr = addr->sin_addr.s_addr;
 											mc_req.imr_interface.s_addr = htonl(INADDR_ANY);
 											if ((setsockopt(multifd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-															&mc_req, sizeof(mc_req))) < 0) {
-												close(multifd);
-												multifd=-1;
-												return NULL;
-											}
+															&mc_req, sizeof(mc_req))) < 0) 
+												goto error;
 										}
 		}
 	}
@@ -194,13 +215,12 @@ static VDECONN *vde_vxlan_open(char *given_sockname, char *descr,int interface_v
 	if ((newconn=calloc(1,sizeof(struct vde_vxlan_conn)))==NULL)
 	{
 		errno=ENOMEM;
-		close(multifd);
-		return NULL;
+		goto error;
 	}
 
 	newconn->module=&vdeplug_vxlan;
 	newconn->hash_mask=STDHASHSIZE;
-  newconn->table=vx_hash_init(AF_INET, newconn->hash_mask);
+	newconn->table=vx_hash_init(AF_INET, newconn->hash_mask);
 	newconn->vni=vnistr?atoi(vnistr):STDVNI;
 	newconn->expiretime=STDEXPIRETIME;
 	switch (multiaddr->sa_family) {
@@ -213,6 +233,11 @@ static VDECONN *vde_vxlan_open(char *given_sockname, char *descr,int interface_v
 	}
 	newconn->multifd=multifd;
 	return (VDECONN *) newconn;
+
+error:
+	if (multifd >= 0) close(multifd);
+	if (newconn != NULL) free(newconn);
+	return NULL;
 }
 
 static ssize_t vde_vxlan_recv(VDECONN *conn,void *buf,size_t len,int flags) {
@@ -234,17 +259,21 @@ static ssize_t vde_vxlan_recv(VDECONN *conn,void *buf,size_t len,int flags) {
 	msg.msg_iov=iov;
 	msg.msg_iovlen=2;
 	msg.msg_control=NULL;
-	msg.msg_control=0;
+	msg.msg_controllen=0;
 	msg.msg_flags=0;
-	if (__builtin_expect(((retval=recvmsg(vde_conn->multifd, &msg, 0)
-						-sizeof(struct vxlan_hdr))>ETH_HEADER_SIZE), 1)) {
+	retval=recvmsg(vde_conn->multifd, &msg, 0)-sizeof(struct vxlan_hdr);
+	if (__builtin_expect((retval > ETH_HEADER_SIZE), 1)) {
 		struct eth_hdr *ehdr=(struct eth_hdr *) buf;
-		if (vhdr.flags != (1<<0) || ntoh24(vhdr.id) != vde_conn->vni)
+		if (vhdr.flags != (1 << 3) || ntoh24(vhdr.id) != vde_conn->vni)
+			goto error;
 		vx_find_in_hash_update(vde_conn->table, vde_conn->hash_mask,
 				ehdr->src, 1, msg.msg_name, time(NULL));
 		return retval;
 	}
-	return 0;
+error:
+	errno = EAGAIN;
+	*((unsigned char *)buf)=0;
+	return 1;
 }
 
 static ssize_t vde_vxlan_send(VDECONN *conn,const void *buf, size_t len,int flags) {
