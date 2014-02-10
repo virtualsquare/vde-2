@@ -127,3 +127,8 @@ void *vx_hash_init(int sa_family, int hash_mask)
 	return calloc(hash_mask+1, elsize);
 }
 
+void vx_hash_fini(void *table)
+{
+	if (table != NULL)
+		free(table);
+}

@@ -34,7 +34,16 @@
 #include <netdb.h>
 #include "libvdeplug_mod.h"
 #include "libvdeplug_vxhash.h"
+/* two alternatives to check whether an ip addr is local:
+LOCALBIND: try to open and bind a socket to the same addr (any port), if it succeeds it is local!
+!LOCALBIND: use getifaddrs and look through the list */
 
+//#define LOCALBIND
+#ifndef LOCALBIND
+#include <ifaddrs.h>
+#endif
+
+//#define DEBUGADDR
 #define STDPORTSTR "14879"
 #define STDTTL 1
 #define STDVNI 1
@@ -74,21 +83,24 @@ static int vde_vxvde_datafd(VDECONN *conn);
 static int vde_vxvde_ctlfd(VDECONN *conn);
 static int vde_vxvde_close(VDECONN *conn);
 
+union sockaddr46 {
+	struct sockaddr vx;
+	struct sockaddr_in v4;
+	struct sockaddr_in6 v6;
+};
+
 struct vde_vxvde_conn {
 	struct vdeplug_module *module;
 	void *table;
 	int hash_mask; // hash table size - 1. This must be 2^n-1 
 	int vni;
-	union {
-		struct sockaddr vx;
-		struct sockaddr_in v4;
-		struct sockaddr_in6 v6;
-	} multiaddr;
+	union sockaddr46 multiaddr;
+	union sockaddr46 localaddr; 
+	in_port_t multiport;
+	in_port_t uniport;
 	int multifd;
 	int unifd;
 	int pollfd;
-	in_port_t multiport;
-	in_port_t uniport;
 	int expiretime;
 };
 
@@ -125,7 +137,67 @@ static inline socklen_t fam2socklen(void *sockaddr)
 	}
 }
 
-#if 0
+static int is_a_localaddr(void *sockaddr)
+{
+	struct sockaddr *s=sockaddr;
+	int retval=0;
+#ifdef LOCALBIND
+	switch (s->sa_family) {
+		case AF_INET: {
+										int tmpfd=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+										if (tmpfd >= 0) {
+											struct sockaddr_in s4=*((struct sockaddr_in *)s);
+											s4.sin_port = 0;
+											if (bind(tmpfd, (struct sockaddr *) &s4, sizeof(s4))==0)
+												retval=1;
+											close(tmpfd);
+										}
+									}
+									break;
+		case AF_INET6: {
+										 int tmpfd=socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+										 if (tmpfd >= 0) {
+											 struct sockaddr_in6 s6=*((struct sockaddr_in6 *)s);
+											 s6.sin6_port = 0;
+											 if (bind(tmpfd, (struct sockaddr *) &s6, sizeof(s6))==0)
+												 retval=1;
+											 close(tmpfd);
+										 }
+									 }
+									 break;
+	}
+#else /* GETIFADDRS */
+	struct ifaddrs *addrs;
+	if (getifaddrs(&addrs) == 0) {
+		struct ifaddrs *ifa;
+		for (ifa = addrs; ifa != NULL && retval == 0; ifa = ifa->ifa_next){
+			if (s->sa_family == ifa->ifa_addr->sa_family) {
+				switch (s->sa_family) {
+					case AF_INET: {
+													struct sockaddr_in *s6=(struct sockaddr_in *)s;
+													struct sockaddr_in *i6=(struct sockaddr_in *)ifa->ifa_addr;
+													if (s6->sin_addr.s_addr == i6->sin_addr.s_addr)
+														retval=1;
+												 }
+												 break;
+					case AF_INET6: {
+													struct sockaddr_in6 *s6=(struct sockaddr_in6 *)s;
+													struct sockaddr_in6 *i6=(struct sockaddr_in6 *)ifa->ifa_addr;
+													if (memcmp(&s6->sin6_addr,&i6->sin6_addr,sizeof(struct in6_addr)) == 0)
+														retval=1;
+												 }
+												 break;
+				}
+			}
+		}
+		freeifaddrs(addrs);
+	}
+#endif
+	return retval;
+}
+
+
+#ifdef DEBUGADDR
 static inline void printaddr(char *msg, void *sockaddr)
 {
 	struct sockaddr *s=sockaddr;
@@ -297,12 +369,12 @@ static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_v
 												goto error;
 											uniport=bindaddr.sin_port;
 											//fprintf(stderr,"local port %d\n",ntohs(bindaddr.sin_port));
-											/*static char buf[]="test";
-											socklen_t addrs=sizeof(struct sockaddr_in);
-											sendto(unifd, buf, strlen(buf)+1, 0, (struct sockaddr *) addr, addrs);*/
 										}
+			default:
+										uniport=0;
 		}
 	}
+	freeaddrinfo(result);
 	if (multifd < 0)
 		return NULL;
 
@@ -332,10 +404,12 @@ static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_v
 	switch (multiaddr->sa_family) {
 		case AF_INET:
 			memcpy(&(newconn->multiaddr.v4), multiaddr, sizeof(struct sockaddr_in));
+			memcpy(&(newconn->localaddr.v4), multiaddr, sizeof(struct sockaddr_in));
 			newconn->multiport = newconn->multiaddr.v4.sin_port;
 			break;
 		case AF_INET6:
 			memcpy(&(newconn->multiaddr.v6), multiaddr, sizeof(struct sockaddr_in6));
+			memcpy(&(newconn->localaddr.v6), multiaddr, sizeof(struct sockaddr_in6));
 			newconn->multiport = newconn->multiaddr.v6.sin6_port;
 			break;
 	}
@@ -381,7 +455,7 @@ static ssize_t vde_vxvde_recv(VDECONN *conn,void *buf,size_t len,int flags) {
 			char cmsg[CMSG_SPACE(sizeof(struct in6_pktinfo)+sizeof(struct in_pktinfo))];
 			int retval;
 			msg.msg_name=&sender;
-			msg.msg_namelen = fam2socklen(&vde_conn->multiaddr.vx);
+			msg.msg_namelen = sizeof(sender);
 			msg.msg_iov=iov;
 			msg.msg_iovlen=2;
 			msg.msg_control=cmsg;
@@ -392,6 +466,10 @@ static ssize_t vde_vxvde_recv(VDECONN *conn,void *buf,size_t len,int flags) {
 			//printaddr("recv multi",&sender);
 			if (__builtin_expect((retval > ETH_HEADER_SIZE), 1)) {
 				struct eth_hdr *ehdr=(struct eth_hdr *) buf;
+				if (vhdr.flags != (1<<3) || ntoh24(vhdr.id) != vde_conn->vni) {
+					//fprintf(stderr,"wrong net id or flags: rejected \n");
+					goto error;
+				}
 				switch (sender.ss_family) {
 					case AF_INET: {
 													struct sockaddr_in *sender4=(struct sockaddr_in *)&sender;
@@ -405,29 +483,26 @@ static ssize_t vde_vxvde_recv(VDECONN *conn,void *buf,size_t len,int flags) {
 													}
 												}
 					case AF_INET6: {
+													 /* workaround: there is not (yet) an ancillary msg for IPv6 returning
+															the IP address of the local interface where the packet was received,
+															i.e. the IPV6 counterpart of ipi_spec_dst	*/
 													struct sockaddr_in6 *sender6=(struct sockaddr_in6 *)&sender;
-#if 0
-													{
-														struct cmsghdr *cmsgptr=CMSG_FIRSTHDR(&msg);
-														struct in6_pktinfo *pki=(struct in6_pktinfo *)(CMSG_DATA(cmsgptr));
-														char saddr[INET6_ADDRSTRLEN];
-														fprintf(stderr,"CMPCMP %s %d\n",inet_ntop(AF_INET6, &pki->ipi6_addr, saddr, sizeof(pki->ipi6_addr)),pki->ipi6_ifindex);    
-													}
-#endif
-													/* XXX this fails to recognize self sent packets */
 													if (sender6->sin6_port == vde_conn->uniport) {
-														struct cmsghdr *cmsgptr=CMSG_FIRSTHDR(&msg);
-														struct in6_pktinfo *pki=(struct in6_pktinfo *)(CMSG_DATA(cmsgptr));
-														if (memcmp(&sender6->sin6_addr, &pki->ipi6_addr, sizeof(struct in6_addr)) == 0) {
-															//fprintf(stderr,"self packet, rejected \n");
+														if (memcmp(&sender6->sin6_addr, &vde_conn->localaddr.v6.sin6_addr,
+																	sizeof(struct in6_addr)) == 0) {
+															//fprintf(stderr,"self packet short path, rejected \n");
+															goto error;
+														} 
+														else if (is_a_localaddr(sender6)) {
+															memcpy(&vde_conn->localaddr, sender6, sizeof(struct sockaddr_in6));
+															//fprintf(stderr,"self packet long path, rejected \n");
 															goto error;
 														}
 													}
 												 }
 				}
-				if (vhdr.flags != (1<<0) || ntoh24(vhdr.id) != vde_conn->vni)
-					vx_find_in_hash_update(vde_conn->table, vde_conn->hash_mask,
-							ehdr->src, 1, msg.msg_name, time(NULL));
+				vx_find_in_hash_update(vde_conn->table, vde_conn->hash_mask,
+						ehdr->src, 1, msg.msg_name, time(NULL));
 				return retval;
 			}
 			goto error;
@@ -452,13 +527,16 @@ static ssize_t vde_vxvde_send(VDECONN *conn,const void *buf, size_t len,int flag
 			 0))	{
 		struct vxvde_hdr vhdr;
 		struct iovec iov[]={{&vhdr, sizeof(vhdr)},{(char *)buf, len}};
-		static struct msghdr msg;
+		struct msghdr msg;
 		int retval;
 		destaddr=&(vde_conn->multiaddr.vx);
 		msg.msg_iov=iov;
 		msg.msg_iovlen=2;
 		msg.msg_name = destaddr;
 		msg.msg_namelen = fam2socklen(destaddr);
+		msg.msg_control = NULL;
+		msg.msg_controllen = 0;
+		msg.msg_flags = 0;
 		//printaddr("send multi",destaddr);
 		memset(&vhdr, 0, sizeof(vhdr));
 		vhdr.flags = (1 << 3);
@@ -489,7 +567,9 @@ static int vde_vxvde_ctlfd(VDECONN *conn) {
 
 static int vde_vxvde_close(VDECONN *conn) {
 	struct vde_vxvde_conn *vde_conn = (struct vde_vxvde_conn *)conn;
+	close(vde_conn->unifd);
 	close(vde_conn->multifd);
+	vx_hash_fini(vde_conn->table);
 	free(vde_conn);
 	return 0;
 }

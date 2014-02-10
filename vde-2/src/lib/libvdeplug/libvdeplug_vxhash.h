@@ -31,5 +31,7 @@ void vx_find_in_hash_update(void *table, int hash_mask,
 /* init the hash table */
 /* hash_mask must be 2^n - 1 */
 void *vx_hash_init(int sa_family, int hash_mask);
+
+void vx_hash_fini(void *table);
 #endif
 

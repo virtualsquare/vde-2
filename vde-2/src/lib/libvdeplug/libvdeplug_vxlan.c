@@ -300,6 +300,7 @@ static int vde_vxlan_ctlfd(VDECONN *conn) {
 static int vde_vxlan_close(VDECONN *conn) {
 	struct vde_vxlan_conn *vde_conn = (struct vde_vxlan_conn *)conn;
 	close(vde_conn->multifd);
+	vx_hash_fini(vde_conn->table);
 	free(vde_conn);
 	return 0;
 }
