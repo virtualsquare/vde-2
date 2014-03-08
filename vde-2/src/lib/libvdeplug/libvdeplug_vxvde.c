@@ -196,7 +196,6 @@ static int is_a_localaddr(void *sockaddr)
 	return retval;
 }
 
-
 #ifdef DEBUGADDR
 static inline void printaddr(char *msg, void *sockaddr)
 {
@@ -255,7 +254,6 @@ static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_v
 	for (rp = result; rp != NULL; rp = rp->ai_next) {
 		switch (rp->ai_family) {
 			case AF_INET6: {
-				// currently unsupported
 											 struct sockaddr_in6 *addr=(struct sockaddr_in6 *)(rp->ai_addr);
 											 struct ipv6_mreq mc_req;
 											 struct sockaddr_in6 bindaddr;
@@ -309,8 +307,8 @@ static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_v
 														 &bindaddrlen) < 0)
 												 goto error;
 											 uniport=bindaddr.sin6_port;
-											 break;
 										 }
+										 break;
 			case AF_INET: {
 											struct sockaddr_in *addr=(struct sockaddr_in *)(rp->ai_addr);
 											struct ip_mreqn mc_req;
@@ -370,6 +368,7 @@ static VDECONN *vde_vxvde_open(char *given_sockname, char *descr,int interface_v
 											uniport=bindaddr.sin_port;
 											//fprintf(stderr,"local port %d\n",ntohs(bindaddr.sin_port));
 										}
+										break;
 			default:
 										uniport=0;
 		}

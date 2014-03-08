@@ -42,6 +42,7 @@
 
 #define BUFSIZE 4096
 #define ETH_ALEN 6
+#define ETH_HDRLEN (ETH_ALEN+ETH_ALEN+2)
 
 VDECONN *conn;
 VDECONN *conn2;
@@ -300,15 +301,19 @@ int locallink(void)
 			break;
 		if (pollv[0].revents & POLLIN) {
 			nx=vde_recv(conn, bufin, BUFSIZE,0);
-			if (nx==0)
+			if (__builtin_expect((nx >= ETH_HDRLEN),1)) {
+				vde_send(conn2, bufin, nx, 0);
+				/*fprintf(stderr,"0->1 %d ",nx);*/
+			} else if (nx<0)
 				break;
-			vde_send(conn2, bufin, nx, 0);
 		}
 		if (pollv[1].revents & POLLIN) {
 			nx=vde_recv(conn2,bufin,BUFSIZE,0);
-			if (nx<0)
+			if (__builtin_expect((nx >= ETH_HDRLEN),1)) {
+				vde_send(conn, bufin, nx, 0);
+				/*fprintf(stderr,"1->0 %d ",nx);*/
+			} else if (nx<0)
 				break;
-			vde_send(conn, bufin, nx, 0);
 		}
 	}
 	return(0);
@@ -465,8 +470,8 @@ int main(int argc, char **argv)
 
 	for(;;) {
 		poll(pollv,3,-1);
-		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
-				pollv[2].revents & POLLIN)
+		if (__builtin_expect(((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
+				pollv[2].revents & POLLIN),0))
 			break;
 		if (pollv[0].revents & POLLIN) {
 			nx=read(STDIN_FILENO,bufin,sizeof(bufin));
@@ -475,17 +480,16 @@ int main(int argc, char **argv)
 			/*fprintf(stderr,"%s: RECV %d %x %x \n",myname,nx,bufin[0],bufin[1]);*/
 			if (nx==0)
 				break;
-			vdestream_recv(vdestream, bufin, nx);
+				vdestream_recv(vdestream, bufin, nx);
 		}
 		if (pollv[1].revents & POLLIN) {
 			nx=vde_recv(conn,bufin,BUFSIZE-2,0);
-			if (nx<0)
-				perror("vde_plug: recvfrom ");
-			else
+			if (__builtin_expect((nx >= ETH_HDRLEN),1))
 			{
 				vdestream_send(vdestream, bufin, nx);
 				/*fprintf(stderr,"%s: SENT %d %x %x \n",myname,nx,bufin[0],bufin[1]);*/
-			}
+			} else if (nx<0)
+				perror("vde_plug: recvfrom ");
 		}
 	}
 
