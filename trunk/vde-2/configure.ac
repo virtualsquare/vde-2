@@ -45,7 +45,8 @@ AC_CHECK_HEADERS([syslimits.h sys/syslimits.h])
 AC_CHECK_HEADERS([openssl/blowfish.h], [],
   [add_cryptcab_support=no ; warn_cryptcab=yes])
 
-AC_CHECK_HEADERS([sysexits.h], [],
+AC_CHECK_HEADERS([sysexits.h],
+  [add_over_ns_support=yes],
   [add_over_ns_support=no ; warn_over_ns=yes])
 
 # Checks for typedefs, structures, and compiler characteristics.
