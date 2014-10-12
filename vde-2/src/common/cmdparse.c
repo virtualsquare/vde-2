@@ -284,13 +284,13 @@ int utm_run(struct utm *utm, struct utm_buf *buf, int fd, int argc, char **argv,
 								int i;
 								for (i=0;i<argc;i++) {
 									if (i) fprintf(mf," ");
-									fprintf(mf,argv[i]);
+									fprintf(mf, "%s", argv[i]);
 								}
 							} else {
 								int num=atoi(t);
 								while (*t >='0' && *t <= '9') t++;
 								if (num < argc) 
-									fprintf(mf,argv[num]);
+									fprintf(mf, "%s", argv[num]);
 							}
 						} else
 							fprintf(mf,"%c",*t);
