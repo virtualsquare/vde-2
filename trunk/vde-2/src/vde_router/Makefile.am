@@ -11,9 +11,27 @@ if ENABLE_PROFILE
 endif
 
 bin_PROGRAMS = vde_router
-vde_router_SOURCES = rbtree.h  vde_headers.h  vder_arp.h  vder_datalink.h  vder_icmp.h \
-    vde_router.h  vder_packet.h	vder_queue.h rbtree.c  vder_arp.c  vder_datalink.c \
-    vder_icmp.c  vde_router.c  vder_packet.c  vder_queue.c vder_udp.c vder_dhcp.c \
-	vder_olsr.c
+vde_router_SOURCES = \
+	rbtree.c \
+	rbtree.h \
+	vde_headers.h \
+	vde_router.c \
+	vde_router.h \
+	vder_arp.c \
+	vder_arp.h \
+	vder_datalink.c \
+	vder_datalink.h \
+	vder_dhcp.c \
+	vder_dhcp.h \
+	vder_icmp.c \
+	vder_icmp.h \
+	vder_olsr.c \
+	vder_olsr.h \
+	vder_packet.c \
+	vder_packet.h \
+	vder_queue.c \
+	vder_queue.h \
+	vder_udp.c \
+	vder_udp.h
 
 vde_router_LDADD = $(top_builddir)/src/common/libvdecommon.la $(top_builddir)/src/lib/libvdeplug.la -lpthread
