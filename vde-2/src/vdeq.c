@@ -45,7 +45,7 @@ char *vdeqname;
 
 static int countnics(const char *s)
 {
-	register int nics=1;
+	int nics=1;
 	while (*s) {
 		if (*s==',') nics++;
 		s++;
@@ -55,8 +55,8 @@ static int countnics(const char *s)
 
 static int countnewnics(int argc,char *argv[])
 {
-	register int nics=0;
-	register int netflag=0;
+	int nics=0;
+	int netflag=0;
 	while (argc > 0) {
 		if (strcmp(argv[0],"-net")==0)
 			netflag=1;
@@ -73,7 +73,7 @@ static int countnewnics(int argc,char *argv[])
 
 static int isdaemonize(int argc,char *argv[])
 {
-	register int daemonize=0;
+	int daemonize=0;
 	if(strcmp(filename,"qemu")==0){
 		int daemonadds=0;
 		while (argc > 0) {
@@ -120,7 +120,7 @@ static void usage(void)
 
 static void cleanup()
 {
-	register int i;
+	int i;
 	for (i=0; i<nb_nics; i++) {
 		if (conn[i] != NULL)
 			vde_close(conn[i]);
@@ -282,13 +282,13 @@ int main(int argc, char **argv)
   char *argsock=NULL,**sockname;
 	int *ports;
   int result;
-  register ssize_t nx;
+  ssize_t nx;
   int newargc;
 	int daemonize;
   char **newargv;
   typedef int pair[2];
   pair *sp;
-  register int i,j;
+  int i,j;
 	int oldsyntax=0;
 	int newsyntax=0;
 	int ver;
@@ -415,8 +415,8 @@ int main(int argc, char **argv)
 			sockname[0]=NULL;
 		else
 		{
-			register char *s=argsock;
-			register char oldch;
+			char *s=argsock;
+			char oldch;
 			i=0;
 			do {
 				sockname[i++]=s;

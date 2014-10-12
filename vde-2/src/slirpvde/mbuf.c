@@ -43,7 +43,7 @@ m_init(Slirp *slirp)
 struct mbuf *
 m_get(Slirp *slirp)
 {
-	register struct mbuf *m;
+	struct mbuf *m;
 	int flags = 0;
 
 	DEBUG_CALL("m_get");

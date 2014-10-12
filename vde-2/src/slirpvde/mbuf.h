@@ -118,7 +118,7 @@ struct mbuf {
 void m_init(Slirp *);
 struct mbuf * m_get(Slirp *);
 void m_free(struct mbuf *);
-void m_cat(register struct mbuf *, register struct mbuf *);
+void m_cat(struct mbuf *, struct mbuf *);
 void m_inc(struct mbuf *, int);
 void m_adj(struct mbuf *, int);
 int m_copy(struct mbuf *, struct mbuf *, int, int);

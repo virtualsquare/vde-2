@@ -99,13 +99,13 @@
 #endif
 static void tcp_dooptions(struct tcpcb *tp, u_char *cp, int cnt,
                           struct tcpiphdr *ti);
-static void tcp_xmit_timer(register struct tcpcb *tp, int rtt);
+static void tcp_xmit_timer(struct tcpcb *tp, int rtt);
 
 static int
-tcp_reass(register struct tcpcb *tp, register struct tcpiphdr *ti,
+tcp_reass(struct tcpcb *tp, struct tcpiphdr *ti,
           struct mbuf *m)
 {
-	register struct tcpiphdr *q;
+	struct tcpiphdr *q;
 	struct socket *so = tp->t_socket;
 	int flags;
 
@@ -130,7 +130,7 @@ tcp_reass(register struct tcpcb *tp, register struct tcpiphdr *ti,
 	 * segment.  If it provides all of our data, drop us.
 	 */
 	if (!tcpfrag_list_end(tcpiphdr_prev(q), tp)) {
-		register int i;
+		int i;
 		q = tcpiphdr_prev(q);
 		/* conversion to int (in i) handles seq wraparound */
 		i = q->ti_seq + q->ti_len - ti->ti_seq;
@@ -158,7 +158,7 @@ tcp_reass(register struct tcpcb *tp, register struct tcpiphdr *ti,
 	 * if they are completely covered, dequeue them.
 	 */
 	while (!tcpfrag_list_end(q, tp)) {
-		register int i = (ti->ti_seq + ti->ti_len) - q->ti_seq;
+		int i = (ti->ti_seq + ti->ti_len) - q->ti_seq;
 		if (i <= 0)
 			break;
 		if (i < q->ti_len) {
@@ -216,12 +216,12 @@ void
 tcp_input(struct mbuf *m, int iphlen, struct socket *inso)
 {
   	struct ip save_ip, *ip;
-	register struct tcpiphdr *ti;
+	struct tcpiphdr *ti;
 	caddr_t optp = NULL;
 	int optlen = 0;
 	int len, tlen, off;
-        register struct tcpcb *tp = NULL;
-	register int tiflags;
+        struct tcpcb *tp = NULL;
+	int tiflags;
         struct socket *so = NULL;
 	int todrop, acked, ourfinisacked, needoutput = 0;
 	int iss = 0;
@@ -1343,7 +1343,7 @@ void
 tcp_pulloutofband(so, ti, m)
 	struct socket *so;
 	struct tcpiphdr *ti;
-	register struct mbuf *m;
+	struct mbuf *m;
 {
 	int cnt = ti->ti_urp - 1;
 
@@ -1374,7 +1374,7 @@ tcp_pulloutofband(so, ti, m)
  */
 
 static void
-tcp_xmit_timer(register struct tcpcb *tp, int rtt)
+tcp_xmit_timer(struct tcpcb *tp, int rtt)
 {
 	register short delta;
 

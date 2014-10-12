@@ -130,7 +130,7 @@ static int hash6(unsigned char *addr)
 static void vde_ip_check(const unsigned char *buf,int rnx) 
 {
 	struct header *ph=(struct header *) buf;
-	register int i,j,vlan=0;
+	int i,j,vlan=0;
 	char addr[256];
 	union body *pb;
 
@@ -286,7 +286,7 @@ unsigned char bufin[BUFSIZE];
 int main(int argc, char **argv)
 {
 	static char *sockname=NULL;
-	register ssize_t nx;
+	ssize_t nx;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 
 	uname(&me);

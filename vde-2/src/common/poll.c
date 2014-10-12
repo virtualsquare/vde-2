@@ -22,7 +22,7 @@
 static int prepare_select(struct pollfd *ufds, nfds_t nfds, int timeout,
 		struct timeval **pstimeout, int *maxfdp1, fd_set *rfds, fd_set *wfds, fd_set *efds)
 {
-	register int i;
+	int i;
 	struct pollfd *currfd;
 	struct timeval *stimeout = *pstimeout;
 		
@@ -93,7 +93,7 @@ static int prepare_select(struct pollfd *ufds, nfds_t nfds, int timeout,
 static int convert_results(struct pollfd *ufds, int nfds,
 		fd_set *rfds, fd_set *wfds, fd_set *efds)
 {
-	register int i;
+	int i;
 	struct pollfd *currfd;
 	int retval = 0;
 

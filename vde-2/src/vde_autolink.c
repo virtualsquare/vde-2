@@ -1454,7 +1454,7 @@ int main(int argc,char **argv)
 			npfd=newmgmtconn(pfd[mgmtindex].fd,pfd,npfd);
 
 		if (mgmt && (npfd > mgmtindex+1)) {
-			register int i;
+			int i;
 			for (i=mgmtindex+1;i<npfd;i++) {
 				if( (pfd[i].revents & POLLHUP) ||
 						((pfd[i].revents & POLLIN) &&

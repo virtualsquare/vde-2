@@ -207,8 +207,8 @@ static inline int po2round(int vx)
 	if (vx == 0)
 		return 0;
 	else {
-		register int i=0;
-		register int x=vx-1;
+		int i=0;
+		int x=vx-1;
 		while (x) { x>>=1; i++; }
 		if (vx != 1<<i)
 			printlog(LOG_WARNING,"Hash size must be a power of 2. %d rounded to %d",vx,1<<i);

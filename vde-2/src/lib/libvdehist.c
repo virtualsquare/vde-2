@@ -397,7 +397,7 @@ static void telnet_option_send3(int fd,int action,int object)
 
 static int telnet_options(struct vdehiststat *st,unsigned char *s)
 {
-	register int action_n_object;
+	int action_n_object;
 	if (st->telnetprotocol == 0) {
 		st->telnetprotocol=1;
 		st->echo=0;

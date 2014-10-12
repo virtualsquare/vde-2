@@ -65,7 +65,7 @@ static struct dbgcl dl[]= {
 /*
 	 void packet_dump (struct packet *p)
 	 {
-	 register int i;
+	 int i;
 	 printf ("packet dump dst");
 	 for (i=0;i<ETH_ALEN;i++)
 	 printf(":%02x",p->header.dest[i]);
@@ -180,7 +180,7 @@ static void free_port(unsigned int portno)
 		struct port *port=portv[portno];
 		if (port != NULL && port->ep==NULL) {
 			portv[portno]=NULL;
-			register int i;
+			int i;
 			/* delete completely the port. all vlan defs zapped */
 			bac_FORALL(validvlan,NUMOFVLAN,ba_clr(vlant[i].table,portno),i);
 			free(port);
@@ -268,7 +268,7 @@ struct endpoint *setup_ep(int portno, int fd_ctl, int fd_data, uid_t user,
 			ep->vdepq_max=stdqlen;
 #endif
 			if(port->ep == NULL) {/* WAS INACTIVE */
-				register int i;
+				int i;
 				/* copy all the vlan defs to the active vlan defs */
 				ep->next=port->ep;
 				port->ep=ep;
@@ -351,7 +351,7 @@ static int close_ep_port_fd(int portno, int fd_ctl)
 				port->ms=NULL;
 				port->sender=NULL;
 				port->curuser=-1;
-				register int i;
+				int i;
 				/* inactivate port: all active vlan defs cleared */
 				bac_FORALL(validvlan,NUMOFVLAN,({
 							ba_clr(vlant[i].bctag,portno);
@@ -467,7 +467,7 @@ void port_send_packet(int portno, void *packet, int len)
 
 void portset_send_packet(bitarray portset, void *packet, int len)
 {
-	register int i;
+	int i;
 #ifndef VDE_PQ2
 	ba_FORALL(portset,numports,
 			SEND_PACKET_PORT(portv[i],i,packet,len), i);
@@ -590,7 +590,7 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 		portv[port]->bytesin+=len;
 #endif
 		if (pflag & HUB_TAG) { /* this is a HUB */
-			register int i;
+			int i;
 #ifndef VDE_PQ2
 			for(i = 1; i < numports; i++)
 				if((i != port) && (portv[i] != NULL))
@@ -640,7 +640,7 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 				/* BROADCAST: tag/untag. Broadcast the packet untouched on the ports
 				 * of the same tag-ness, then transform it to the other tag-ness for the others*/
 				if (tagged) {
-					register int i;
+					int i;
 #ifndef VDE_PQ2
 					ba_FORALL(vlant[vlan].bctag,numports,
 							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
@@ -657,7 +657,7 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len,&tmpbufu);}),i);
 #endif
 				} else { /* untagged */
-					register int i;
+					int i;
 #ifndef VDE_PQ2
 					ba_FORALL(vlant[vlan].bcuntag,numports,
 							({if (i != port) SEND_PACKET_PORT(portv[i],i,packet,len);}),i);
@@ -989,7 +989,7 @@ static int print_port(FILE *fd,int i,int inclinactive)
 
 static int print_ptable(FILE *fd,char *arg)
 {
-	register int i;
+	int i;
 	if (*arg != 0) {
 		i=atoi(arg);
 		if (i <0 || i>=numports)
@@ -1006,7 +1006,7 @@ static int print_ptable(FILE *fd,char *arg)
 
 static int print_ptableall(FILE *fd,char *arg)
 {
-	register int i;
+	int i;
 	if (*arg != 0) {
 		i=atoi(arg);
 		if (i <0 || i>=numports)
@@ -1034,7 +1034,7 @@ static void portzerocounter(int i)
 
 static int portresetcounters(char *arg)
 {
-	register int i;
+	int i;
 	if (*arg != 0) {
 		i=atoi(arg);
 		if (i <0 || i>=numports)
@@ -1131,7 +1131,7 @@ static int vlanremove(int vlan)
 {
 	if (vlan >= 0 && vlan < NUMOFVLAN) {
 		if (bac_check(validvlan,vlan)) {
-			register int i,used=0;
+			int i,used=0;
 			ba_FORALL(vlant[vlan].table,numports,used++,i);
 			if (used)
 				return EADDRINUSE;
@@ -1206,7 +1206,7 @@ static int vlandelport(char *arg)
 
 static void vlanprintactive(int vlan,FILE *fd)
 {
-	register int i;
+	int i;
 	printoutc(fd,"VLAN %04d",vlan);
 #ifdef FSTP
 	if (pflag & FSTP_TAG) {
@@ -1248,7 +1248,7 @@ static void vlanprintactive(int vlan,FILE *fd)
 static int vlanprint(FILE *fd,char *arg)
 {
 	if (*arg != 0) {
-		register int vlan;
+		int vlan;
 		vlan=atoi(arg);
 		if (vlan >= 0 && vlan < NUMOFVLAN-1) {
 			if (bac_check(validvlan,vlan))
@@ -1264,7 +1264,7 @@ static int vlanprint(FILE *fd,char *arg)
 
 static void vlanprintelem(int vlan,FILE *fd)
 {
-	register int i;
+	int i;
 	printoutc(fd,"VLAN %04d",vlan);
 	ba_FORALL(vlant[vlan].table,numports,
 			printoutc(fd," -- Port %04d tagged=%d active=%d status=%s",
@@ -1274,7 +1274,7 @@ static void vlanprintelem(int vlan,FILE *fd)
 static int vlanprintall(FILE *fd,char *arg)
 {
 	if (*arg != 0) {
-		register int vlan;
+		int vlan;
 		vlan=atoi(arg);
 		if (vlan > 0 && vlan < NUMOFVLAN-1) {
 			if (bac_check(validvlan,vlan))
@@ -1302,7 +1302,7 @@ static int setmacaddr(char *strmac)
 	if (rv < 6)
 		return EINVAL;
 	else  {
-		register int i;
+		int i;
 		for (i=0;i<ETH_ALEN;i++)
 			switchmac[i]=maci[i];
 		return 0;

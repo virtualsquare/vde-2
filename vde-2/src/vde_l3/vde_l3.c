@@ -1513,7 +1513,7 @@ for(;;)
 				mgmtfdstart=mgmtindex+1;
 			}
 			if (mgmtfdstart >= 0 && npfd > mgmtfdstart) {
-				register int i;
+				int i;
 				for (i=mgmtfdstart;i<npfd;i++) {
 					if (pfd[i].revents & POLLHUP ||
 							(pfd[i].revents & POLLIN && mgmtcommand(pfd[i].fd) < 0))

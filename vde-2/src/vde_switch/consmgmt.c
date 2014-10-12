@@ -79,7 +79,7 @@ static struct plugin **plugint=&pluginh;
 
 void addcl(int ncl,struct comlist *cl)
 {
-	register int i;
+	int i;
 	for (i=0;i<ncl;i++,cl++) {
 		cl->next=NULL;
 		(*clt)=cl;
@@ -89,9 +89,9 @@ void addcl(int ncl,struct comlist *cl)
 
 void delcl(int ncl,struct comlist *cl)
 {
-	register int i;
+	int i;
 	for (i=0;i<ncl;i++,cl++) {
-		register struct comlist **p=&clh;
+		struct comlist **p=&clh;
 		while (*p != NULL) {
 			if (*p == cl) 
 				*p=cl->next;
@@ -116,9 +116,9 @@ void adddbgcl(int ncl,struct dbgcl *cl)
 
 void deldbgcl(int ncl,struct dbgcl *cl)
 {
-	register int i;
+	int i;
 	for (i=0;i<ncl;i++,cl++) {
-		register struct dbgcl **p=&dbgclh;
+		struct dbgcl **p=&dbgclh;
 		while (*p != NULL) {
 			if (*p == cl) {
 				if (cl->fds) free(cl->fds);
@@ -143,7 +143,7 @@ void addplugin(struct plugin *cl)
 
 void delplugin(struct plugin *cl)
 {
-	register struct plugin **p=plugint=&pluginh;
+	struct plugin **p=plugint=&pluginh;
 	while (*p != NULL) {
 		if (*p == cl)
 			*p=cl->next;

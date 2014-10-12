@@ -670,7 +670,7 @@ static void splitpacket(const unsigned char *buf,int size,int dir)
 	//fprintf(stderr,"%s: splitpacket rnx=%d remaining=%d size=%d\n",progname,rnx[dir],remaining[dir],size);
 	if (size==0) return;
 	if (rnx[dir]>0) {
-		register int amount=MIN(remaining[dir],size);
+		int amount=MIN(remaining[dir],size);
 		//fprintf(stderr,"%s: fragment amount %d\n",progname,amount);
 		memcpy(fragp[dir],buf,amount);
 		remaining[dir]-=amount;
@@ -1679,7 +1679,7 @@ int main(int argc,char *argv[])
 			int mgmtfdstart=consoleindex;
 			if (mgmtindex >= 0) mgmtfdstart=mgmtindex+1;
 			if (mgmtfdstart >= 0 && npfd > mgmtfdstart) {
-				register int i;
+				int i;
 				for (i=mgmtfdstart;i<npfd;i++) {
 					if (pfd[i].revents & POLLIN && mgmtcommand(pfd[i].fd) < 0)
 						pfd[i].revents |= POLLHUP;
