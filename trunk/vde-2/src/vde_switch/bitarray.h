@@ -94,7 +94,7 @@ static inline bitarray ba_alloc(int n)
 
 static inline bitarray ba_realloc(bitarray b,int n,int m)
 {
-	register int __i;
+	int __i;
 	bitarray nb=realloc(b,__WORDSIZEROUND(m)*sizeof(unsigned long)); 
 	if(nb != NULL) 
 		for(__i=__WORDSIZEROUND(n);__i<__WORDSIZEROUND(m);__i++) 
@@ -120,15 +120,15 @@ static inline void ba_clr(bitarray x,int i)
 
 static inline void ba_zap(bitarray x,int n)
 { 
-	register unsigned int __i; 
+	unsigned int __i; 
 	int max=__WORDSIZEROUND(n); 
 	for (__i=0; __i< max; __i++) 
 		x[__i]=0;
 }
 
 #define ba_FORALLFUN(X,N,F,ARG) \
-	({ register unsigned int __i,__j; \
-	 register bitarrayelem __v; \
+	({ unsigned int __i,__j; \
+	 bitarrayelem __v; \
 	 int max=__WORDSIZEROUND(N); \
 	 for (__i=0; __i< max; __i++) \
 	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
@@ -136,8 +136,8 @@ static inline void ba_zap(bitarray x,int n)
 	 0; })
 
 #define ba_FORALL(X,N,EXPR,K) \
-	({ register unsigned int __i,__j; \
-	 register bitarrayelem __v; \
+	({ unsigned int __i,__j; \
+	 bitarrayelem __v; \
 	 int max=__WORDSIZEROUND(N); \
 	 for (__i=0; __i< max; __i++) \
 	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
@@ -146,8 +146,8 @@ static inline void ba_zap(bitarray x,int n)
 
 static inline int ba_card(bitarray x,int n)
 {
-	register unsigned int __i,__j,__n=0; 
-	register bitarrayelem __v; 
+	unsigned int __i,__j,__n=0; 
+	bitarrayelem __v; 
 	int max=__WORDSIZEROUND(n); 
 	for (__i=0; __i< max; __i++) 
 		for (__v=(x)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) 
@@ -157,8 +157,8 @@ static inline int ba_card(bitarray x,int n)
 
 static inline void ba_empty(bitarray x,int n)
 { 
-	register unsigned int __i; 
-	register bitarrayelem __v=0; 
+	unsigned int __i; 
+	bitarrayelem __v=0; 
 	int max=__WORDSIZEROUND(n); 
 	for (__i=0; __i< max; __i++) 
 		__v |= (x)[__i]; \
@@ -171,7 +171,7 @@ static inline void ba_copy(bitarray dst, bitarray src, int n)
 
 static inline void ba_add(bitarray dst, bitarray src, int n)
 {
-	register unsigned int __i; 
+	unsigned int __i; 
 	int max=__WORDSIZEROUND(n); 
 	for (__i=0; __i< max; __i++) 
 		dst[__i] |= src[__i]; 
@@ -179,7 +179,7 @@ static inline void ba_add(bitarray dst, bitarray src, int n)
 
 static inline void ba_remove(bitarray dst, bitarray src, int n)
 {
-	register unsigned int __i; 
+	unsigned int __i; 
 	int max=__WORDSIZEROUND(n); 
 	for (__i=0; __i< max; __i++) 
 		dst[__i] &= ~(src[__i]); 
@@ -187,7 +187,7 @@ static inline void ba_remove(bitarray dst, bitarray src, int n)
 
 static inline void ba_negate(bitarray x, int n)
 {
-	register unsigned int __i; 
+	unsigned int __i; 
 	int max=__WORDSIZEROUND(n); 
 	for (__i=0; __i< max; __i++) 
 		x[__i] = ~(x[__i]);
@@ -203,8 +203,8 @@ static inline bitarray bac_alloc(int n)
 
 static inline bitarray bac_realloc(bitarray b,int n,int m)
 {
-	register int __i;
-	register int __size=b[__WORDSIZEROUND(n)]; 
+	int __i;
+	int __size=b[__WORDSIZEROUND(n)]; 
 	bitarray nb=realloc(b,(__WORDSIZEROUND(m)+1)*sizeof(unsigned long)); 
 	if(nb != NULL) { 
 		b[__WORDSIZEROUND(m)]=__size; 
@@ -223,23 +223,23 @@ static inline int bac_check(bitarray x,int i)
 
 static inline void bac_set(bitarray x,int n,int i)
 { 
-	register bitarrayelem __v=x[i>>__LOG_WORDSIZE]; 
-	register bitarrayelem __w=__v; 
+	bitarrayelem __v=x[i>>__LOG_WORDSIZE]; 
+	bitarrayelem __w=__v; 
 	__v |= (1L << (i & __WORDSIZEMASK)); 
 	if (__v != __w) x[i>>__LOG_WORDSIZE]=__v,(x[__WORDSIZEROUND(n)]++); 
 }
 
 static inline void bac_clr(bitarray x,int n,int i)
 { 
-	register bitarrayelem __v=x[i>>__LOG_WORDSIZE]; 
-	register bitarrayelem __w=__v; 
+	bitarrayelem __v=x[i>>__LOG_WORDSIZE]; 
+	bitarrayelem __w=__v; 
 	__v &= ~(1L << (i & __WORDSIZEMASK)); 
 	if (__v != __w) x[i>>__LOG_WORDSIZE]=__v,(x[__WORDSIZEROUND(n)]--); 
 }
 
 static inline void bac_zap(bitarray x,int n)
 { 
-	register unsigned int __i;
+	unsigned int __i;
 		int max=__WORDSIZEROUND(n);
 	 for (__i=0; __i< max; __i++)
 		 x[__i]=0;
@@ -247,18 +247,18 @@ static inline void bac_zap(bitarray x,int n)
 }
 
 #define bac_FORALLFUN(X,N,F,ARG) \
-	({ register unsigned int __i,__j; \
-	 register bitarrayelem __v; \
-	 register int __n=(X)[__WORDSIZEROUND(N)]; \
+	({ unsigned int __i,__j; \
+	 bitarrayelem __v; \
+	 int __n=(X)[__WORDSIZEROUND(N)]; \
 	 for (__i=0; __n > 0; __i++) \
 	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
 	 if (__v & 1) (F)(__i*__VDEWORDSIZE+__j,(ARG)),__n--; \
 	 0; })
 
 #define bac_FORALL(X,N,EXPR,K) \
-	({ register unsigned int __i,__j; \
-	 register bitarrayelem __v; \
-	 register int __n=(X)[__WORDSIZEROUND(N)]; \
+	({ unsigned int __i,__j; \
+	 bitarrayelem __v; \
+	 int __n=(X)[__WORDSIZEROUND(N)]; \
 	 for (__i=0; __n > 0; __i++) \
 	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
 	 if (__v & 1) (K)=__i*__VDEWORDSIZE+__j,(EXPR),__n--; \

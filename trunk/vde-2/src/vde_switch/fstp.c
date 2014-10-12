@@ -192,7 +192,7 @@ static struct fsttagbpdu outtagpacket = {
 int fstnewvlan(int vlan)
 {
 	/*printf("F new vlan %d\n",vlan);*/
-	register unsigned int port;
+	unsigned int port;
 	int newvlan=(fsttab[vlan] == NULL);
 	if (newvlan  &&
 			((fsttab[vlan]=malloc(sizeof(struct vlst))) == NULL ||
@@ -249,7 +249,7 @@ int fstremovevlan(int vlan)
 
 void fstsetnumports (int val)
 {
-	register int i;
+	int i;
 	/*printf("F numports %d\n",val);*/
 	for (i=0;i<NUMOFVLAN;i++) {
 		if (fsttab[i]) {
@@ -292,7 +292,7 @@ void fstsetnumports (int val)
 static void fst_hello_vlan(int vlan,int now)
 {
 	int age,nowvlan;
-	register int port;
+	int port;
 	/* timeout on the root port */
 	if (fsttab[vlan]->rootport != 0 && (now - fsttab[vlan]->roottimestamp) > 3*helloperiod)
 		fstnewvlan(vlan);
@@ -333,7 +333,7 @@ static void fst_hello_vlan(int vlan,int now)
  */
 static void fst_updatebackup(int vlan,int index)
 {
-	register int port;
+	int port;
 	ba_FORALL(fsttab[vlan]->backup,numports, ({
 				if (!FSTP_ACTIVE(vlan,port)) {
 				ba_clr(fsttab[vlan]->backup,port);
@@ -413,7 +413,7 @@ static void fst_sendbpdu(int vlan,int port,int agr,int tc,int tcack)
  */
 static void topology_change(int vlan, int genport)
 {
-	register int port;
+	int port;
 	int now=qtime();
 	//if (now - fsttab[vlan]->tctime > 2*helloperiod) { /*limit age?*/
 	/*printf("TOPOLOGY CHANGE %d\n",vlan);*/
@@ -438,7 +438,7 @@ static void topology_change(int vlan, int genport)
  * 3- give back the acknowledge and put the new root in fwd*/
 static void fastprotocol(int vlan, int newrootport)
 {
-  register int port;
+  int port;
 	ba_FORALL(fsttab[vlan]->untag,numports,
 			({ if(port != newrootport && !(ba_check(fsttab[vlan]->backup,port)) &&
 						!(ba_check(fsttab[vlan]->edge,port)) && FSTP_ACTIVE(vlan,port)) {
@@ -667,7 +667,7 @@ static char *decoderole(int vlan, int port)
 
 static void fstprintactive(int vlan,FILE *fd)
 {
-	register int i;
+	int i;
 	printoutc(fd,"FST DATA VLAN %04d %s %s",vlan,
 			memcmp(myid,fsttab[vlan]->root,SWITCHID_LEN)==0?"ROOTSWITCH":"",
 			((pflag & FSTP_TAG)==0)?"FSTP IS DISABLED":"");
@@ -690,7 +690,7 @@ static void fstprintactive(int vlan,FILE *fd)
 static int fstprint(FILE *fd,char *arg)
 {
 	if (*arg != 0) {
-		register int vlan;
+		int vlan;
 		vlan=atoi(arg);
 		if (vlan >= 0 && vlan < NUMOFVLAN-1) {
 			if (bac_check(validvlan,vlan))

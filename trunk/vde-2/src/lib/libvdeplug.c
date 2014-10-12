@@ -749,7 +749,7 @@ void vdestream_recv(VDESTREAM *vdestream, unsigned char *buf, size_t len)
 	//fprintf(stderr,"%s: splitpacket rnx=%d remaining=%d size=%d\n",myname,rnx,vdestream->remaining,len);
 	if (len==0) return;
 	if (vdestream->rnx>0) {
-		register int amount=MIN(vdestream->remaining,len);
+		int amount=MIN(vdestream->remaining,len);
 		//fprintf(stderr,"%s: fragment amount %d\n",myname,amount);
 		memcpy(vdestream->fragp,buf,amount);
 		vdestream->remaining-=amount;

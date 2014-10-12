@@ -54,11 +54,11 @@ udp_init(Slirp *slirp)
  * ip->ip_len length data (IPDU)
  */
 void
-udp_input(register struct mbuf *m, int iphlen)
+udp_input(struct mbuf *m, int iphlen)
 {
 	Slirp *slirp = m->slirp;
-	register struct ip *ip;
-	register struct udphdr *uh;
+	struct ip *ip;
+	struct udphdr *uh;
 	int len;
 	struct ip save_ip;
 	struct socket *so;
@@ -232,7 +232,7 @@ int udp_output2(struct socket *so, struct mbuf *m,
                 struct sockaddr_in *saddr, struct sockaddr_in *daddr,
                 int iptos)
 {
-	register struct udpiphdr *ui;
+	struct udpiphdr *ui;
 	int error = 0;
 
 	DEBUG_CALL("udp_output");

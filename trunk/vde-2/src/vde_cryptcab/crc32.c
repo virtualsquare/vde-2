@@ -33,7 +33,7 @@ u_int32_t crc_tab[256];
  */
 u_int32_t chksum_crc32 (unsigned char *block, unsigned int length)
 {
-   register unsigned long crc;
+   unsigned long crc;
    unsigned long i;
 
    crc = 0xFFFFFFFF;
@@ -47,7 +47,7 @@ u_int32_t chksum_crc32 (unsigned char *block, unsigned int length)
 
 unsigned char *crc32(unsigned char *block, unsigned int len)
 {
-	register unsigned long crc=chksum_crc32(block,len);
+	unsigned long crc=chksum_crc32(block,len);
 	unsigned char *res=malloc(4);
 	
 	res[0]=crc&0x000000FF;

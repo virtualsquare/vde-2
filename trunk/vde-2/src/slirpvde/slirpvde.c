@@ -138,7 +138,7 @@ int slirp_can_output(void *opaque)
 #define convery2ascii(x) ((x)>=' ' && (x) <= '~')?(x):'.'
 void dumppkt(const uint8_t *pkt, int pkt_len)
 {
-	register int i,j;
+	int i,j;
 	printf("Packet dump len=%d\n",pkt_len);
 	if (pkt_len == 0) 
 		return;
@@ -354,7 +354,7 @@ int main(int argc, char **argv)
   char *sockname=NULL;
   int result,nfds;
   register ssize_t nx;
-  /*register int i;*/
+  /*int i;*/
   fd_set rs,ws,xs;
   int opt,longindx;
 	int daemonize=0;

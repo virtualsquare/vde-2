@@ -84,7 +84,7 @@ static int addpid(int pid) {
 void libvdetap_init (void) __attribute((constructor));
 void libvdetap_init(void)
 {
-	register int i;
+	int i;
 	nativesym(ioctl, "ioctl");
 	nativesym(open, "open");
 	nativesym(open64, "open64");

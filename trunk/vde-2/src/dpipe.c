@@ -29,7 +29,7 @@ static char *progname;
 
 int splitindex(int argc, char *argv[], int *dirchar) 
 {
-	register int i;
+	int i;
 
 	for (i=0; i<argc; i++) {
 		if (*dirchar == argv[i][0] && argv[i][1] == '=' ) {

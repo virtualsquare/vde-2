@@ -57,7 +57,7 @@ void qtime_csexit()
 
 unsigned int qtimer_add(time_t period,int times,void (*call)(),void *arg)
 {
-	register int n;
+	int n;
 	if (period>0 && call && times>=0) {
 		qtime_csenter();
 		if (activeqt >= maxqt) {
@@ -96,7 +96,7 @@ unsigned int qtimer_add(time_t period,int times,void (*call)(),void *arg)
 
 void qtimer_del(unsigned int n)
 {
-	register int i;
+	int i;
 	for (i=0; i<activeqt; i++) {
 		if (n==qth[i]->qt_n) {
 			qth[i]->qt_times=0;
@@ -107,8 +107,8 @@ void qtimer_del(unsigned int n)
 
 static void sig_alarm(int sig)
 {
-	register int i;
-	register int j;
+	int i;
+	int j;
 	gqtime++;
 	//printf("%d\n",gqtime);
 	for (i=0,j=0; i<activeqt; i++) {

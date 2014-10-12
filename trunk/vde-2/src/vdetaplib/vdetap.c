@@ -30,7 +30,7 @@ int main(int argc,char *argv[])
 {
 	int fd,fddata;
 	int nx;
-	register int i;
+	int i;
 	struct vde_open_args open_args={.port=0,.group=NULL,.mode=0700};
 	char *descr;
 	/*printf("argc = %d\n",argc);

@@ -102,7 +102,7 @@ static int maxtypes;
 
 unsigned char add_type(struct swmodule *mgr,int prio)
 {
-	register int i;
+	int i;
 	if(ntypes==maxtypes) {
 		maxtypes = maxtypes ? 2 * maxtypes : 8;
 		if (maxtypes > PRIOFLAG) {
@@ -168,14 +168,14 @@ void add_fd(int fd,unsigned char type,void *private_data)
 
 static void file_cleanup(void)
 {
-	register int i;
+	int i;
 	for(i = 0; i < nfds; i++)
 		TYPE2MGR(fdpp[i]->type)->cleanup(fdpp[i]->type,fds[i].fd,fdpp[i]->private_data);
 }
 
 void remove_fd(int fd)
 {
-	register int i;
+	int i;
 
 	for(i = 0; i < nfds; i++){
 		if(fds[i].fd == fd) break;
@@ -196,7 +196,7 @@ void remove_fd(int fd)
 static void main_loop()
 {
 	time_t now;
-	register int n,i;
+	int n,i;
 	while(1) {
 		n=poll(fds,nfds,-1);
 		now=time(NULL);
@@ -206,7 +206,7 @@ static void main_loop()
 		} else {
 			for(i = 0; /*i < nfds &&*/ n>0; i++){
 				if(fds[i].revents != 0) {
-					register int prenfds=nfds;
+					int prenfds=nfds;
 					n--;
 					fdpp[i]->timestamp=now;
 					TYPE2MGR(fdpp[i]->type)->handle_io(fdpp[i]->type,fds[i].fd,fds[i].revents,fdpp[i]->private_data);
@@ -258,7 +258,7 @@ static void version(void)
 
 static struct option *optcpy(struct option *tgt, struct option *src, int n, int tag)
 {
-	register int i;
+	int i;
 	memcpy(tgt,src,sizeof(struct option) * n);
 	for (i=0;i<n;i++) {
 		tgt[i].val=(tgt[i].val & 0xffff) | tag << 16;
@@ -303,7 +303,7 @@ static void parse_args(int argc, char **argv)
 	if (long_options == NULL || optstring==NULL)
 		exit(2);
 	{ /* fill-in the long_options fields */
-		register int i;
+		int i;
 		char *os=optstring;
 		char last=0;
 		struct option *opp=long_options;
