@@ -9,6 +9,15 @@ if ENABLE_PROFILE
 endif
 
 bin_PROGRAMS = vde_vxlan
-vde_vxlan_SOURCES = vde_vxlan.c vxlan_hash.c log.c plug.c vxlan.c
+vde_vxlan_SOURCES = \
+	log.c \
+	log.h \
+	plug.c \
+	plug.h \
+	vde_vxlan.c \
+	vxlan.c \
+	vxlan.h \
+	vxlan_hash.c \
+	vxlan_hash.h
 vde_vxlan_LDADD = $(top_builddir)/src/common/libvdecommon.la \
 		  $(top_builddir)/src/lib/libvdeplug.la
