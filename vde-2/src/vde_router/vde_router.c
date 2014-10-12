@@ -1387,7 +1387,7 @@ int main(int argc, char *argv[])
 	char cmd[MAXCMD];
 	int npfd = 0;
 	struct pollfd pfd[MAXCONN];
-	int consoleindex = -1, mgmtindex = -1;
+	int mgmtindex = -1;
 	int i, n, daemon = 0;
 	char *pidfile = NULL, *configfile = NULL;
 	int option_index;
@@ -1459,7 +1459,6 @@ int main(int argc, char *argv[])
 		}
 		setsid();
 	} else {
-		consoleindex = npfd;
 		pfd[npfd].fd = STDIN_FILENO;
 		pfd[npfd].events = POLLIN | POLLHUP;
 		write(STDOUT_FILENO,header,strlen(header));
