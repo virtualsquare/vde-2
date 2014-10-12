@@ -51,7 +51,6 @@ char *vde_realpath(const char *name, char *resolved)
 	char *resolved_root = resolved + 1;
 	char *ret_path = NULL;
 	int num_links = 0;
-	int validstat = 0;
 	struct stat *pst = NULL;
 
 	if (!name || !resolved)
@@ -128,7 +127,6 @@ char *vde_realpath(const char *name, char *resolved)
 		else if (end - start == 2 && start[0] == '.' && start[1] == '.')
 		{
 			/* Back up to previous component, ignore if at root already.  */
-			validstat = 0;
 			if (dest > resolved_root)
 				while ((--dest)[-1] != '/');
 		}
@@ -151,7 +149,6 @@ char *vde_realpath(const char *name, char *resolved)
 			*dest = '\0';
 
 			/*check the dir along the path */
-			validstat = 1;
 			if (lstat(resolved, pst) < 0)
 				goto abort;
 			else
@@ -169,7 +166,6 @@ char *vde_realpath(const char *name, char *resolved)
 					}
 
 					/* symlink! */
-					validstat = 0;
 					n = readlink (resolved, buf, PATH_MAX);
 					if (n < 0)
 						goto abort;

@@ -142,7 +142,7 @@ static inline void ba_zap(bitarray x,int n)
 	 for (__i=0; __i< max; __i++) \
 	 for (__v=(X)[__i],__j=0; __j < __VDEWORDSIZE; __v >>=1, __j++) \
 	 if (__v & 1) {(K)=__i*__VDEWORDSIZE+__j;(EXPR);} \
-	 0; })
+	 (K); })
 
 static inline int ba_card(bitarray x,int n)
 {

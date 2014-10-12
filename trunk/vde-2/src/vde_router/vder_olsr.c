@@ -608,7 +608,6 @@ static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *
 static void olsr_recv(uint8_t *buffer, int len)
 {
 	struct olsrmsg *msg;
-	struct olsr_hmsg_tc *msg_tc;
 	struct olsrhdr *outohdr, *oh = (struct olsrhdr *) buffer;
 	struct olsr_route_entry *ancestor;
 	int parsed = 0;
@@ -653,7 +652,6 @@ static void olsr_recv(uint8_t *buffer, int len)
 				recv_mid(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin);
 				break;
 			case OLSRMSG_TC:
-				msg_tc = (struct olsr_hmsg_tc *) (buffer + parsed);
 				if (reconsider_topology(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin) < 1)
 					msg->ttl = 0;
 				else {
