@@ -1357,7 +1357,7 @@ static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 		return nfds;
 	}
 	if (nfds < MAXCONN) {
-		snprintf(buf,MAXCMD,header);
+		snprintf(buf,MAXCMD,"%s",header);
 		write(new,buf,strlen(buf));
 		write(new,prompt,strlen(prompt));
 		pfd[nfds].fd=new;
