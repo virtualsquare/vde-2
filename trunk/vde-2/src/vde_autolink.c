@@ -1329,6 +1329,7 @@ int main(int argc,char **argv)
 		{"mgmtmode",	1, 0, MGMTMODEARG},
 		{"sock",	1, 0, 's'},
 		{"switchmgmt",	1, 0, 'S'},
+		{NULL,		0, 0, 0},
 	};
 	progname=basename(argv[0]);
 
