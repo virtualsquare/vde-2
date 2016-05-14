@@ -20,7 +20,8 @@ libvdeplug_la_SOURCES =  \
 	../libvdeplug_udp.c \
 	../libvdeplug_vxhash.c \
 	../libvdeplug_vxlan.c \
-	../libvdeplug_vxvde.c
+	../libvdeplug_vxvde.c \
+	../libvdeplug_tap.c
 
 libvdeplug_la_LIBADD = $(LIBADD)
 libvdeplug_la_LDFLAGS = $(AM_LDFLAGS) -version-number 2:2:2 -export-dynamic

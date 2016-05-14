@@ -43,6 +43,7 @@ extern struct vdeplug_module vdeplug_ptpm;
 extern struct vdeplug_module vdeplug_vxlan;
 extern struct vdeplug_module vdeplug_vxvde;
 //extern struct vdeplug_module vdeplug_gvde;
+extern struct vdeplug_module vdeplug_tap;
 
 static struct vdeplug_module *modules[]={
 	&vdeplug_vde,
@@ -53,6 +54,7 @@ static struct vdeplug_module *modules[]={
 	&vdeplug_vxlan,
 	&vdeplug_vxvde,
 	//&vdeplug_gvde,
+	&vdeplug_tap,
 };
 
 #define NVDE_MODS sizeof(modules)/sizeof(struct vdeplug_module *)
