@@ -133,7 +133,7 @@ static inline void markov_node_free(struct markov_node *old)
 	free(old);
 }
 
-static void markov_compute(i)
+static void markov_compute(int i)
 {
 	int j;
 	ADJMAP(i,i)=100.0;
@@ -1405,7 +1405,7 @@ static int delmgmtconn(int i,struct pollfd *pfd,int nfds)
 
 void usage(void)
 {
-	fprintf(stderr,"Usage: %s OPTIONS\n"
+	fprintf(stderr,"Usage: %s OPTIONS [sock1 sock2]\n"
 			"\t--help|-h\n"
 			"\t--rcfile|-f Configuration file\n"
 			"\t--loss|-l loss_percentage\n"
@@ -1420,7 +1420,6 @@ void usage(void)
 			"\t--nofifo|-N\n"
 			"\t--mgmt|-M management_socket\n"
 			"\t--mgmtmode management_permission(octal)\n"
-			"\t--vde-plug plug1:plug2 | -v plug1:plug2\n"
 			"\t--daemon\n"
 			"\t--pidfile pidfile\n"
 			"\t--blink blinksocket\n"
@@ -1452,7 +1451,6 @@ int main(int argc,char *argv[])
 		{"nofifo",0 , 0, 'N'},
 		{"mgmt", 1, 0, 'M'},
 		{"mgmtmode", 1, 0, MGMTMODEARG},
-		{"vde-plug",1,0,'v'},
 		{"daemon",0 , 0, DAEMONIZEARG},
 		{"pidfile", 1, 0, PIDFILEARG},
 		{"blink",1,0,LOGSOCKETARG},
@@ -1467,7 +1465,7 @@ int main(int argc,char *argv[])
 
 	while(1) {
 		int c;
-		c = GETOPT_LONG (argc, argv, "hNl:n:d:M:D:m:b:s:c:v:L:f:",
+		c = GETOPT_LONG (argc, argv, "hNl:n:d:M:D:m:b:s:c:L:f:",
 				long_options, &option_index);
 		if (c<0)
 			break;
@@ -1511,19 +1509,6 @@ int main(int argc,char *argv[])
 			case 'N':
 				nofifo=1;
 				break;
-			case 'v':
-				{
-					char *colon;
-					vdepath[LR]=strdup(optarg);
-					colon=index(vdepath[LR],':');
-					if (colon) {
-						*colon=0;
-						vdepath[RL]=colon+1;
-					} else {
-						fprintf(stderr,"Bad vde_plugs specification.\n");
-						usage();
-					}
-				}
 			case MGMTMODEARG:
 				sscanf(optarg,"%o",&mgmtmode);
 				break;
@@ -1547,8 +1532,13 @@ int main(int argc,char *argv[])
 				break;
 		}
 	}
-	if (optind < argc)
+
+	if (optind + 2 == argc) {
+		vdepath[LR]=argv[optind];
+		vdepath[RL]=argv[optind+1];
+	} else if (optind < argc) {
 		usage();
+	}
 
 	if (blinksun.sun_path[0] != 0) {
 		blinksock=socket(AF_UNIX, SOCK_DGRAM, 0);
