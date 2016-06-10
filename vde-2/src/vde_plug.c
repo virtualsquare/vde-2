@@ -437,14 +437,6 @@ int main(int argc, char **argv)
 			sockname2=argv[optind];
 			optind++;
 		}
-		if (sockname!=NULL && sockname2==NULL) {
-			char *colon;
-			if (strstr(sockname,"->") == NULL && /* NOT UDP! */
-					(colon=strchr(sockname,':')) != NULL) {
-				sockname2=colon+1;
-				*colon=0;
-			}
-		}
 	}
 	atexit(cleanup);
 	setsighandlers();
