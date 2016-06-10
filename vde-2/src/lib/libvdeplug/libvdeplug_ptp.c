@@ -112,7 +112,7 @@ static char *vde_ptpm_check(char *given_sockname)
 	return NULL;
 }
 
-#define UNUSED(X) ({(void *)(X);})
+#define UNUSED(X) ({(void *)((intptr_t)(X));})
 
 static VDECONN *vde_ptpf_open(char *given_sockname, char *descr,int interface_version,
 		struct vde_open_args *open_args)
