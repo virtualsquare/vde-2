@@ -53,3 +53,5 @@ src/vdetaplib/vdetap
 src/vdeterm
 src/wirefilter
 src/kvde_switch/kvde_switch
+src/vde_router/vde_router
+

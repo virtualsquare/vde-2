@@ -3,6 +3,9 @@
  * Licensed under the GPLv2
  *
  */
+
+#include <config.h>
+
 #include "vde_router.h"
 #include "vde_headers.h"
 #include "vder_packet.h"

@@ -7,6 +7,8 @@
  *
  * For the router engine see vder_datalink.c
  */
+#include <config.h>
+
 #include "vder_olsr.h"
 #include "vder_datalink.h"
 #include "vde_router.h"
@@ -28,7 +30,6 @@
 #include <arpa/inet.h>
 #include <getopt.h>
 #include <libgen.h>
-
 
 static char *mgmt;
 static int mgmtmode=0700;
@@ -310,9 +311,9 @@ static inline int is_netmask(uint32_t addr)
 static inline int not_a_number(char *p)
 {
 	if (!p)
-		return 1; 
+		return 1;
 	if ((p[0] < '0') || (p[0] > '9'))
-		return 1; 
+		return 1;
 	return 0;
 }
 
@@ -386,7 +387,7 @@ static int ifconfig(int fd,char *s)
 		}
 		if (match_input("dhcp", arg)) {
 			temp_address.s_addr = (uint32_t)(-1);
-			pthread_create(&selected->dhcpclient, 0, dhcp_client_loop, selected); 
+			pthread_create(&selected->dhcpclient, 0, dhcp_client_loop, selected);
 		}
 		else if (!inet_aton(arg, &temp_address) || !is_unicast(temp_address.s_addr)) {
 			printoutc(fd, "Invalid address \"%s\"", arg);
@@ -645,7 +646,7 @@ static int filter(int fd,char *s)
 			if (not_a_number(arg)) {
 				if (match_input("tcp", arg))
 					proto = IPPROTO_TCP;
-				else if (match_input("udp", arg)) 
+				else if (match_input("udp", arg))
 					proto = IPPROTO_UDP;
 				else if (match_input("igmp", arg))
 					proto = IPPROTO_IGMP;
@@ -778,12 +779,12 @@ static void fill_queue_info(struct vder_queue *q, char *info)
 			snprintf(info, MAXCMD, "unlimited");
 			break;
 		case QPOLICY_FIFO:
-			snprintf(info, MAXCMD, "pfifo limit: %u (%d packets dropped)", 
+			snprintf(info, MAXCMD, "pfifo limit: %u (%d packets dropped)",
 				q->policy_opt.fifo.limit,
 				q->policy_opt.fifo.stats_drop);
 			break;
 		case QPOLICY_RED:
-			snprintf(info, MAXCMD, "red min: %u, max: %u, probability: %lf limit: %u (%d packets dropped, %d packets fired)", 
+			snprintf(info, MAXCMD, "red min: %u, max: %u, probability: %lf limit: %u (%d packets dropped, %d packets fired)",
 				q->policy_opt.red.min,
 				q->policy_opt.red.max,
 				q->policy_opt.red.P,
@@ -1120,7 +1121,7 @@ static int dhcpd(int fd,char *s)
 		dhcpd_settings->lease_time = DEFAULT_LEASE_TIME;
 		dhcpd_settings->flags = 0;
 		selected->dhcpd_started = 1;
-		pthread_create(&selected->dhcpd, 0, dhcp_server_loop, dhcpd_settings); 
+		pthread_create(&selected->dhcpd, 0, dhcp_server_loop, dhcpd_settings);
 	} else if (selected->dhcpd_started) {
 		pthread_cancel(selected->dhcpd);
 		selected->dhcpd_started = 0;
@@ -1173,7 +1174,7 @@ static int olsr(int fd,char *s)
 			free(olsr_settings);
 			return EINVAL;
 		}
-		pthread_create(&olsr_thread, 0, vder_olsr_loop, olsr_settings); 
+		pthread_create(&olsr_thread, 0, vder_olsr_loop, olsr_settings);
 	} else {
 		pthread_cancel(olsr_thread);
 		/* stop */
@@ -1207,7 +1208,7 @@ static struct comlist {
 static inline void delnl(char *buf)
 {
 	int len=strlen(buf)-1;
-	while (len>0 && 
+	while (len>0 &&
 				(buf[len]=='\n' || buf[len]==' ' || buf[len]=='\t')) {
 		buf[len]=0;
 		len--;
@@ -1222,7 +1223,7 @@ static int handle_cmd(int fd,char *inbuf)
 	while (*inbuf == ' ' || *inbuf == '\t' || *inbuf == '\n') inbuf++;
 	delnl(inbuf);
 	if (*inbuf != '\0' && *inbuf != '#') {
-		for (i=0; i<NCL 
+		for (i=0; i<NCL
 				&& strncmp(commandlist[i].tag,inbuf,strlen(commandlist[i].tag))!=0;
 				i++)
 			;
@@ -1264,7 +1265,7 @@ static int mgmtcommand(int fd)
 		fprintf(stderr,"%s: read from mgmt %s",progname,strerror(errno));
 		return -1;
 	}
-	else if (n==0){ 
+	else if (n==0){
 		return -1;
 		/* Remote end has closed connection. */
 	}

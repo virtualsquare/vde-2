@@ -22,6 +22,15 @@
 #define PROTO_TCP 6
 #define PROTO_UDP 17
 
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
+#ifdef VDE_DARWIN
+#pragma message "Darwin!"
+#else
+#pragma message "No Darwin!"
+#endif
+
 #if defined(VDE_FREEBSD) || defined(VDE_DARWIN)
 struct iphdr
 {
@@ -43,10 +52,11 @@ struct iphdr
 	u_int32_t daddr;
 	/*The options start here. */
 };
+#define ICMP_TIME_EXCEEDED ICMP_TIMXCEED
 #endif
 
-struct 
-__attribute__ ((__packed__)) 
+struct
+__attribute__ ((__packed__))
 vde_ethernet_header
 {
 	uint8_t dst[6];
@@ -63,11 +73,11 @@ vde_ethernet_header
 #define ETHERNET_ADDRESS_SIZE 6
 #define IP_ADDRESS_SIZE 4
 
-#define ETH_BCAST (unsigned char *)"\xFF\xFF\xFF\xFF\xFF\xFF" 
+#define ETH_BCAST (unsigned char *)"\xFF\xFF\xFF\xFF\xFF\xFF"
 #define HTYPE_ETH 1
 
 struct
-__attribute__ ((__packed__)) 
+__attribute__ ((__packed__))
 vde_arp_header
 {
 	uint16_t htype;
@@ -78,7 +88,7 @@ vde_arp_header
 	uint8_t s_mac[6];
 	uint32_t s_addr;
 	uint8_t d_mac[6];
-	uint32_t d_addr;	
+	uint32_t d_addr;
 };
 
 #define ethhead(vb) ((struct vde_ethernet_header *)(vb->data))

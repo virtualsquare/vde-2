@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include "vder_udp.h"
 #include <stdio.h>
 #include <unistd.h>
@@ -183,5 +185,3 @@ int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len
 	*fromport = uh->sport;
 	return len;
 }
-
-
