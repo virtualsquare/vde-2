@@ -22,15 +22,6 @@
 #define PROTO_TCP 6
 #define PROTO_UDP 17
 
-#define XSTR(x) STR(x)
-#define STR(x) #x
-
-#ifdef VDE_DARWIN
-#pragma message "Darwin!"
-#else
-#pragma message "No Darwin!"
-#endif
-
 #if defined(VDE_FREEBSD) || defined(VDE_DARWIN)
 struct iphdr
 {
