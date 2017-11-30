@@ -3,6 +3,9 @@
  * Licensed under the GPLv2
  *
  */
+
+#include <config.h>
+
 #include "vde_router.h"
 #include "vde_headers.h"
 #include "vder_queue.h"
@@ -86,7 +89,7 @@ static void *vder_timer_loop(void *arg)
 		pthread_mutex_unlock(&Router.global_config_lock);
 		interval.tv_sec = 0;
 		interval.tv_nsec = Router.smallest_interval / 1000;
-		if (Router.timed_dequeue) 
+		if (Router.timed_dequeue)
 			nanosleep(&interval, NULL);
 		else
 			sleep(2);
@@ -114,7 +117,7 @@ void vder_timed_dequeue_add(struct vder_queue *q, uint32_t interval)
 	pthread_mutex_unlock(&Router.global_config_lock);
 }
 
-void vder_timed_dequeue_del(struct vder_queue *q) 
+void vder_timed_dequeue_del(struct vder_queue *q)
 {
 	struct vder_timed_dequeue *prev = NULL, *cur = Router.timed_dequeue;
 	pthread_mutex_lock(&Router.global_config_lock);
@@ -137,7 +140,7 @@ void vder_timed_dequeue_del(struct vder_queue *q)
 void vderouter_init(void)
 {
 	memset(&Router, 0, sizeof(Router));
-	pthread_create(&Router.timer, 0, vder_timer_loop, NULL); 
+	pthread_create(&Router.timer, 0, vder_timer_loop, NULL);
 	pthread_mutex_init(&Router.global_config_lock, NULL);
 	Router.smallest_interval = 100000;
 
@@ -197,7 +200,7 @@ int vder_route_add(uint32_t address, uint32_t netmask, uint32_t gateway, uint16_
 	ro->netmask = netmask;
 	ro->gateway = gateway;
 	ro->metric = metric;
-	if (dst) 
+	if (dst)
 		ro->iface = dst;
 	else {
 		struct vder_route *next_hop = vder_get_route(gateway);
@@ -205,7 +208,7 @@ int vder_route_add(uint32_t address, uint32_t netmask, uint32_t gateway, uint16_
 			errno = EHOSTUNREACH;
 			goto out_unlock;
 		}
-		ro->iface = next_hop->iface; 
+		ro->iface = next_hop->iface;
 	}
 
 	/* Is this route already there? */
@@ -313,7 +316,7 @@ struct vder_iface *vder_iface_new(char *sock, uint8_t *macaddr)
 
 	pthread_mutex_lock(&Router.global_config_lock);
 
-	vif->vdec = vde_open(sock, "vde_router", &open_args); 
+	vif->vdec = vde_open(sock, "vde_router", &open_args);
 	if (vif->vdec == NULL) {
 		perror("vde_open");
 		free(vif);
@@ -489,7 +492,7 @@ int vder_ipaddress_is_local(uint32_t addr) {
 	return 0;
 }
 
-int vder_ipaddress_is_broadcast(uint32_t addr) 
+int vder_ipaddress_is_broadcast(uint32_t addr)
 {
 	struct vder_iface *iface = Router.iflist;
 	if (addr == (uint32_t)(-1))
@@ -604,7 +607,7 @@ int vder_filter(struct vde_buff *buf)
 				/* fall through */
 			case filter_drop:
 				return 1;
-			default: 
+			default:
 				return 0;
 		}
 	}

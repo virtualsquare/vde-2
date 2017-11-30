@@ -3,6 +3,9 @@
  * Licensed under the GPLv2
  *
  */
+
+#include <config.h>
+
 #include "vder_datalink.h"
 #include "vder_arp.h"
 #include "vder_icmp.h"
@@ -170,7 +173,7 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 	if (vder_recv(vif, vb, MAX_PACKET_SIZE - sizeof(struct vde_buff)) >= 0) {
 		struct vde_ethernet_header *eth = ethhead(vb);
 		/* 1. Filter out packets that are not for us */
-		if (memcmp(eth->dst, vif->macaddr, 6) && 
+		if (memcmp(eth->dst, vif->macaddr, 6) &&
 			memcmp(eth->dst, ETH_BCAST, 6) ) {
 				return;
 		}
@@ -220,4 +223,3 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 		}
 	}
 }
-
