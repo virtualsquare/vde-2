@@ -583,6 +583,12 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 	int vlan,tagged;
 	int port=ep->port;
 
+	//DG minimum length of a packet is 60 bytes plus trailing CRC
+	if (__builtin_expect(len < 60, 0)) {
+		memset(packet->data+len,0,60-len);
+		len=60;
+	}
+
 	if(PACKETFILTER(PKTFILTIN,port,packet,len)) {
 
 #ifdef PORTCOUNTERS
