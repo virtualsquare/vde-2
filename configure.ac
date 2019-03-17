@@ -11,7 +11,6 @@ AC_CONFIG_HEADER([include/config.h])
 AC_CONFIG_LIBOBJ_DIR(src/common)
 
 # Checks for programs.
-AC_PROG_CXX
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_LN_S
