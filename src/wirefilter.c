@@ -133,7 +133,7 @@ static inline void markov_node_free(struct markov_node *old)
 	free(old);
 }
 
-static void markov_compute(i)
+static void markov_compute(int i)
 {
 	int j;
 	ADJMAP(i,i)=100.0;
