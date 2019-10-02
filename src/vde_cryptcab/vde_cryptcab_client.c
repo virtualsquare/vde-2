@@ -109,9 +109,9 @@ rcv_challenge(struct datagram *pkt, struct peer *p)
 			keyname + strlen("/tmp/"),
 			strlen(keyname) - strlen("/tmp/") - strlen(".key"));
 
-	memcpy(ret->key,key,16);
-	memcpy(ret->iv,iv,8);
-	if (write(od,key,16) < 0 || write(od,iv,8) < 0) {
+	memcpy(ret->key,key,CHACHA_MAX_KEY_SZ);
+	memcpy(ret->iv,iv,CHACHA_IV_BYTES);
+	if (write(od,key,CHACHA_MAX_KEY_SZ) < 0 || write(od,iv,CHACHA_IV_BYTES) < 0) {
 		perror("Could not write chacha key");
 		goto failure;
 	}
