@@ -1370,7 +1370,7 @@ static struct comlist cl[]={
 	{"vlan/create","N","create the VLAN with tag N",vlancreate,INTARG},
 	{"vlan/remove","N","remove the VLAN with tag N",vlanremove,INTARG},
 	{"vlan/addport","N PORT","add port to the vlan N (tagged)",vlanaddport,STRARG},
-	{"vlan/delport","N PORT","add port to the vlan N (tagged)",vlandelport,STRARG},
+	{"vlan/delport","N PORT","delete port from the vlan N (tagged)",vlandelport,STRARG},
 	{"vlan/print","[N]","print the list of defined vlan",vlanprint,STRARG|WITHFILE},
 	{"vlan/allprint","[N]","print the list of defined vlan (including inactive port)",vlanprintall,STRARG|WITHFILE},
 };
