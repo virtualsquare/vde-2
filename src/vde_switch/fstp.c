@@ -30,14 +30,14 @@ static int numports;
 #ifdef FSTP
 #include <fstp.h>
 /*********************** sending macro used by FSTP & Core ******************/
-void inline ltonstring(unsigned long l,unsigned char *s) {
+static void inline ltonstring(unsigned long l,unsigned char *s) {
 	s[3]=l; l>>=8;
 	s[2]=l; l>>=8;
 	s[1]=l; l>>=8;
 	s[0]=l;
 }
 
-unsigned long inline nstringtol(unsigned char *s) {
+static unsigned long inline nstringtol(unsigned char *s) {
 	return (s[0]<<24)+(s[1]<<16)+(s[2]<<8)+s[3];
 }
 
