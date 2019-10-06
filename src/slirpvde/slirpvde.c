@@ -290,7 +290,7 @@ static void parse_redir_locx(char *buff)
 		*path++=0;
 		tcp2unix_add(port,path);
 	} else 
-		fprintf(stderr,"Error: tcp2unix redirection sytax error -x port:path e.g. -x 6000:/tmp/.X11-unix/X0\r\n");
+		fprintf(stderr,"Error: tcp2unix redirection syntax error -x port:path e.g. -x 6000:/tmp/.X11-unix/X0\r\n");
 }
 
 static void do_redir_tcp(struct redir_tcp_udp *head, int quiet)
