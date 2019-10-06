@@ -91,8 +91,6 @@ isvalid_crc32(unsigned char *block, int len)
 
 int data_encrypt_decrypt(unsigned char *src, unsigned char *dst, int len, unsigned char *key, unsigned char *iv)
 {
-	int tlen, olen;
-
 	if (encryption_disabled){
 		memcpy(dst,src,len);
 		return len;
