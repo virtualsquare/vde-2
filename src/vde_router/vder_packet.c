@@ -202,7 +202,7 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 			} else {
 				struct iphdr *hdr = iphead(packet);
 				uint32_t sender = hdr->saddr;
-				uint8_t foot[sizeof(hdr) + 8];
+				uint8_t foot[sizeof(struct iphdr) + 8];
 
 				memcpy(foot, footprint(packet), sizeof(struct iphdr) + 8);
 				if (vder_ip_decrease_ttl(packet)) {
