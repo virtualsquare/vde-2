@@ -99,6 +99,7 @@ int data_encrypt_decrypt(unsigned char *src, unsigned char *dst, int len, unsign
 	wc_Chacha_SetIV(&ctx, iv, CHACHA_IV_BYTES);
 	if (wc_Chacha_Process(&ctx, dst, src, len) == 0)
 		return len;
+    return -1;
 }
 
 
