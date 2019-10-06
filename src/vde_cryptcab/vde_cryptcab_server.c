@@ -258,8 +258,8 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 	sync();
 	usleep(10000);	
 	if (((fd = open (filename, O_RDONLY)) == -1)||
-			((read (fd, pkt->orig->key, 16)) == -1) ||
-			((read (fd, pkt->orig->iv, 8)) == -1) ){
+			((read (fd, pkt->orig->key, CHACHA_MAX_KEY_SZ)) == -1) ||
+			((read (fd, pkt->orig->iv, CHACHA_IV_BYTES)) == -1) ){
 		perror ("chacha.key open error");
 		deny_access(pkt->orig);
 		return;
