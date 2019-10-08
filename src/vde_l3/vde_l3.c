@@ -428,12 +428,12 @@ static void swap_macaddr(uint8_t addr1[], uint8_t addr2[])
 /* 
  * Swap src/dst ip addresses at given mem addresses
  */
-static void swap_ipaddr(uint32_t *addr1, uint32_t *addr2)
+static void swap_ipaddr(void *addr1, void *addr2)
 {
-	uint32_t tmp;
-	memcpy(&tmp,addr1,4);
+	uint8_t tmp[sizeof(uint32_t)];
+	memcpy(tmp,addr1,4);
 	memcpy(addr1,addr2,4);
-	memcpy(addr2,&tmp,4);
+	memcpy(addr2,tmp,4);
 }
 
 
@@ -535,7 +535,7 @@ size_t arp_reply(struct vde_iface *oif, struct vde_buff *vdb)
 	ah =(struct arp_header *)iphead(vdb);
 	ah->opcode = htons(ARP_REPLY);
 	swap_macaddr(ah->s_mac, ah->d_mac);
-        memcpy(ah->s_mac, oif->mac,6);
+	memcpy(ah->s_mac, oif->mac,6);
 	swap_ipaddr(&(ah->s_addr), &(ah->d_addr));
 
 	return(raw_send(oif,vdb));
@@ -1460,7 +1460,7 @@ int main(int argc, char *argv[])
 	i=0;
 	while (vif) {
 		pfd[i].fd = vde_datafd(vif->vdec);
-     		pfd[i++].events=POLLIN | POLLHUP;
+		pfd[i++].events=POLLIN | POLLHUP;
 		vif = vif->next;
 	}
 	npfd = numif;

@@ -1,5 +1,5 @@
-#ifndef _VDE_L3_H_
-#define _VDE_L3_H__
+#ifndef VDE_L3_H
+#define VDE_L3_H
 /* pfifo.c */
 int pfifo_enqueue(struct vde_buff *vdb, struct vde_iface *vif);
 int pfifo_dequeue(struct vde_iface *vif);
@@ -49,4 +49,4 @@ uint32_t ascii2ip(char *c);
 uint32_t valid_nm(uint32_t nm);
 uint32_t ascii2nm(char *c);
 int ip_input(struct vde_buff *vdb);
-#endif /* _VDE_L3_H__ */
+#endif /* VDE_L3_H */

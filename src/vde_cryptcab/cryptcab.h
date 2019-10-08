@@ -36,6 +36,7 @@
 #include <config.h>
 #include <vde.h>
 #include <vdecommon.h>
+#include <limits.h>
 
 
 #define PORTNO 7667

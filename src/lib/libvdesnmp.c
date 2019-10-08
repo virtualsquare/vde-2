@@ -261,7 +261,9 @@ int counters_parse(void){
 						PORTDOWN(curport-1);
 					} else if( strncmp(portstatus, "ACTIVE", 6) == 0 ){
 						PORTUP(curport-1);
-						strncpy(pl->desc, portdesc, strlen(portdesc)-1);
+						/* Ensure string is null-terminated before strcopy */
+						portdesc[DESC_MAXLEN - 1] = (char)0;
+						strcpy(pl->desc, portdesc);
 					}
 
 					inpkts = inbytes = outpkts = outbytes = 0;
