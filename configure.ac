@@ -11,7 +11,6 @@ AC_CONFIG_HEADER([include/config.h])
 AC_CONFIG_LIBOBJ_DIR(src/common)
 
 # Checks for programs.
-AC_PROG_CXX
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_LN_S
@@ -42,7 +41,7 @@ AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdint.h \
 
 AC_CHECK_HEADERS([syslimits.h sys/syslimits.h])
 
-AC_CHECK_HEADERS([openssl/blowfish.h], [],
+AC_CHECK_HEADERS([wolfssl/wolfcrypt/chacha.h], [],
   [add_cryptcab_support=no ; warn_cryptcab=yes])
 
 AC_CHECK_HEADERS([sysexits.h],
@@ -129,10 +128,10 @@ AC_ARG_ENABLE([experimental],
     [Enable experimental features (async notifies, plugin support, packet counter)]),
   [if test $enableval = "yes"; then enable_experimental=yes; fi])
 
-# Disable vde_cryptcab? (depends on ssl, maybe unwanted)
+# Disable vde_cryptcab? (depends on wolfssl, maybe unwanted)
 AC_ARG_ENABLE([cryptcab],
   AS_HELP_STRING([--disable-cryptcab],
-    [Disable libcrypto-dependend vde_cryptcab compilation]),
+    [Disable vde_cryptcab compilation]),
   [if test $enableval = "no" ; then add_cryptcab_support=no ; warn_cryptcab=no ; fi])
 
 # Disable vde_over_ns? (not working on android, maybe unwanted)
@@ -347,9 +346,9 @@ AS_ECHO
 AS_ECHO
 if ! test x$add_cryptcab_support = "xyes" ; then
   if test x$warn_cryptcab = "xyes" ; then
-    AC_MSG_WARN([VDE CryptCab support has been disabled because libcrypto is
-not installed on your system, or because openssl/blowfish.h could not be found.
-Please install them if you want CryptCab to be compiled and installed.])
+    AC_MSG_WARN([VDE CryptCab support has been disabled because wolfSSL is
+not installed on your system, or because wolfssl/wolfcrypt/chacha.h could not be found.
+Please install libwolfssl if you want CryptCab to be compiled and installed.])
     AS_ECHO
   fi
 fi

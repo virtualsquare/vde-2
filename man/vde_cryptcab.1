@@ -38,16 +38,16 @@ A
 \fBvde_cryptcab\fP 
 is a distributed cable manager for VDE switches.
 It allows two VDE switches on two machines to communicate
-using a blowfish encrypted channel.
+using a ChaCha encrypted channel.
 
 When used in client mode (i.e., with -c option), it generates a random
-blowfish key, and uses
+ChaCha key, and uses
 .B scp (1)
 to transfer the key to the remote server.
 
 On the client side, the environment variable SCP_EXTRA_OPTIONS may be set in order 
 to append options to the scp command line (this is useful for example when dropbear or
-another non-standard ssh client is used to transfer the blowfish key).
+another non-standard ssh client is used to transfer the ChaCha key).
 
 After a 4-way handshake phase to verify client credentials, server and 
 client will exchange VDE datagrams encapsulating them into cryptograms

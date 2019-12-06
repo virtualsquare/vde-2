@@ -5,9 +5,7 @@
  *
  * Released under the terms of GNU GPL v.2
  * (http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
- * with the additional exemption that
- * compiling, linking, and/or using OpenSSL is allowed.
- * 
+ *
  */
 
 #include "config.h"
@@ -36,32 +34,32 @@ static void send_keepalive(struct peer *p){
 /*
  * Send a login packet. This is the first phase of 4WHS
  */
-static void
-blowfish_login(struct peer *p)
+	static void
+chacha_login(struct peer *p)
 {
 	send_udp((unsigned char*)p->id,FILENAMESIZE,p,CMD_LOGIN);
 }
 
 static void try_to_login(struct peer *p)
 {
-	static struct timeval last_login_time; 
+	static struct timeval last_login_time;
 	struct timeval now;
 	gettimeofday(&now, 0);
-	if (now.tv_sec < last_login_time.tv_sec  || now.tv_sec - last_login_time.tv_sec < 5) {
-		vc_printlog(4,"Attempt to login to  %s (udp port %hu): please wait, login in progress...",remotehost,remoteport);
+	if (now.tv_sec < last_login_time.tv_sec || now.tv_sec - last_login_time.tv_sec < 5) {
+		vc_printlog(4,"Attempt to login to %s (udp port %hu): please wait, login in progress...",remotehost,remoteport);
 		return;
 	}
-		
+
 	vc_printlog(2,"Logging in to %s (udp port %hu)",remotehost,remoteport);
-	blowfish_login(p);
+	chacha_login(p);
 	gettimeofday(&last_login_time, 0);
 }
 
 
 /*
- * Receive a challenge. Try to send response encrypted with local blowfish key.
+ * Receive a challenge. Try to send response encrypted with local chacha key.
  */
-static void 
+	static void
 rcv_challenge(struct datagram *pkt, struct peer *p)
 {
 	send_udp(pkt->data+1,pkt->len-1,p,CMD_RESPONSE);
@@ -69,38 +67,37 @@ rcv_challenge(struct datagram *pkt, struct peer *p)
 }
 
 /*
- * Generate a new blowfish key, store it in a local file and fill the fields
+ * Generate a new chacha key, store it in a local file and fill the fields
  * of peer structure.
  * Client only.
  */
-static struct peer
+	static struct peer
 *generate_key (struct peer *ret)
 {
 	int fd=-1, od=-1;
-	unsigned char key[16];
-	unsigned char iv[8];
+	unsigned char key[CHACHA_MAX_KEY_SZ];
+	unsigned char iv[CHACHA_IV_BYTES];
 	char *path;
 	char random[]="/dev/urandom";
 	if (pre_shared){
 		path=pre_shared;
-		vc_printlog(2,"Reading pre-shared Blowfish key...");	
+		vc_printlog(2,"Reading pre-shared Chacha key...");	
 	}else{
 		path=random;
-		vc_printlog(2,"Generating Blowfish key...");	
+		vc_printlog(2,"Generating ChaCha key...");	
 	}
 
 
 	if ( ((fd = open (path, O_RDONLY)) == -1)||
-			 ((read (fd, key, 16)) == -1) ||
-			 ((read (fd, iv, 8)) == -1) )
+			((read (fd, key, CHACHA_MAX_KEY_SZ)) == -1) ||
+			((read (fd, iv, CHACHA_IV_BYTES)) == -1) )
 	{
 
 		perror ("Error Creating key.\n");
 		goto failure;
 	}
-	
+
 	close (fd);
-	
   memset(keyname + strlen(keyname) - 10, 'X', 6);
 #ifdef VDE_DARWIN
   od = mkostemps(keyname, 4, O_EXLOCK);
@@ -108,25 +105,25 @@ static struct peer
   od = mkostemps(keyname, 4, O_RDWR | O_CREAT | O_TRUNC);
 #endif
 	if (od < 0){
-		perror ("blowfish.key mktemp error");
+		perror ("chacha.key mktemp error");
 		goto failure;
 	}
 	memset(ret,0, sizeof(struct peer));
 
-  strncpy(ret->id,
-          keyname + strlen("/tmp/"), 
-          strlen(keyname) - strlen("/tmp/") - strlen(".key"));
+	strncpy(ret->id,
+			keyname + strlen("/tmp/"),
+			strlen(keyname) - strlen("/tmp/") - strlen(".key"));
 
-	memcpy(ret->key,key,16);
-	memcpy(ret->iv,iv,8);
-	if (write(od,key,16) < 0 || write(od,iv,8) < 0) {
-		perror("Could not write blowfish key");
+	memcpy(ret->key,key,CHACHA_MAX_KEY_SZ);
+	memcpy(ret->iv,iv,CHACHA_IV_BYTES);
+	if (write(od,key,CHACHA_MAX_KEY_SZ) < 0 || write(od,iv,CHACHA_IV_BYTES) < 0) {
+		perror("Could not write chacha key");
 		goto failure;
 	}
 	close (od);
 	vc_printlog(2,"Done.");	
 	return ret;
-	
+
 failure:
 	if (fd != -1)
 		close(fd);
@@ -137,7 +134,7 @@ failure:
 
 
 /*
- * Call the generate_key() and then transmit the key to the server via 
+ * Call the generate_key() and then transmit the key to the server via
  * OpenSSH secure copy.
  */
 static struct peer *generate_and_xmit(struct peer *ret){
@@ -150,7 +147,7 @@ static struct peer *generate_and_xmit(struct peer *ret){
 		fprintf(stderr,"Couldn't create the secret key.\n");
 		exit(255);
 	}
-	
+
 	target=gethostbyname(remotehost);
 	if (target == NULL)
 	{
@@ -164,17 +161,17 @@ static struct peer *generate_and_xmit(struct peer *ret){
 		char *cmd[]={"scp",NULL, NULL, NULL,0};
 		pid_t pid;
 		int status;
-    int cmd_idx = 1;
+		int cmd_idx = 1;
 		vc_printlog(2,"Sending key over ssh channel:");
-    if (scp_extra_options)
-      cmd[cmd_idx++] = scp_extra_options;
+		if (scp_extra_options)
+			cmd[cmd_idx++] = scp_extra_options;
 		if(remoteusr)
 			snprintf(dest,PATH_MAX,"%s@%s:/tmp/.%s.key",remoteusr, remotehost, ret->id);
 		else
 			snprintf(dest,PATH_MAX,"%s:/tmp/.%s.key", remotehost, ret->id);
-    snprintf(source, PATH_MAX, "/tmp/%s.key", ret->id);
-    cmd[cmd_idx++] = source;
-    cmd[cmd_idx++] = dest;
+		snprintf(source, PATH_MAX, "/tmp/%s.key", ret->id);
+		cmd[cmd_idx++] = source;
+		cmd[cmd_idx++] = dest;
 
 
 		if ((pid=fork()) == 0) {
@@ -201,7 +198,7 @@ static int recv_datagram(struct datagram *pkt, int nfd, struct peer *p1)
 	socklen_t peerlen;
 	int datafd;
 	struct timeval now;
-	
+
 	datafd = vde_datafd(p1->plug);
 	while(datafd < 0) {
 		vc_printlog(4,"waiting for vde_libs...");
@@ -212,16 +209,16 @@ static int recv_datagram(struct datagram *pkt, int nfd, struct peer *p1)
 
 	pfd[0].fd=nfd;
 	pfd[0].events=POLLIN|POLLHUP;
-	pfd[1].fd = datafd; 
+	pfd[1].fd = datafd;
 	pfd[1].events = POLLIN|POLLHUP;
 
-	 do{
+	do{
 		pollret = poll(pfd,2,1000);
 		if(pollret<0){
-		 	if(errno==EINTR)
-		   		return 0;
-		 	perror("poll");
-		 	exit(1);
+			if(errno==EINTR)
+				return 0;
+			perror("poll");
+			exit(1);
 		}
 
 		gettimeofday(&now,NULL);
@@ -229,15 +226,15 @@ static int recv_datagram(struct datagram *pkt, int nfd, struct peer *p1)
 		if (after(now,last_out_time) && p1->state == ST_AUTH){
 			send_keepalive(p1);
 		}
-   	} while (pollret==0);
+	} while (pollret==0);
 
-  
+
 	for(;;){
 		if (pfd[0].revents&POLLIN) {
 			struct sockaddr_in ipaddress;
 			peerlen = sizeof(struct sockaddr_in);
 			pkt->len = recvfrom(nfd, pkt->data, MAXPKT, 0,
-				(struct sockaddr *) &ipaddress, &peerlen);
+					(struct sockaddr *) &ipaddress, &peerlen);
 			if(ipaddress.sin_addr.s_addr == p1->in_a.sin_addr.s_addr){
 				pkt->orig=p1;
 				pkt->src = SRC_UDP;
@@ -248,9 +245,9 @@ static int recv_datagram(struct datagram *pkt, int nfd, struct peer *p1)
 			}
 		}
 
-	 	if (pfd[1].revents&POLLHUP){
+		if (pfd[1].revents&POLLHUP){
 			vc_printlog(1,"VDE Error");
-		} 
+		}
 		if (pfd[1].revents&POLLIN) {
 			vc_printlog(4,"VDE Pkt");
 			pkt->len = vde_recv(p1->plug, pkt->data, MAXPKT,0);
@@ -271,7 +268,7 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 	struct datagram pkt, pkt_dec;
 	struct peer _peer;
 	struct peer *p1 = &_peer;
-	
+
 	plugname = _plugname;
 	remoteusr = _remoteusr;
 	remotehost = _remotehost;
@@ -295,10 +292,10 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 	myaddr.sin_family = AF_INET;
 	myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	myaddr.sin_port = htons(udp_port);
-	
+
 	wire = socket(PF_INET,SOCK_DGRAM,0);
 	if (bind(wire,(struct sockaddr *) &myaddr, sizeof(myaddr))<0)
-		        {perror("bind socket"); exit(3);}
+	{perror("bind socket"); exit(3);}
 
 	set_nfd(wire);
 
@@ -307,7 +304,7 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 	p1->next = NULL;
 	try_to_login(p1);
 	usleep(100000);
-	
+
 	for(;;){
 		r = recv_datagram(&pkt, wire, p1);
 		if (r == 0)
@@ -315,7 +312,7 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 
 		if(pkt.src==SRC_VDE){
 			if(p1->state==ST_AUTH){
-				vc_printlog(4,"VDE pkt received (%d Bytes)",pkt.len); 
+				vc_printlog(4,"VDE pkt received (%d Bytes)",pkt.len);
 				send_udp(pkt.data, pkt.len, p1, PKT_DATA);
 				gettimeofday(&last_out_time,NULL);
 			}else{
@@ -334,10 +331,23 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 					vc_printlog(2,"Successfully authenticated.");
 					break;
 				case ST_AUTH + PKT_DATA:
-					vc_printlog(4,"Data pkt received (%d Bytes)",pkt.len); 
-					pkt_dec.len = data_decrypt(pkt.data+1, pkt_dec.data, pkt.len-1, p1);
-					
-					vde_send(p1->plug,pkt_dec.data,pkt_dec.len,0);	
+					{
+						unsigned int len = pkt.len - 1;
+						unsigned char *p = (pkt.data + 1);
+						unsigned char *tail = (p + len - 12);
+						uint32_t crc;
+
+						crc = tail[0] + (tail[1] << 8) +
+							(tail[2] << 16) + (tail[3] << 24);
+						len -= 12;
+						pkt_dec.len = data_encrypt_decrypt(p, pkt_dec.data, len, p1->key, tail);
+						if (crc == chksum_crc32(pkt_dec.data,pkt_dec.len)) {
+							vc_printlog(4,"Data pkt received (%d Bytes)",pkt.len);
+							vde_send(p1->plug,pkt_dec.data,pkt_dec.len,0);	
+						} else {
+							vc_printlog(4,"CRC error, incoming data packet discarded (%d Bytes)",pkt.len);
+						}
+					}
 					break;
 				case ST_OPENING + CMD_DENY:
 				case ST_WAIT_AUTH + CMD_DENY:
@@ -349,12 +359,12 @@ void cryptcab_client(char *_plugname, unsigned short udp_port, enum e_enc_type _
 					try_to_login(p1);
 					break;
 				default:
-					vc_printlog(4,"Unknown/undesired pkt received. (state: 0x%X code: 0x%X )", p1->state, (unsigned char)pkt.data[0]); 
+					vc_printlog(4,"Unknown/undesired pkt received. (state: 0x%X code: 0x%X )", p1->state, (unsigned char)pkt.data[0]);
 			}
-			
+
 		}
-		
+
 	}
 	exit (0);
-} 
+}
 

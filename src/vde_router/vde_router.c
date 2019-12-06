@@ -579,7 +579,7 @@ static void show_filter(int fd, struct vder_filter *filter)
 		snprintf(source, 10, "eth%d", filter->src_iface->interface_id);
 	}
 	if (filter->tos >= 0) {
-		snprintf(tos, 10, "tos %d", filter->tos);
+		snprintf(tos, 10, "tos %3d", (uint8_t)filter->tos);
 	}
 	if (filter->proto > 0) {
 		proto_name(filter->proto, proto);

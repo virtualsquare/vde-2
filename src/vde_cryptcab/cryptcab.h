@@ -5,8 +5,6 @@
  *
  * Released under the terms of GNU GPL v.2
  * (http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
- * with the additional exemption that
- * compiling, linking, and/or using OpenSSL is allowed.
  *
  */
 
@@ -38,13 +36,13 @@
 #include <config.h>
 #include <vde.h>
 #include <vdecommon.h>
+#include <limits.h>
 
 
 #define PORTNO 7667
 
 
-#include <openssl/blowfish.h>
-#include <openssl/evp.h>
+#include <wolfssl/wolfcrypt/chacha.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -106,6 +104,7 @@
 
 #define SESSION_TIMEOUT 120
 #define CHALLENGE_TIMEOUT 20
+#define CRYPTCAB_CHALLENGE_SIZE 128
 #define PRELOGIN_TIMEOUT 3
 #define EXPIRE_NOW 0
 #define time_now(x) gettimeofday(x,NULL)
@@ -123,10 +122,10 @@ struct peer
 {
 	struct peer *next;		/* Next list element		*/	
 	unsigned long long counter; 	/* Progressive N number 	*/
-	unsigned char key[16];		/* Blowfish key			*/
-	unsigned char iv[8];		/* Blowfish vector		*/
+	unsigned char key[CHACHA_MAX_KEY_SZ];		/* Chacha key			*/
+	unsigned char iv[CHACHA_IV_BYTES];		/* Chacha vector		*/
 	char id[FILENAMESIZE];		/* Filename for key on server	*/
-	char challenge[128];		/* 128B Challenge for 4WHS	*/
+	char challenge[CRYPTCAB_CHALLENGE_SIZE];		/* 128B Challenge for 4WHS	*/
 	struct sockaddr_in in_a;	/* Current transport address	*/
 	struct sockaddr_in handover_a;	/* Handover transport address	*/
 	struct timeval expire;		/* Expiration timer		*/
@@ -139,7 +138,7 @@ struct peer
 
 
 /*
- * Each datagram received from network or from vde_plug 
+ * Each datagram received from network or from vde_plug
  * is arranged into a struct like this.
  */
 struct datagram
@@ -152,7 +151,7 @@ struct datagram
 
 void vc_printlog(int priority, const char *format, ...);
 
-void 
+void
 send_udp(unsigned char *data, size_t len, struct peer *p, unsigned char flags );
 
 void
@@ -165,8 +164,7 @@ int isvalid_crc32(unsigned char *block, int len);
 void disable_encryption(void);
 void set_nfd(int fd);
 int isvalid_timestamp(unsigned char *block, int size, struct peer *p);
-int data_encrypt(unsigned char *src, unsigned char *dst, int len, struct peer *p);
-int data_decrypt(unsigned char *src, unsigned char *dst, int len, struct peer *p);
+int data_encrypt_decrypt(unsigned char *src, unsigned char *dst, int len, unsigned char *key, unsigned char *iv);
 void set_timestamp(unsigned char *block);
 void send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags);
 void send_vdeplug(const char *data, size_t len, struct peer *p);

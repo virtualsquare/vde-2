@@ -5,12 +5,11 @@
  *
  * Released under the terms of GNU GPL v.2
  * (http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
- * with the additional exemption that
- * compiling, linking, and/or using OpenSSL is allowed.
  *
  */
 
 #include "cryptcab.h"
+#include <stdarg.h>
 
 /*
  * Usage implies exit.
@@ -21,9 +20,8 @@ static void Usage(char *programname)
 	fprintf(stderr,"Usage: %s [-s socketname] [-c [remoteuser@]remotehost[:remoteport]] [-p localport] [-P pre-shared/key/path] [-d] [-x] [-v]\n",programname);
 	exit(1);
 }
-	
-static EVP_CIPHER_CTX ctx;
-static int ctx_initialized = 0;
+
+ChaCha ctx;
 static int encryption_disabled = 0;
 static int nfd;
 static unsigned long long mycounter=1;
@@ -58,8 +56,6 @@ void set_nfd(int fd){
 int
 isvalid_timestamp(unsigned char *block, int size, struct peer *p)
 {
-	
-	
 	int i;
 	unsigned long long pktcounter=0;
 	for(i=0;i<8;i++){
@@ -72,13 +68,13 @@ isvalid_timestamp(unsigned char *block, int size, struct peer *p)
 		//fprintf(stderr,"bad timestamp!\n");
 		return 0;
 	}
-	
+
 }
 
 /*
  * Check CRC32 Checksum from incoming datagram
  */
-int 
+	int
 isvalid_crc32(unsigned char *block, int len)
 {
 	unsigned char *crc=(unsigned char *)crc32(block,len-4);
@@ -86,93 +82,33 @@ isvalid_crc32(unsigned char *block, int len)
 		free(crc);
 		return 1;
 	}else{
-			
+
 		//fprintf(stderr,"bad crc32!\n");
 		free(crc);
 		return 0;
 	}
 }
 
-int data_encrypt(unsigned char *src, unsigned char *dst, int len, struct peer *p)
+int data_encrypt_decrypt(unsigned char *src, unsigned char *dst, int len, unsigned char *key, unsigned char *iv)
 {
-	int tlen, olen, ulen;
-
-  ulen = len - (len % 8);
-	
 	if (encryption_disabled){
 		memcpy(dst,src,len);
 		return len;
 	}
-
-	if (!ctx_initialized) {
-		EVP_CIPHER_CTX_init (&ctx);
-		ctx_initialized = 1;
-	}
-	
-	EVP_EncryptInit (&ctx, EVP_bf_cbc (), p->key, p->iv);
-	if (EVP_EncryptUpdate (&ctx, dst, &olen, src, len) != 1)
-	{
-		fprintf (stderr,"error in encrypt update\n");
-		olen = -1;
-		goto cleanup;
-	}
-
-	if (EVP_EncryptFinal (&ctx, dst + ulen, &tlen) != 1)
-	{
-		fprintf (stderr,"error in encrypt final\n");
-		olen = -1;
-		goto cleanup;
-	}
-	olen += tlen;
-
-cleanup:
-	EVP_CIPHER_CTX_cleanup(&ctx);	
-	return olen;
-}
-
-int data_decrypt(unsigned char *src, unsigned char *dst, int len, struct peer *p)
-{
-	int tlen, olen, ulen;
-
-  ulen = len - (len % 8);
-
-	if (encryption_disabled){
-		memcpy(dst,src,len);
+	wc_Chacha_SetKey(&ctx, key, CHACHA_MAX_KEY_SZ);
+	wc_Chacha_SetIV(&ctx, iv, CHACHA_IV_BYTES);
+	if (wc_Chacha_Process(&ctx, dst, src, len) == 0)
 		return len;
-	}
-	
-	if (!ctx_initialized) {
-		EVP_CIPHER_CTX_init (&ctx);
-		ctx_initialized = 1;
-	}
-
-	EVP_DecryptInit (&ctx, EVP_bf_cbc (), p->key, p->iv);
-	if (EVP_DecryptUpdate (&ctx, dst, &olen, src, ulen) != 1)
-	{
-		fprintf (stderr,"error in decrypt update\n");
-		olen = -1;
-		goto cleanup;
-	}
-
-	if (EVP_DecryptFinal (&ctx, dst + ulen, &tlen) != 1)
-	{
-		fprintf (stderr,"error in decrypt final, ulen = %d, tlen = %d\n", ulen, tlen);
-		olen = -1;
-		goto cleanup;
-	}
-	olen += tlen;
-
-cleanup:
-	EVP_CIPHER_CTX_cleanup(&ctx);	
-	return olen;
+    return -1;
 }
+
 
 /*
  * Include a progressive number into outgoing datagram,
  * to prevent packet replication/injection attack.
- * 
+ *
  */
-void
+	void
 set_timestamp(unsigned char *block)
 {
 	int i;
@@ -180,49 +116,43 @@ set_timestamp(unsigned char *block)
 		block[i]=(unsigned char)(mycounter>>(i*8))&(0x00000000000000FF);
 	}
 	mycounter++;
-	
-		
 }
 
 
 /*
  * Send an udp datagram to specified peer.
  */
-void
+	void
 send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 {
-		  
+
 	unsigned char outpkt[MAXPKT];
 	unsigned char *outbuf=outpkt+1;
 	int olen;
 	struct sockaddr_in *destination=&(p->in_a);
 	unsigned char *crc;
 
-  if (len + 8 - 1 > MAXPKT) {
-    len = MAXPKT - 8 + 1;
-	  vc_printlog(2,"Warning: Cropping down packet size to %d", len);
-  }
+	if (len + 8 - 1 > MAXPKT) {
+		len = MAXPKT - 8 + 1;
+		vc_printlog(2,"Warning: Cropping down packet size to %d", len);
+	}
 
 
 	if (encryption_disabled || (flags==CMD_CHALLENGE || flags==CMD_LOGIN || flags==CMD_DENY || flags==CMD_AUTH_OK || flags == CMD_KEEPALIVE)){
 		memcpy(outbuf,data,len);
 		olen=len;
 	}else{
-		if(flags==PKT_DATA){
-			set_timestamp(data+len);
-			len+=8;
-			
-			crc = crc32(data,len);
-			memcpy(data+len,crc,4);
-			free(crc);
-			len+=4;
-			
-		}
-		olen = data_encrypt(data,outbuf,len,p);
+		unsigned char *tail = outbuf + len;
+		crc = crc32(data,len);
+		memcpy(tail,crc,4);
+		free(crc);
+		set_timestamp(tail + 4);
+		olen = data_encrypt_decrypt(data, outbuf, len, p->key, tail);
+		olen+=12;
 	}
 	outpkt[0]=flags;
 	sendto(nfd, outpkt, olen + 1, 0, (struct sockaddr *) destination,
-	    	sizeof(struct sockaddr_in));
+			sizeof(struct sockaddr_in));
 	vc_printlog(4,"UDP Sent %dB datagram.",olen+1);
 }
 
@@ -239,10 +169,10 @@ vde_plug(struct peer *p, char *plugname)
 }
 
 /*
- * Send a virtual frame to the vde_plug process associated 
+ * Send a virtual frame to the vde_plug process associated
  * with the peer
  */
-void
+	void
 send_vdeplug(const char *data, size_t len, struct peer *p)
 {
 	static unsigned int outbuf[MAXPKT];
@@ -250,19 +180,19 @@ send_vdeplug(const char *data, size_t len, struct peer *p)
 	static u_int16_t outlen;
 	if(len<=0)
 		return;
-	
+
 	if(outp==0 && (len >=2) ){
 		outlen=2;
 		outlen+=(unsigned char)data[1];
 		outlen+=((unsigned char)(data[0]))<<8;
 	}
-	
+
 	if(len>=outlen){
 		vde_send(p->plug,data,outlen,0);
 		send_vdeplug(data+outlen,len-outlen, p);
 		return;
 	}
-		
+
 	memcpy(outbuf+outp,data,len);
 	outp+=len;
 	if(outp>=outlen){
@@ -290,7 +220,7 @@ int main(int argc, char **argv, char **env)
 	int daemonize = 0;
 
 	scp_extra_options=getenv("SCP_EXTRA_OPTIONS");
-	
+
 
 	while (1) {
 		int option_index = 0;
@@ -300,94 +230,94 @@ int main(int argc, char **argv, char **env)
 		char *pusr,*pport, *vvv=NULL;
 
 		static struct option long_options[] = {
-		        {"sock", 1, 0, 's'},
-		        {"vdesock", 1, 0, 's'},
-		        {"unix", 1, 0, 's'},
-		        {"localport", 1, 0, 'p'},
-		        {"connect",1,0,'c'},
-		        {"preshared ",1,0,'P'},
+			{"sock", 1, 0, 's'},
+			{"vdesock", 1, 0, 's'},
+			{"unix", 1, 0, 's'},
+			{"localport", 1, 0, 'p'},
+			{"connect",1,0,'c'},
+			{"preshared ",1,0,'P'},
 			{"noencrypt",0,0,'x'},
 			{"keepalive",0,0,'k'},
 			{"verbose",optional_argument,0,'v'},
-		        {"help",0,0,'h'},
-		        {"daemon",0,0,'d'},
-		        {0, 0, 0, 0}
+			{"help",0,0,'h'},
+			{"daemon",0,0,'d'},
+			{0, 0, 0, 0}
 		};
 		c = GETOPT_LONG (argc, argv, "s:p:c:P:hv::xkd",
-		      	  long_options, &option_index);
+				long_options, &option_index);
 		if (c == -1)
-		        break;
+			break;
 		switch (c) {
-		        case 's':
-		      	  plugname=strdup(optarg);
-		      	  break;
+			case 's':
+				plugname=strdup(optarg);
+				break;
 			case 'v':
-			  verbose=1;
-			  if(optarg)
-		      	  	vvv=strdup(optarg);
-			  while(vvv && *vvv++ == 'v')
-			  	verbose++;
-			  break;
+				verbose=1;
+				if(optarg)
+					vvv=strdup(optarg);
+				while(vvv && *vvv++ == 'v')
+					verbose++;
+				break;
 			case 'x':
-			  enc_type = ENC_NOENC;
-			  break;
-		        case 'c':
-		      	  ctl_socket=strdup(optarg);
+				enc_type = ENC_NOENC;
+				break;
+			case 'c':
+				ctl_socket=strdup(optarg);
 
-		      	  pusr=strchr(ctl_socket,sepusr);
-		      	  pport=strchr(ctl_socket,sepport);
-		      	  
-		      	  if( ( pusr != strrchr(ctl_socket,sepusr)) || 
-		      		(pport != strrchr(ctl_socket,sepport)) ||
-		      			(pport && pusr>pport) )
-		      		  Usage(programname);
-		      	  
-		      	  if(!pusr && !pport){
-		      		  remoteusr=NULL;
-		      		  remoteport=PORTNO;
-		      		  remotehost=strdup(ctl_socket);
-		      		  break;
-		      	  }
-		      	  if(!pport){
-		      	  	  remoteusr=(char *)strndup(ctl_socket,pusr-ctl_socket);
-		      		  remotehost=(char *)strndup(pusr+1,strlen(ctl_socket)-strlen(remoteusr)-1);
-		      		  remoteport=PORTNO;
-		      		  break;
-		      	  }
-				  if(!pusr){
-		      		  remoteusr=NULL;
-		      	  	  remotehost=(char *)strndup(ctl_socket,pport-ctl_socket);
-		      		  remoteport=atoi((char *)strndup(pport+1,strlen(ctl_socket)-strlen(remotehost)-1));
-		      		  break;
-		      	  }
-		      	  remoteusr=(char *)strndup(ctl_socket,pusr-ctl_socket);
-		      	  remotehost=(char *)strndup(pusr+1,pport-pusr-1);
-		      	  remoteport=atoi((char *)strndup(pport+1,strlen(ctl_socket)-strlen(remotehost)-strlen(remoteusr)-2));
-		      	  break;
+				pusr=strchr(ctl_socket,sepusr);
+				pport=strchr(ctl_socket,sepport);
 
-		        case 'p':
-		      	udp_port=atoi(optarg);
-		      	break;
-		      	
-		        case 'P': 
-		      	pre_shared=strdup(optarg);
-		      	fprintf(stderr,"Using pre-shared key %s\n",pre_shared);
-			enc_type = ENC_PRESHARED;
-		      	break;
+				if( ( pusr != strrchr(ctl_socket,sepusr)) ||
+						(pport != strrchr(ctl_socket,sepport)) ||
+						(pport && pusr>pport) )
+					Usage(programname);
+
+				if(!pusr && !pport){
+					remoteusr=NULL;
+					remoteport=PORTNO;
+					remotehost=strdup(ctl_socket);
+					break;
+				}
+				if(!pport){
+					remoteusr=(char *)strndup(ctl_socket,pusr-ctl_socket);
+					remotehost=(char *)strndup(pusr+1,strlen(ctl_socket)-strlen(remoteusr)-1);
+					remoteport=PORTNO;
+					break;
+				}
+				if(!pusr){
+					remoteusr=NULL;
+					remotehost=(char *)strndup(ctl_socket,pport-ctl_socket);
+					remoteport=atoi((char *)strndup(pport+1,strlen(ctl_socket)-strlen(remotehost)-1));
+					break;
+				}
+				remoteusr=(char *)strndup(ctl_socket,pusr-ctl_socket);
+				remotehost=(char *)strndup(pusr+1,pport-pusr-1);
+				remoteport=atoi((char *)strndup(pport+1,strlen(ctl_socket)-strlen(remotehost)-strlen(remoteusr)-2));
+				break;
+
+			case 'p':
+				udp_port=atoi(optarg);
+				break;
+
+			case 'P':
+				pre_shared=strdup(optarg);
+				fprintf(stderr,"Using pre-shared key %s\n",pre_shared);
+				enc_type = ENC_PRESHARED;
+				break;
 			case 'k':
-			keepalives=1;
-			break;
+				keepalives=1;
+				break;
 			case 'd':
-			daemonize=1;
-			break;
+				daemonize=1;
+				break;
 
-		        case 'h':
-		        default:
-		      	  Usage(programname);
+			case 'h':
+			default:
+				Usage(programname);
 		}
 	}
-	if(optind < argc) 
-		  Usage(programname);
+	if(optind < argc)
+		Usage(programname);
 	if (keepalives && remotehost==NULL){
 		fprintf(stderr,"\nkeepalive option is valid in client mode only.\n\n");
 		Usage(programname);
@@ -396,11 +326,11 @@ int main(int argc, char **argv, char **env)
 		fprintf(stderr,"\nWarning: Not using pre-shared key mode, encryption disabled.\n\n");
 		pre_shared = NULL;
 	}
-		
-	
+
+
 	vc_printlog(1,"Verbosity: %d", verbose);
 	chksum_crc32gentab();	
-	
+
 	switch(enc_type){
 		case ENC_NOENC:
 			vc_printlog(1,"Encryption Disabled.");
@@ -419,10 +349,10 @@ int main(int argc, char **argv, char **env)
 			close(STDIN_FILENO);
 			close(STDOUT_FILENO);
 			if (fork() > 0)
-				exit(0); 
+				exit(0);
 		} else exit(0);
 	}
-	  
+
 	if(!remotehost){
 		cryptcab_server(plugname, udp_port, enc_type, pre_shared);
 	} else {

@@ -5,15 +5,14 @@
  *
  * Released under the terms of GNU GPL v.2
  * (http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
- * with the additional exemption that
- * compiling, linking, and/or using OpenSSL is allowed.
  *
- * based on implementation by Finn Yannick Jacobs  Krzysztof Dabrowski, ElysiuM deeZine 
+ * based on implementation by Finn Yannick Jacobs Krzysztof Dabrowski, ElysiuM deeZine
  *
  */
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 #include <config.h>
@@ -24,14 +23,14 @@
  *		so make sure, you call it before using the other
  *		functions!
  */
-u_int32_t crc_tab[256];
+uint32_t crc_tab[256];
 
 /* chksum_crc() -- to a given block, this one calculates the
  *				crc32-checksum until the length is
  *				reached. the crc32-checksum will be
  *				the result.
  */
-u_int32_t chksum_crc32 (unsigned char *block, unsigned int length)
+uint32_t chksum_crc32(unsigned char *block, unsigned int length)
 {
    unsigned long crc;
    unsigned long i;
