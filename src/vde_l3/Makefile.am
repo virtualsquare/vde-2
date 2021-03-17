@@ -1,7 +1,6 @@
-
 moddir = $(pkglibdir)/vde_l3
 
-AM_LDFLAGS = -module -avoid-version -export-dynamic
+AM_LDFLAGS = -avoid-version -export-dynamic
 AM_LIBTOOLFLAGS = --tag=disable-static
 AM_CPPFLAGS = -I$(top_srcdir)/include
 
@@ -14,6 +13,12 @@ mod_LTLIBRARIES = pfifo.la tbf.la bfifo.la
 pfifo_la_SOURCES = pfifo.c  vde_buff.h
 tbf_la_SOURCES = tbf.c  vde_buff.h
 bfifo_la_SOURCES = bfifo.c  vde_buff.h
+
+vde_l3_lib_LDFLAGS = -module
+
+pfifo_la_LDFLAGS = $(vde_l3_lib_LDFLAGS)
+bfifo_la_LDFLAGS = $(vde_l3_lib_LDFLAGS)
+tbf_la_LDFLAGS = $(vde_l3_lib_LDFLAGS)
 
 pfifo_la_LIBADD = $(top_builddir)/src/common/libvdecommon.la
 bfifo_la_LIBADD = $(top_builddir)/src/common/libvdecommon.la

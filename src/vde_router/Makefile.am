@@ -1,7 +1,7 @@
 
 moddir = $(pkglibdir)/vde_router
 
-AM_LDFLAGS = -module -avoid-version -export-dynamic
+AM_LDFLAGS = -avoid-version -export-dynamic
 AM_LIBTOOLFLAGS = --tag=disable-static
 AM_CPPFLAGS = -I$(top_srcdir)/include
 
