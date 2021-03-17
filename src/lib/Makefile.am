@@ -1,7 +1,7 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include \
               -DSYSCONFDIR="\"$(sysconfdir)\"" -DLOCALSTATEDIR="\"$(localstatedir)\""
 LIBADD = $(top_builddir)/src/common/libvdecommon.la
-SUBDIRS =
+SUBDIRS = vdemgmt
 
 if ENABLE_PROFILE
   AM_CFLAGS = -pg --coverage
@@ -9,17 +9,13 @@ if ENABLE_PROFILE
 endif
 
 lib_LTLIBRARIES = \
-	libvdemgmt.la \
 	libvdesnmp.la \
 	libvdeplug.la \
 	libvdehist.la
 
 # read before touching http://www.gnu.org/software/libtool/manual/libtool.html#Updating-version-info
 
-libvdemgmt_la_LIBADD = $(LIBADD)
-libvdemgmt_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
-
-libvdesnmp_la_LIBADD = $(LIBADD) $(top_builddir)/src/lib/libvdemgmt.la
+libvdesnmp_la_LIBADD = $(LIBADD) $(top_builddir)/src/lib/vdemgmt/libvdemgmt.la
 libvdesnmp_la_LDFLAGS = $(AM_LDFLAGS) -version-number 0:0:1 -export-dynamic
 
 libvdeplug_la_LIBADD = $(LIBADD)
@@ -33,5 +29,4 @@ SUBDIRS += . python
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = vdesnmp.pc vdemgmt.pc vdeplug.pc vdehist.pc
-
+pkgconfig_DATA = vdesnmp.pc vdeplug.pc vdehist.pc
