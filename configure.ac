@@ -21,7 +21,7 @@ AC_DEFINE_UNQUOTED(MODULES_EXT, "$shrext_cmds", [Extension of shared objects])
 
 # Checks for libraries.
 AC_CHECK_LIB([dl], [dlopen])
-AC_CHECK_LIB([crypto], [EVP_EncryptInit],
+AC_CHECK_LIB([wolfssl], [wc_Chacha_Process],
   [add_cryptcab_support=yes],
   [add_cryptcab_support=no ; warn_cryptcab=yes])
 AC_CHECK_LIB([pthread], [pthread_create],
