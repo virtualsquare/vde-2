@@ -47,6 +47,7 @@ static char *rcfile;
 static char *pidfile = NULL;
 static char pidfile_path[PATH_MAX];
 static int daemonize = 0;
+static int nostdin = 0;
 static unsigned int console_type=-1;
 static unsigned int mgmt_ctl=-1;
 static unsigned int mgmt_data=-1;
@@ -495,6 +496,7 @@ static void cleanup(unsigned char type,int fd,void *private_data)
 
 #define MGMTMODEARG 0x100
 #define MGMTGROUPARG 0x101
+#define NOSTDINARG 0x102
 
 static struct option long_options[] = {
 	{"daemon", 0, 0, 'd'},
@@ -503,6 +505,7 @@ static struct option long_options[] = {
 	{"mgmt", 1, 0, 'M'},
 	{"mgmtmode", 1, 0, MGMTMODEARG},
 	{"mgmtgroup", 1, 0, MGMTGROUPARG},
+	{"nostdin", 0, 0, NOSTDINARG},
 #ifdef DEBUGOPT
 	{"debugclients",1,0,'D'},
 #endif
@@ -520,6 +523,7 @@ static void usage(void)
 			"  -M, --mgmt SOCK            path of the management UNIX socket\n"
 			"      --mgmtmode MODE        management UNIX socket access mode (octal)\n"
 			"      --mgmtgroup GROUP      management UNIX socket group name\n"
+			"      --nostdin              Allow stdin to be closed\n"
 #ifdef DEBUGOPT
 			"  -D, --debugclients #       number of debug clients allowed\n"
 #endif
@@ -554,7 +558,9 @@ static int parseopt(int c, char *optarg)
 			}
 			mgmt_group = grp->gr_gid;
 			break;
-
+		case NOSTDINARG:
+			nostdin=1;
+			break;
 		default:
 			outc=c;
 	}
@@ -570,7 +576,7 @@ static void init(void)
 	}
 	/* add stdin (if tty), connect and data fds to the set of fds we wait for
 	 *    * input */
-	if(!daemonize)
+	if(!daemonize && !nostdin)
 	{
 		console_type=add_type(&swmi,0);
 		add_fd(0,console_type,NULL);
