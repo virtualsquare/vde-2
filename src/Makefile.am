@@ -59,7 +59,7 @@ if ENABLE_PROFILE
   AM_LDFLAGS = -pg --coverage
 endif
 
-vde_autolink_LDADD = $(LDADD) lib/libvdemgmt.la
+vde_autolink_LDADD = $(LDADD) lib/vdemgmt/libvdemgmt.la
 vde_plug2tap_LDADD = $(LDADD) lib/libvdeplug.la
 if ENABLE_PCAP
   vde_pcapplug_LDADD = $(LDADD) lib/libvdeplug.la -lpcap
