@@ -478,9 +478,11 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
 		do
 		{
+			struct sockaddr_un reqsock;
 			/* Here sockname is the last successful one in the previous step. */
 			sprintf(req.sock.sun_path, "%s/.%05d-%05d", sockname, pid, sockno++);
-			res=bind(conn->fddata, (struct sockaddr *) &req.sock, sizeof (req.sock));
+			reqsock = req.sock;
+			res=bind(conn->fddata, (struct sockaddr *) &reqsock, sizeof (req.sock));
 		}
 		while (res < 0 && errno == EADDRINUSE);
 
@@ -494,8 +496,10 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 				memset(req.sock.sun_path, 0, sizeof(req.sock.sun_path));
 				do 
 				{
+					struct sockaddr_un reqsock;
 					sprintf(req.sock.sun_path, "%s/vde.%05d-%05d", fallback_dirname[i], pid, sockno++);
-					res = bind(conn->fddata, (struct sockaddr *) &req.sock, sizeof (req.sock));
+					reqsock = req.sock;
+					res = bind(conn->fddata, (struct sockaddr *) &reqsock, sizeof (req.sock));
 				}
 				while (res < 0 && errno == EADDRINUSE);
 			}
