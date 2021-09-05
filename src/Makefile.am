@@ -2,8 +2,7 @@ SUBDIRS = \
 	common \
 	lib \
 	vde_switch \
-	vde_l3 \
-	slirpvde
+	vde_l3
 
 bin_PROGRAMS = \
 	dpipe \
