@@ -250,11 +250,13 @@ send_auth_ok(struct peer *p)
 rcv_login(struct datagram *pkt, char *pre_shared)
 {
 	int fd;
-	char filename[128];
-	if(!pre_shared)
-		snprintf(filename,127,"/tmp/.%s.key",pkt->data+1);
-	else
-		snprintf(filename,127,"%s",pre_shared);
+	char filename[256 + 1];
+	if(!pre_shared) {
+		if (strlen((char *)pkt->data + 1) > (256 - 11))
+			*(pkt->data + 1 + 256 - 11) = 0;
+		snprintf(filename,256,"/tmp/.%s.key",pkt->data+1);
+	} else
+		snprintf(filename,256,"%s",pre_shared);
 	sync();
 	usleep(10000);	
 	if (((fd = open (filename, O_RDONLY)) == -1)||
