@@ -935,10 +935,12 @@ static struct comlist cl[]={
 #endif
 };
 
+#ifdef DEBUGOPT
 static void sighupmgmt(int signo)
 {
 	EVENTOUT(MGMTSIGHUP, signo);
 }
+#endif
 
 void start_consmgmt(void)
 {
