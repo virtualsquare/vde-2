@@ -1,20 +1,20 @@
 #                                               -*- Autoconf -*-/
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.59)
+AC_PREREQ([2.71])
 AC_INIT([vde2],[2.3.2],[info@v2.cs.unibo.it])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_SRCDIR([include/vde.h])
-AC_CONFIG_HEADER([include/config.h])
 AC_CONFIG_LIBOBJ_DIR(src/common)
+AC_CONFIG_HEADERS([include/config.h])
 
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_LN_S
-AC_PROG_LIBTOOL
+LT_INIT
 AM_PROG_CC_C_O
 
 AC_DEFINE_UNQUOTED(MODULES_EXT, "$shrext_cmds", [Extension of shared objects])
@@ -32,7 +32,9 @@ AC_CHECK_LIB([pcap], [pcap_open_dead],
   [add_pcap=no ; warn_pcap=yes])
 
 # Checks for header files.
-AC_HEADER_STDC
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdint.h \
   stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/socket.h \
@@ -56,7 +58,6 @@ AC_C_PROTOTYPES
 AC_TYPE_MODE_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
-AC_HEADER_TIME
 
 # Checks for library functions.
 AC_FUNC_CHOWN
@@ -251,7 +252,6 @@ AM_CONDITIONAL(CAN_MAKE_VDETUNCTL, test "$can_make_vdetunctl" = yes)
 AM_CONDITIONAL(ENABLE_EXPERIMENTAL, test "$enable_experimental" = yes)
 AM_CONDITIONAL(ENABLE_PROFILE, test "$enable_profile" = yes)
 AM_CONDITIONAL(DARWIN_GCC, test "$darwin_gcc" = yes)
-AM_CONDITIONAL(ENABLE_KERNEL_SWITCH, test "$enable_kernel_switch" = yes)
 
 
 CFLAGS="-Wall -O2 $CFLAGS"
@@ -271,7 +271,6 @@ AC_CONFIG_FILES(
   [src/lib/vdemgmt/Makefile]
   [src/lib/vdemgmt/vdemgmt.pc]
   [src/vde_switch/Makefile]
-  [src/kvde_switch/Makefile]
   [src/vde_over_ns/Makefile]
   [src/common/Makefile]
   [src/vdetaplib/Makefile]
