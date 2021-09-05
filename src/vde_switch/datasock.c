@@ -58,14 +58,16 @@ static gid_t grp_owner = -1;
 
 enum request_type { REQ_NEW_CONTROL, REQ_NEW_PORT0 };
 
+struct __attribute__((packed)) req_v1_new_control_s {
+	unsigned char addr[ETH_ALEN];
+	struct sockaddr_un name;
+};
+
 struct request_v1 {
 	uint32_t magic;
 	enum request_type type;
 	union {
-		struct {
-			unsigned char addr[ETH_ALEN];
-			struct sockaddr_un name;
-		} new_control;
+		struct req_v1_new_control_s new_control;
 	} u;
 	char description[];
 } __attribute__((packed));
@@ -115,6 +117,7 @@ static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 	int optsize = sizeof(sockbufsize);
 #endif
 	struct sockaddr_un sun_in;
+	const size_t max_ctl_sock_len = sizeof(sun_in.sun_path) - 8;
 	// init sun_in memory
 	memset(&sun_in,0,sizeof(sun_in));
 	switch(type){
@@ -164,6 +167,8 @@ static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 			portno=ep_get_port(ep);
 			add_fd(fd_data,data_type,ep);
 			sun_in.sun_family = AF_UNIX;
+			if (strlen(ctl_socket) > max_ctl_sock_len)
+				ctl_socket[max_ctl_sock_len] = 0;
 			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d.%d",ctl_socket,portno,fd_data);
 
 			if ((unlink(sun_in.sun_path) < 0 && errno != ENOENT) ||
@@ -238,10 +243,12 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 			}
 			return;
 		} else if (len > 0) {
+			struct sockaddr_un sa_un;
 			reqbuf[len]=0;
 			if(req->v1.magic == SWITCH_MAGIC){
 				if(req->v3.version == 3) {
-					ep=new_port_v1_v3(fd, req->v3.type, &(req->v3.sock));
+					memcpy(&sa_un, &req->v3.sock, sizeof(struct sockaddr_un));
+					ep=new_port_v1_v3(fd, req->v3.type, &sa_un);
 					if (ep != NULL) {
 						mainloop_set_private_data(fd,ep);
 						setup_description(ep,strdup(req->v3.description));
@@ -253,7 +260,8 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 					remove_fd(fd); 
 				}
 				else {
-					ep=new_port_v1_v3(fd, req->v1.type, &(req->v1.u.new_control.name));
+					memcpy(&sa_un, &req->v1.u.new_control.name, sizeof(struct sockaddr_un));
+					ep=new_port_v1_v3(fd, req->v1.type, &sa_un);
 					if (ep != NULL) {
 						mainloop_set_private_data(fd,ep);
 						setup_description(ep,strdup(req->v1.description));
@@ -284,11 +292,11 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 			return;
 		}
 		/*
-			if(fcntl(new, F_SETFL, O_NONBLOCK) < 0){
-			printlog(LOG_WARNING,"fcntl - setting O_NONBLOCK %s",strerror(errno));
-			close(new);
-			return;
-		}*/
+		   if(fcntl(new, F_SETFL, O_NONBLOCK) < 0){
+		   printlog(LOG_WARNING,"fcntl - setting O_NONBLOCK %s",strerror(errno));
+		   close(new);
+		   return;
+		   }*/
 
 		add_fd(new,wd_type,NULL);
 	}
@@ -300,6 +308,7 @@ static void cleanup(unsigned char type,int fd,void *arg)
 	int test_fd;
 
 	if (fd < 0) {
+		const size_t max_ctl_sock_len = sizeof(clun.sun_path) - 5;
 		if (!strlen(ctl_socket)) {
 			/* ctl_socket has not been created yet */
 			return;
@@ -308,6 +317,8 @@ static void cleanup(unsigned char type,int fd,void *arg)
 			printlog(LOG_ERR,"socket %s",strerror(errno));
 		}
 		clun.sun_family=AF_UNIX;
+		if (strlen(ctl_socket) > max_ctl_sock_len)
+			ctl_socket[max_ctl_sock_len] = 0;
 		snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/ctl",ctl_socket);
 		if(connect(test_fd, (struct sockaddr *) &clun, sizeof(clun))){
 			close(test_fd);
@@ -320,6 +331,9 @@ static void cleanup(unsigned char type,int fd,void *arg)
 	} else {
 		if (type == data_type && arg != NULL) {
 			int portno=ep_get_port(arg);
+			const size_t max_ctl_sock_len = sizeof(clun.sun_path) - 8;
+			if (strlen(ctl_socket) > max_ctl_sock_len)
+				ctl_socket[max_ctl_sock_len] = 0;
 			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d.%d",ctl_socket,portno,fd);
 			unlink(clun.sun_path);
 		}
@@ -351,7 +365,7 @@ static void usage(void)
 			"  -m, --mode MODE            Permissions for the control socket (octal)\n"
 			"      --dirmode MODE         Permissions for the sockets directory (octal)\n"
 			"  -g, --group GROUP          Group owner for comm sockets\n"
-			);
+		  );
 }
 
 static int parseopt(int c, char *optarg)
@@ -389,6 +403,7 @@ static void init(void)
 	int connect_fd;
 	struct sockaddr_un sun;
 	int one = 1;
+	const size_t max_ctl_sock_len = sizeof(sun.sun_path) - 5;
 
 	/* Set up default modes */
 	if (mode < 0 && dirmode < 0)
@@ -435,12 +450,12 @@ static void init(void)
 	}
 	if (((mkdir(rel_ctl_socket, 0777) < 0) && (errno != EEXIST))) {
 		fprintf(stderr,"Cannot create ctl directory '%s': %s\n",
-			rel_ctl_socket, strerror(errno));
+				rel_ctl_socket, strerror(errno));
 		exit(-1);
 	}
 	if (!vde_realpath(rel_ctl_socket, ctl_socket)) {
 		fprintf(stderr,"Cannot resolve ctl dir path '%s': %s\n",
-			rel_ctl_socket, strerror(errno));
+				rel_ctl_socket, strerror(errno));
 		exit(1);
 	}
 
@@ -454,6 +469,8 @@ static void init(void)
 		exit(-1);
 	}
 	sun.sun_family = AF_UNIX;
+	if (strlen(ctl_socket) > max_ctl_sock_len)
+		ctl_socket[max_ctl_sock_len] = 0;
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		if((errno == EADDRINUSE) && still_used(&sun)){
@@ -463,7 +480,7 @@ static void init(void)
 		else if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 			printlog(LOG_ERR, "Could not bind to socket '%s/ctl' (second attempt): %s", ctl_socket, strerror(errno));
 			exit(-1);
-	 	}
+		}
 	} 
 	chmod(sun.sun_path,mode);
 	if(chown(sun.sun_path,-1,grp_owner) < 0) {
