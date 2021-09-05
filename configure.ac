@@ -1,20 +1,20 @@
 #                                               -*- Autoconf -*-/
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.59)
+AC_PREREQ([2.71])
 AC_INIT([vde2],[2.3.2],[info@v2.cs.unibo.it])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_SRCDIR([include/vde.h])
-AC_CONFIG_HEADER([include/config.h])
 AC_CONFIG_LIBOBJ_DIR(src/common)
+AC_CONFIG_HEADERS([include/config.h])
 
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_LN_S
-AC_PROG_LIBTOOL
+LT_INIT
 AM_PROG_CC_C_O
 
 AC_DEFINE_UNQUOTED(MODULES_EXT, "$shrext_cmds", [Extension of shared objects])
@@ -32,7 +32,9 @@ AC_CHECK_LIB([pcap], [pcap_open_dead],
   [add_pcap=no ; warn_pcap=yes])
 
 # Checks for header files.
-AC_HEADER_STDC
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdint.h \
   stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/socket.h \
@@ -56,7 +58,6 @@ AC_C_PROTOTYPES
 AC_TYPE_MODE_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
-AC_HEADER_TIME
 
 # Checks for library functions.
 AC_FUNC_CHOWN
@@ -162,7 +163,6 @@ AC_ARG_ENABLE([tuntap],
         [AC_DEFINE([HAVE_TUNTAP], 1, [If defined, tuntap support is compiled in])],
         [warn_tuntap=yes])
       can_make_libvdetap=yes
-      can_make_vdetunctl=yes
       ;;
     darwin*)
       # I don't use AC_CHECK_FILES because I need test -e and not test -r
@@ -212,46 +212,14 @@ AC_ARG_ENABLE([kernel-switch],
     AC_DEFINE([USE_IPN], 1, [If defined, enable support for IPN socket])
   fi])
 
-# python bindings
-AC_ARG_ENABLE([python],
-  AS_HELP_STRING([--disable-python], [Disable python bindings]),
-  [enable_python=$enableval],
-  [enable_python=yes]
-)
-
-if test x"$enable_python" = x"yes"; then
-  # check python
-  AM_PATH_PYTHON([2.5])
-  AC_PATH_PROG(PYTHON_CONFIG, python$PYTHON_VERSION-config)
-  if test x"$PYTHON_CONFIG" = x""; then
-    AC_PATH_PROG(PYTHON_CONFIG, python-config)
-  fi
-  if test x"$PYTHON_CONFIG" = x""; then
-    # not found, give up
-    enable_python=no
-  else
-    PYTHON_CFLAGS=`$PYTHON_CONFIG --includes`
-    PYTHON_LIBS=`$PYTHON_CONFIG --libs`
-    PYTHON_INCLUDES="$PYTHON_CFLAGS"
-  fi
-  AC_SUBST(PYTHON_CFLAGS)
-  AC_SUBST(PYTHON_INCLUDES)
-  AC_SUBST(PYTHON_LIBS)
-fi
-
-
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
 AM_CONDITIONAL(ENABLE_VDE_OVER_NS, test "$add_over_ns_support" = yes)
 AM_CONDITIONAL(ENABLE_ROUTER, test "$enable_router" = yes)
-AM_CONDITIONAL(ENABLE_VXLAN, test "$enable_vxlan" = yes)
-AM_CONDITIONAL(ENABLE_PYTHON, test "$enable_python" = yes)
 AM_CONDITIONAL(ENABLE_PCAP, test "$add_pcap" = yes)
 AM_CONDITIONAL(CAN_MAKE_LIBVDETAP, test "$can_make_libvdetap" = yes)
-AM_CONDITIONAL(CAN_MAKE_VDETUNCTL, test "$can_make_vdetunctl" = yes)
 AM_CONDITIONAL(ENABLE_EXPERIMENTAL, test "$enable_experimental" = yes)
 AM_CONDITIONAL(ENABLE_PROFILE, test "$enable_profile" = yes)
 AM_CONDITIONAL(DARWIN_GCC, test "$darwin_gcc" = yes)
-AM_CONDITIONAL(ENABLE_KERNEL_SWITCH, test "$enable_kernel_switch" = yes)
 
 
 CFLAGS="-Wall -O2 $CFLAGS"
@@ -267,19 +235,14 @@ AC_CONFIG_FILES(
   [src/lib/vdesnmp.pc]
   [src/lib/vdeplug.pc]
   [src/lib/vdehist.pc]
-  [src/lib/python/Makefile]
   [src/lib/vdemgmt/Makefile]
   [src/lib/vdemgmt/vdemgmt.pc]
   [src/vde_switch/Makefile]
-  [src/kvde_switch/Makefile]
   [src/vde_over_ns/Makefile]
   [src/common/Makefile]
   [src/vdetaplib/Makefile]
-  [src/vde_l3/Makefile]
   [src/vde_cryptcab/Makefile]
   [src/vde_router/Makefile]
-  [src/vde_vxlan/Makefile]
-  [src/slirpvde/Makefile]
   [src/vde_switch/plugins/Makefile]
 )
 AC_OUTPUT
@@ -299,18 +262,6 @@ if test x$enable_router = "xyes" ; then
   AS_ECHO " + VDE Router.............. enabled"
 else
   AS_ECHO " - VDE Router.............. disabled"
-fi
-
-if test x$enable_vxlan = "xyes" ; then
-  AS_ECHO " + VDE VXLAN............... enabled"
-else
-  AS_ECHO " - VDE VXLAN............... disabled"
-fi
-
-if test x$enable_python = "xyes" ; then
-  AS_ECHO " + Python Libraries........ enabled"
-else
-  AS_ECHO " - Python Libraries........ disabled"
 fi
 
 if test x$warn_tuntap = "xyes" ; then
@@ -335,12 +286,6 @@ if test x$enable_profile = "xyes" ; then
   AS_ECHO " + Profiling options....... enabled"
 else
   AS_ECHO " - Profiling options....... disabled"
-fi
-
-if test x$enable_kernel_switch = "xyes" ; then
-  AS_ECHO " + Kernel switch........... enabled"
-else
-  AS_ECHO " - Kernel switch........... disabled"
 fi
 
 AS_ECHO
@@ -368,20 +313,6 @@ if ! test x$enable_router = "xyes" ; then
 not installed on your system.])
     AS_ECHO
   fi
-fi
-
-if ! test x$enable_vxlan = "xyes" ; then
-  if test x$warn_vxlan = "xyes" ; then
-    AC_MSG_WARN([VDE VXLAN support has been disabled.])
-    AS_ECHO
-  fi
-fi
-
-if ! test x$enable_python = "xyes" ; then
-    AC_MSG_WARN([Python libraries support has been disabled because python is
-not installed on your system, or because it could not be found. Please install
-it if you want Python libraries to be compiled and installed.])
-    AS_ECHO
 fi
 
 if ! test x$add_pcap = "xyes" ; then
