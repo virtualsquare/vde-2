@@ -30,15 +30,15 @@
 #define MAX 10
 
 #define nativesym(function, name) \
-    { \
-        const char *msg; \
+{ \
+	const char *msg; \
 	if (native_##function == NULL) { \
-	    *(void **)(&native_##function) = dlsym(RTLD_NEXT, name); \
-	    if ((msg = dlerror()) != NULL) { \
- 		fprintf (stderr, "%s: dlsym(%s): %s\n", PACKAGE, name, msg); \
-	    } \
+		*(void **)(&native_##function) = dlsym(RTLD_NEXT, name); \
+		if ((msg = dlerror()) != NULL) { \
+			fprintf (stderr, "%s: dlsym(%s): %s\n", PACKAGE, name, msg); \
+		} \
 	} \
-    }
+}
 
 static int     (*native_ioctl) (int d, int request, ...) = NULL;
 static int     (*native_open) (const char *pathname, int flags, ...) = NULL;
@@ -142,12 +142,12 @@ int open64(const char *path, int flags, ...)
 
 static char *getvdeopt(struct ifreq *ifr,char *suffix)
 {
-	static char buf[16];
+	static char buf[32];
 	char *rv;
-	snprintf(buf,16,"%s_%s",ifr->ifr_name,suffix);
+	snprintf(buf,31,"%s_%s",ifr->ifr_name,suffix);
 	if ((rv=getenv(buf)) != NULL)
 		return rv;
-	snprintf(buf,16,"VDEALLTAP_%s",suffix);
+	snprintf(buf,31,"VDEALLTAP_%s",suffix);
 	if ((rv=getenv(buf)) != NULL)
 		return rv;
 	else
