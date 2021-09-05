@@ -278,7 +278,6 @@ AC_CONFIG_FILES(
   [src/vde_cryptcab/Makefile]
   [src/vde_router/Makefile]
   [src/vde_vxlan/Makefile]
-  [src/slirpvde/Makefile]
   [src/vde_switch/plugins/Makefile]
 )
 AC_OUTPUT
