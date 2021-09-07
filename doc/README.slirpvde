@@ -1,8 +1,35 @@
-slirpvde is based upon:
+Sept 07, 2021
+slirpvde is no longer provided by vde-2.
 
-	slirp by Danny Gasparovsky
-	slirp support for Qemu by Fabrice Bellard
-	slirp-vde interface by Renzo Davoli
+vdeplug4 supports a convenient plugin for slirp.
 
-This product includes software developed by Danny Gasparovski.
-2004.05.03
+References:
+vdeplug4:          https://github.com/rd235/vdeplug4
+libslirp:          https://gitlab.freedesktop.org/slirp/libslirp
+libvdeslirp:       https://github.com/virtualsquare/libvdeslirp
+slirp plugin:      https://github.com/virtualsquare/vdeplug_slirp
+
+This plugin uses the standard libslirp, code shared with many other
+projects, so safer and regularly updated.
+The new vdeplug4 plugin supports ipv6.
+
+The same functionnalities previously provided by slirpve are supported
+by the new tools, using a different syntax.
+
+examples:
+
+OLD: slirpvde /tmp/mysw
+NEW: vde_plug /tmp/mysw slirp://
+or:
+NEW: vde_plug vde:///tmp/mysw slirp://
+
+OLD: slirpvde -d -p /tmp/mypid /tmp/mysw
+NEW: vde_plug -d -p /tmp/mypid /tmp/mysw slirp://
+
+OLD: dpipe vde_plug = ssh remote.machine.org slirpvde -
+NEW: dpipe vde_plug = ssh remote.machine.org vde_plug slirp://
+or
+NEW: vde_plug vde:// "cmd://ssh remote.machine.org vde_plug slirp://"
+
+OLD: slirpvde -H 192.168.55.1 /tmp/mysw
+NEW: vde_plug vde:///tmp/mysw slirp:///host=192.168.55.1
