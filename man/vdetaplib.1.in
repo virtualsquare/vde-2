@@ -18,7 +18,7 @@ To use it, the libvdetab.so library must be preloaded
 .B 
 export LD_PRELOAD=%PKGLIBDIR%/libvdetap.so
 .RE
-(csh, tchs syntax):
+(csh, tcsh syntax):
 .RS
 .br
 .B
@@ -34,7 +34,7 @@ variable VDEALLTAP to the vde socket.
 .B
 export VDEALLTAP=/tmp/vde.ctl
 .RE
-(csh, tchs syntax):
+(csh, tcsh syntax):
 .RS
 .br
 .B
@@ -56,7 +56,7 @@ export tap1=/tmp/myvde.ctl
 .B
 export ppc=/tmp/ppc.ctl
 .RE
-(csh, tchs syntax):
+(csh, tcsh syntax):
 .RS
 .br
 .B
@@ -85,7 +85,7 @@ export tap0_group=vde-net
 .B
 export tap0_mode=0660
 .RE
-(csh, tchs, syntax):
+(csh, tcsh, syntax):
 .RS
 .br
 .B
