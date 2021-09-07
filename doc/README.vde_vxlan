@@ -1,0 +1,18 @@
+Sept 07, 2021
+vde_vxlan is no longer provided by vde-2.
+
+vdeplug4 supports a convenient plugin for vxlan and vxvde.
+
+References:
+vdeplug4:          https://github.com/rd235/vdeplug4
+(vdeplug_vxlan and vdeplug_vxde are provided as standard plugins).
+
+The same functionnalities previously provided by vde_vxlan are supported
+by the new tools, using a different syntax.
+
+example:
+
+OLD: vde_vxlan --vxlan-id 42  --vxlan-addr 234.0.0.1 --sock /tmp/mysw
+NEW: vde_plug /tmp/mysw vxlan://234.0.0.1/vni=42
+or:
+NEW: vde_plug vde:///tmp/mysw vxlan://234.0.0.1/vni=42
