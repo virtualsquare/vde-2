@@ -204,14 +204,6 @@ AC_ARG_ENABLE([pcap],
     [Disable pcap support (pdump plugin)]),
   [if test $enableval = "no" ; then add_pcap=no ; warn_pcap=no ; fi])
 
-AC_ARG_ENABLE([kernel-switch],
-  AS_HELP_STRING([--enable-kernel-switch],
-    [Compile support for in-kernel switch. ]),
-  [if test $enableval = "yes"; then
-    enable_kernel_switch=yes
-    AC_DEFINE([USE_IPN], 1, [If defined, enable support for IPN socket])
-  fi])
-
 AM_CONDITIONAL(ENABLE_CRYPTCAB, test "$add_cryptcab_support" = yes)
 AM_CONDITIONAL(ENABLE_VDE_OVER_NS, test "$add_over_ns_support" = yes)
 AM_CONDITIONAL(ENABLE_ROUTER, test "$enable_router" = yes)
