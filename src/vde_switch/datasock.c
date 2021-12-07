@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <libgen.h>
+#include <sched.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -87,8 +88,14 @@ union request {
 
 static int send_datasock(int fd_ctl, int fd_data, void *packet, int len, int port)
 {
-	if (send(fd_data, packet, len, 0) < 0) {
+	while (send(fd_data, packet, len, 0) < 0) {
 		int rv=errno;
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+		if(rv == ENOBUFS) {
+			sched_yield();
+			continue;
+		}
+#endif
 		if(rv != EAGAIN && rv != EWOULDBLOCK) 
 			printlog(LOG_WARNING,"send_sockaddr port %d: %s",port,strerror(errno));
 		else
