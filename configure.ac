@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-/
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.71])
+AC_PREREQ([2.59])
 AC_INIT([vde2],[2.3.2],[info@v2.cs.unibo.it])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects])
@@ -32,7 +32,6 @@ AC_CHECK_LIB([pcap], [pcap_open_dead],
   [add_pcap=no ; warn_pcap=yes])
 
 # Checks for header files.
-AC_CHECK_INCLUDES_DEFAULT
 AC_PROG_EGREP
 
 AC_HEADER_SYS_WAIT
