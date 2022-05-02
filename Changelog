@@ -1,3 +1,28 @@
+VDE 2.3.3, 2022-05-02
+	* Several bug fixes
+	* new hash function
+	* Allow pipes on stdin for daemonized switches
+	* fixed wirefilter '-N' option
+	* vde_switch: min packet len enforced
+	* Added vde_router
+	* dpipe: Fixed error checking for setpgrp().
+	* Fix incorrect chacha key size
+	* configure: do not test for CXX, it's not needed
+	* Fix description for "vlan/delport" command.
+	* Silence compiler warning about implicit type.
+	* Fix typo in error message
+	* Fixes 2019.10.06
+	* fstp: Add static to inline functions
+	* configure: Check for wolfSSL instead of OpenSSL.
+	* build: Fix parallel make.
+	* vde_switch: add `-nostdin` flag to allow stdin to be closed
+	* Deprecate modules
+	* Fix warnings with newer gcc
+	* [vde_plug] Removed kvde IPN support
+	* In vde_switch retry send() when it returns ENOBUFS on Darwin and FreeBSD
+	* configure.ac: Downgrade autoconf from 2.71 to 2.59
+	* Added GitHub actions
+
 VDE 2.3.2, 2011-11-23
 	* dpipe: new daemon mode
 	* [vde_switch] new mainloop management
