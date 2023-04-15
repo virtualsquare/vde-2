@@ -8,7 +8,9 @@
  *
  */
 
+#include "config.h"
 #include "cryptcab.h"
+
 #define KEEPALIVE_INTERVAL 30
 
 static unsigned char keepalives = 0;
@@ -96,9 +98,12 @@ rcv_challenge(struct datagram *pkt, struct peer *p)
 	}
 
 	close (fd);
-
-	memset(keyname + strlen(keyname) - 10, 'X', 6);
-	od = mkostemps(keyname, 4, O_RDWR | O_CREAT | O_TRUNC);
+	  memset(keyname + strlen(keyname) - 10, 'X', 6);
+#ifdef VDE_DARWIN
+  od = mkostemps(keyname, 4, O_EXLOCK);
+#else
+  od = mkostemps(keyname, 4, O_RDWR | O_CREAT | O_TRUNC);
+#endif
 	if (od < 0){
 		perror ("chacha.key mktemp error");
 		goto failure;
