@@ -22,8 +22,12 @@ AC_DEFINE_UNQUOTED(MODULES_EXT, "$shrext_cmds", [Extension of shared objects])
 # Checks for libraries.
 AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([wolfssl], [wc_Chacha_Process],
-  [add_cryptcab_support=yes],
-  [add_cryptcab_support=no ; warn_cryptcab=yes])
+  [have_wolfssl=yes],
+  [have_wolfssl=no])
+AC_CHECK_LIB([mbedcrypto], [mbedtls_chacha20_starts],
+  [have_mbedtls=yes],
+  [have_mbedtls=no])
+
 AC_CHECK_LIB([pthread], [pthread_create],
   [enable_router=yes],
   [enable_router=no ; warn_router=yes])
@@ -43,7 +47,10 @@ AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdint.h \
 AC_CHECK_HEADERS([syslimits.h sys/syslimits.h])
 
 AC_CHECK_HEADERS([wolfssl/wolfcrypt/chacha.h], [],
-  [add_cryptcab_support=no ; warn_cryptcab=yes])
+  [have_wolfssl=no])
+
+AC_CHECK_HEADERS([mbedtls/chacha20.h], [],
+  [have_mbedtls=no])
 
 AC_CHECK_HEADERS([sysexits.h],
   [add_over_ns_support=yes],
@@ -128,7 +135,43 @@ AC_ARG_ENABLE([experimental],
     [Enable experimental features (async notifies, plugin support, packet counter)]),
   [if test $enableval = "yes"; then enable_experimental=yes; fi])
 
-# Disable vde_cryptcab? (depends on wolfssl, maybe unwanted)
+# Select crypt implementation for cryptcab
+AC_ARG_WITH([crypt],
+  AS_HELP_STRING([],
+    [Choose implementation for cryptcab - wolfssl, mbedtls]),
+  [crypt="$withval"],
+  [crypt='wolfssl'])
+
+case "$crypt" in
+  'wolfssl')
+    if test $have_wolfssl = yes; then
+      add_cryptcab_support=yes
+      warn_cryptcab=no
+    else
+      add_cryptcab_support=no
+      warn_cryptcab=yes
+    fi
+    AC_DEFINE([USE_WOLFSSL], 1, [Define to 1 if you want to use the wolfssl crypt implementation.])
+    SSL_LIB="-lwolfssl"
+    AC_SUBST(SSL_LIB)
+    ;;
+  'mbedtls')
+    if test $have_mbedtls = yes; then
+      add_cryptcab_support=yes
+      warn_cryptcab=no
+    else
+      add_cryptcab_support=no
+      warn_cryptcab=yes
+    fi
+    AC_DEFINE([USE_WOLFSSL], 0, [Define to 1 if you want to use the wolfssl crypt implementation.])
+    SSL_LIB="-lmbedcrypto"
+    AC_SUBST(SSL_LIB)
+    ;;
+  *)
+    AC_MSG_ERROR([Unsupported crypt option: $crypt. At the moment, only wolfssl and mbedlts are supported. Contributions are appreciated! :-)])
+esac
+
+# Disable vde_cryptcab? (depends on wolfssl/mbedtls, maybe unwanted)
 AC_ARG_ENABLE([cryptcab],
   AS_HELP_STRING([--disable-cryptcab],
     [Disable vde_cryptcab compilation]),
@@ -282,10 +325,16 @@ fi
 AS_ECHO
 AS_ECHO
 if ! test x$add_cryptcab_support = "xyes" ; then
-  if test x$warn_cryptcab = "xyes" ; then
+  if test x$warn_cryptcab = "xyes" && test x$crypt = "xwolfssl"; then
     AC_MSG_WARN([VDE CryptCab support has been disabled because wolfSSL is
 not installed on your system, or because wolfssl/wolfcrypt/chacha.h could not be found.
 Please install libwolfssl if you want CryptCab to be compiled and installed.])
+    AS_ECHO
+  fi
+  if test x$warn_cryptcab = "xyes" && test x$crypt = "xmbedtls"; then
+    AC_MSG_WARN([VDE CryptCab support has been disabled because MbedTLS is
+not installed on your system, or because mbedtls/chacha20.h could not be found.
+Please install mbedtls if you want CryptCab to be compiled and installed.])
     AS_ECHO
   fi
 fi

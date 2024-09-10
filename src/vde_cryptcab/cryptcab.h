@@ -42,7 +42,13 @@
 #define PORTNO 7667
 
 
+#if USE_WOLFSSL
 #include <wolfssl/wolfcrypt/chacha.h>
+#else
+#include <mbedtls/chacha20.h>
+#define CHACHA_MAX_KEY_SZ 32
+#define CHACHA_IV_BYTES 12
+#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
