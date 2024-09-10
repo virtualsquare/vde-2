@@ -21,7 +21,12 @@ static void Usage(char *programname)
 	exit(1);
 }
 
-ChaCha ctx;
+#if USE_WOLFSSL
+static ChaCha ctx;
+#else
+static mbedtls_chacha20_context ctx;
+#include <mbedtls/chacha20.h>
+#endif
 static int encryption_disabled = 0;
 static int nfd;
 static unsigned long long mycounter=1;
@@ -95,11 +100,24 @@ int data_encrypt_decrypt(unsigned char *src, unsigned char *dst, int len, unsign
 		memcpy(dst,src,len);
 		return len;
 	}
+#if USE_WOLFSSL
 	wc_Chacha_SetKey(&ctx, key, CHACHA_MAX_KEY_SZ);
 	wc_Chacha_SetIV(&ctx, iv, CHACHA_IV_BYTES);
 	if (wc_Chacha_Process(&ctx, dst, src, len) == 0)
 		return len;
-    return -1;
+#else
+	mbedtls_chacha20_init(&ctx);
+	mbedtls_chacha20_setkey(&ctx, key);
+	mbedtls_chacha20_starts(&ctx, iv, 0);
+
+	if (mbedtls_chacha20_update(&ctx, len, src, dst) == 0) {
+		mbedtls_chacha20_free(&ctx);
+		return len;
+	}
+
+	mbedtls_chacha20_free(&ctx);
+#endif
+	return -1;
 }
 
 
