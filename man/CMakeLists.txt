@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.7)
+
+set(PANDOC_ORG "VirtualSquare")
+
+# ### pandoc pages
+
+file(GLOB VU_PANDOC_PAGES ${CMAKE_CURRENT_SOURCE_DIR}/*.[1-8].md)
+set(VU_MAN_FILES)
+foreach(VU_PANDOC_PATH IN LISTS VU_PANDOC_PAGES)
+# VU_PANDOCPAGE: basename of VU_PANDOC_PATH
+	get_filename_component(VU_PANDOCPAGE ${VU_PANDOC_PATH} NAME)
+# VU_MANPAGE: VU_PANDOCPAGE without the suffix
+	string(REGEX REPLACE "\.md$" "" VU_MANPAGE ${VU_PANDOCPAGE})
+	list(APPEND VU_MAN_FILES ${VU_MANPAGE})
+endforeach(VU_PANDOC_PATH)
+
+add_custom_target(${PROJECT_NAME}_manpages ALL make PANDOC_ORG="${PANDOC_ORG}"  ${VU_MAN_FILES}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+### man pages
+file(GLOB VU_MAN_PAGES ${CMAKE_CURRENT_SOURCE_DIR}/*.[1-8])
+foreach(VU_MAN_PATH IN LISTS VU_MAN_PAGES)
+	get_filename_component(VU_MANPAGE ${VU_MAN_PATH} NAME)
+	string(REGEX REPLACE ".*\\." "" MAN_CHAPTER ${VU_MANPAGE})
+	install(FILES ${VU_MAN_PATH} DESTINATION ${CMAKE_INSTALL_MANDIR}/man${MAN_CHAPTER})
+endforeach(VU_MAN_PATH)
