@@ -23,7 +23,7 @@ Using VDE:
 - A real Linux box can be connected to the VDE using a tap interface (TUNTAP)  
   (packets can be further routed using standard linux methods). 
 - It is possible to join two VDE switches -- also running on different
-  real conputers -- using virtual VDE cables
+  real computers -- using virtual VDE cables
 - UML (user-mode-linux) virtual machines can be connected to the VDE
 - MPS (MIPS emulated machines (c) Morsiani/Davoli) can be connected 
 to the virtual VDE.
@@ -31,7 +31,7 @@ to the virtual VDE.
 Examples of VDE uses:
 - With VDE it is possible to create a virtual network of UML machines running
 on several real computer
-- VDE can be used to create tunnels (even crossing masquerated networks)
+- VDE can be used to create tunnels (even crossing masqueraded networks)
 - VDE can provide mobility support. Changing a VDE cable with another does not
 affect the communications in place. The new VDE cable can use a completely 
 different path on the real net. VDE supports also multiple concurrent VDE cables
