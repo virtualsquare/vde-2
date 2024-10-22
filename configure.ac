@@ -136,8 +136,8 @@ AC_ARG_ENABLE([experimental],
 
 # Select crypt implementation for cryptcab
 AC_ARG_WITH([crypt],
-  AS_HELP_STRING([],
-    [Choose implementation for cryptcab - wolfssl, mbedtls]),
+  AS_HELP_STRING([--with-crypt=wolfssl|mbedtls],
+    [Choose implementation for cryptcab]),
   [crypt="$withval"],
   [crypt='wolfssl'])
 
