@@ -943,10 +943,8 @@ static char prompt[]="\nVDEwf$ ";
 static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 {
 	int new;
-	unsigned int len;
 	char buf[MAXCMD];
-	struct sockaddr addr;
-	new = accept(fd, &addr, &len);
+	new = accept(fd, NULL, NULL);
 	if(new < 0){
 		printlog(LOG_WARNING,"mgmt accept %s",strerror(errno));
 		return nfds;
