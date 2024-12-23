@@ -259,19 +259,24 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 					if (ep != NULL) {
 						mainloop_set_private_data(fd,ep);
 						setup_description(ep,strdup(req->v3.description));
+					} else {
+						remove_fd(fd);
+						return;
 					}
 				}
 				else if(req->v3.version > 2 || req->v3.version == 2) {
 					printlog(LOG_ERR, "Request for a version %d port, which this "
 							"vde_switch doesn't support", req->v3.version);
-					remove_fd(fd); 
-				}
-				else {
+					remove_fd(fd);
+				} else {
 					memcpy(&sa_un, &req->v1.u.new_control.name, sizeof(struct sockaddr_un));
 					ep=new_port_v1_v3(fd, req->v1.type, &sa_un);
 					if (ep != NULL) {
 						mainloop_set_private_data(fd,ep);
 						setup_description(ep,strdup(req->v1.description));
+					} else {
+						remove_fd(fd);
+						return;
 					}
 				}
 			}
