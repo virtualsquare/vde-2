@@ -1155,9 +1155,9 @@ static int mgmtcommand(int fd)
 static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 {
 	int new;
-	unsigned int len;
 	char buf[MAXCMD];
 	struct sockaddr addr;
+	socklen_t len = sizeof(addr);
 	new = accept(fd, &addr, &len);
 	if(new < 0){
 		printlog(LOG_ERR,"mgmt accept %s",strerror(errno));

@@ -1349,9 +1349,9 @@ int config_readline (int fd, char *l)
 static int newmgmtconn(int fd,struct pollfd *pfd,int nfds)
 {
 	int new;
-	unsigned int len;
 	char buf[MAXCMD];
 	struct sockaddr addr;
+	socklen_t len = sizeof(addr);
 	new = accept(fd, &addr, &len);
 	if(new < 0) {
 		fprintf(stderr, "mgmt accept %s",strerror(errno));
