@@ -56,6 +56,7 @@ int main(int argc,char *argv[])
 		{"rcfile", 1, 0, 'f'},
 		{"sock", 1, 0, 's'},
 		{"verbose", 0, 0, 'v'},
+    		{ 0, 0, 0, 0},
 	};
 	int c;
 	while ((c=getopt_long (argc, argv, "f:s:v",
