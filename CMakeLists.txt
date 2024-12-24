@@ -7,7 +7,7 @@ project(vde2
 include(GNUInstallDirs)
 include(./Macros.cmake)
 
-add_definitions(-DSYSCONFDIR=\"${CMAKE_INSTALL_SYSCONFDIR}\" -DLOCALSTATEDIR=\"${CMAKE_INSTALL_LOCALSTATEDIR}\")
+add_definitions(-DSYSCONFDIR=\"/${CMAKE_INSTALL_SYSCONFDIR}\" -DLOCALSTATEDIR=\"/${CMAKE_INSTALL_LOCALSTATEDIR}\")
 
 cm_define_project(
     ${PROJECT_VERSION} 
