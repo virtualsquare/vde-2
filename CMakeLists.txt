@@ -32,7 +32,7 @@ set(WITH_CRYPT "wolfssl" CACHE STRING "Choose implementation for cryptcab (wolfs
 set(crypt ${WITH_CRYPT})
 
 # Set compiler flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall --std=gnu17")
 
 # Check for required libraries
 find_library(DL_LIBRARY dl)
