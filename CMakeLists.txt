@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.25)
 project(vde2 
     VERSION 2.3.3 
     LANGUAGES C
@@ -19,7 +19,29 @@ cm_define_project(
     ${PROJECT_NAME}
 )
 
+include_directories(${CMAKE_BINARY_DIR}/include)
+
+# Platform-specific configurations
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+    cm_define_var(VDE_LINUX 1)
+elseif(CMAKE_SYSTEM_NAME MATCHES "Android")
+    cm_define_var(VDE_BIONIC 1)
+elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    cm_define_var(VDE_DARWIN 1)
+elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+    cm_define_var(VDE_FREEBSD 1)
+else()
+    message(FATAL_ERROR "Unsupported OS: ${CMAKE_SYSTEM_NAME}")
+endif()
+
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+	SET(DEFAULT_VDEPUG4 ON)
+else()
+	set(DEFAULT_VDEPUG4 OFF)
+endif()
+
 # Options
+option(WITH_VDEPLUG4 "Use VDEPLUG4" ${DEFAULT_VDEPUG4})
 option(ENABLE_VXLAN "Enable VDE VXLAN" ON)
 option(ENABLE_CRYPTCAB "Enable VDE CryptCab" ON)
 option(ENABLE_VDE_OVER_NS "Enable VDE over NS" ON)
@@ -40,6 +62,7 @@ find_library(HAVE_WOLFSSL wolfssl)
 find_library(PTHREAD_LIBRARY pthread)
 find_library(PCAP_LIBRARY pcap)
 find_library(HAVE_MBEDTLS mbedtls)
+find_library(VDEPLUG4_LIBRARY vdeplug_mod)
 
 # Check for headers
 
@@ -130,19 +153,6 @@ cm_check_type_size("char*" SIZEOF_CHAR_P)
 set(MODULES_EXT ${CMAKE_SHARED_LIBRARY_SUFFIX})
 
 cm_define_var(MODULES_EXT \"${CMAKE_SHARED_LIBRARY_SUFFIX}\")
-
-# Platform-specific configurations
-if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-    cm_define_var(VDE_LINUX 1)
-elseif(CMAKE_SYSTEM_NAME MATCHES "Android")
-    cm_define_var(VDE_BIONIC 1)
-elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    cm_define_var(VDE_DARWIN 1)
-elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
-    cm_define_var(VDE_FREEBSD 1)
-else()
-    message(FATAL_ERROR "Unsupported OS: ${CMAKE_SYSTEM_NAME}")
-endif()
 
 if(${crypt} STREQUAL "wolfssl")
   if(HAVE_WOLFSSL AND HAVE_WOLFSSL_CHACHA_H)
@@ -248,6 +258,10 @@ if(VDEPLUG4_LIBRARY)
     message(STATUS "VDE plug4 library found: ${VDEPLUG4_LIBRARY}")
 endif()
 
+if(WITH_VDEPLUG4 AND NOT VDEPLUG4_LIBRARY)
+    message(FATAL_ERROR "VDEPLUG4 library not found")
+endif()
+
 if(ENABLE_EXPERIMENTAL)
     add_definitions(-DENABLE_EXPERIMENTAL)
 endif()
@@ -260,18 +274,24 @@ endif()
 add_subdirectory(src)
 add_subdirectory(include)
 add_subdirectory(man)
-add_subdirectory(doc)
+if(NOT WITH_VDEPLUG4)
+	add_subdirectory(man_plug)
+endif()
 
-cm_configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/config.h)
+# doc are ostly obsolete
+# add_subdirectory(doc)
+
+cm_configure_file(${CMAKE_CURRENT_BINARY_DIR}/include/config.h)
 
 # Install configuration
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/config.h
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/config.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vde2)
 
 # Output configuration summary
 message(STATUS "")
 message(STATUS "Configure results:")
 message(STATUS "")
+message(STATUS " use VDEPLUG4............ ${WITH_VDEPLUG4}")
 message(STATUS " VDE VXLAN............... ${ENABLE_VXLAN}")
 message(STATUS " VDE CryptCab............ ${ENABLE_CRYPTCAB}")
 message(STATUS " VDE Router.............. ${ENABLE_ROUTER}")

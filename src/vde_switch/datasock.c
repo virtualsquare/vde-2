@@ -176,7 +176,10 @@ static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 			sun_in.sun_family = AF_UNIX;
 			if (strlen(ctl_socket) > max_ctl_sock_len)
 				ctl_socket[max_ctl_sock_len] = 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
 			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d.%d",ctl_socket,portno,fd_data);
+#pragma GCC diagnostic pop
 
 			if ((unlink(sun_in.sun_path) < 0 && errno != ENOENT) ||
 					bind(fd_data, (struct sockaddr *) &sun_in, sizeof(struct sockaddr_un)) < 0){
@@ -331,7 +334,10 @@ static void cleanup(unsigned char type,int fd,void *arg)
 		clun.sun_family=AF_UNIX;
 		if (strlen(ctl_socket) > max_ctl_sock_len)
 			ctl_socket[max_ctl_sock_len] = 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
 		snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/ctl",ctl_socket);
+#pragma GCC diagnostic pop
 		if(connect(test_fd, (struct sockaddr *) &clun, sizeof(clun))){
 			close(test_fd);
 			if(unlink(clun.sun_path) < 0)
@@ -346,7 +352,10 @@ static void cleanup(unsigned char type,int fd,void *arg)
 			const size_t max_ctl_sock_len = sizeof(clun.sun_path) - 8;
 			if (strlen(ctl_socket) > max_ctl_sock_len)
 				ctl_socket[max_ctl_sock_len] = 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
 			snprintf(clun.sun_path,sizeof(clun.sun_path),"%s/%03d.%d",ctl_socket,portno,fd);
+#pragma GCC diagnostic pop
 			unlink(clun.sun_path);
 		}
 		close(fd);
@@ -483,7 +492,10 @@ static void init(void)
 	sun.sun_family = AF_UNIX;
 	if (strlen(ctl_socket) > max_ctl_sock_len)
 		ctl_socket[max_ctl_sock_len] = 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
+#pragma GCC diagnostic pop
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		if((errno == EADDRINUSE) && still_used(&sun)){
 			printlog(LOG_ERR, "Could not bind to socket '%s/ctl': %s", ctl_socket, strerror(errno));

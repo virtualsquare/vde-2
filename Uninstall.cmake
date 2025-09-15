@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.25)
 set(MANIFEST "${CMAKE_CURRENT_BINARY_DIR}/install_manifest.txt")
 
 if(NOT EXISTS ${MANIFEST})

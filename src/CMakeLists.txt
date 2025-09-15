@@ -30,10 +30,12 @@ if(ENABLE_VXLAN)
     add_subdirectory(vde_vxlan)
 endif()
 
-add_executable(vde_plug vde_plug.c)
-target_link_libraries(vde_plug vdeplug vdecommon)
+if (NOT WITH_VDEPLUG4)
+  add_executable(vde_plug vde_plug.c)
+  target_link_libraries(vde_plug vdeplug vdecommon)
 
-add_executable(dpipe dpipe.c)
+  add_executable(dpipe dpipe.c)
+endif()
 
 add_executable(unixcmd unixcmd.c)
 target_link_libraries(unixcmd vdecommon)
@@ -50,5 +52,13 @@ target_link_libraries(wirefilter vdeplug m vdecommon)
 add_executable(vdeterm vdeterm.c)
 target_link_libraries(vdeterm vdeplug vdehist vdecommon)
 
-install(TARGETS vde_plug dpipe unixcmd vde_plug2tap vde_autolink wirefilter vdeterm
+add_executable(vde_pcapplug vde_pcapplug.c)
+target_link_libraries(vde_pcapplug vdeplug pcap vdecommon)
+
+if (NOT WITH_VDEPLUG4)
+	install(TARGETS vde_plug dpipe
+        DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+install(TARGETS unixcmd vde_plug2tap vde_autolink wirefilter vdeterm vde_pcapplug
         DESTINATION ${CMAKE_INSTALL_BINDIR})
