@@ -866,7 +866,7 @@ void *plugin_dlopen(const char *modname, int flag)
 		TRY_DLOPEN("%s%s", modname, MODULES_EXT);
 		TRY_DLOPEN("%s%s/%s", homedir, USER_PLUGINS_DIR, modname);
 		TRY_DLOPEN("%s%s/%s%s", homedir, USER_PLUGINS_DIR, modname, MODULES_EXT);
-		TRY_DLOPEN("%s%s", PLUGINS_DIR, modname);
+		TRY_DLOPEN("%s/%s", PLUGINS_DIR, modname);
 		TRY_DLOPEN("%s/%s%s", PLUGINS_DIR, modname, MODULES_EXT);
 
 		free(testpath);

@@ -48,8 +48,8 @@ endif()
 
 if(ENABLE_EXPERIMENTAL)
 	add_subdirectory(plugins)
-	target_compile_options(vde_switch PRIVATE ${EXP_CFLAGS})
-	target_compile_definitions(vde_switch PRIVATE -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN -DPLUGINS_DIR="${CMAKE_INSTALL_PREFIX}/lib/plugins")
+	target_link_options(vde_switch PRIVATE ${EXP_CFLAGS})
+	target_compile_definitions(vde_switch PRIVATE -DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN -DPLUGINS_DIR="${CMAKE_INSTALL_FULL_LIBDIR}/vde2/plugins")
 endif()
 
 install(TARGETS vde_switch DESTINATION ${CMAKE_INSTALL_BINDIR})

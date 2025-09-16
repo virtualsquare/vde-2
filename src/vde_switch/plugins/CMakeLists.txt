@@ -1,4 +1,3 @@
-
 # Set the include directory
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
@@ -23,4 +22,5 @@ else()
 endif()
 
 # install modules
-install(TARGETS dump iplog pdump DESTINATION ${CMAKE_INSTALL_LIBDIR}/modules)
+install(TARGETS dump iplog pdump DESTINATION
+		${CMAKE_INSTALL_LIBDIR}/vde2/plugins)
