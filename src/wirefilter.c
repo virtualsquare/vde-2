@@ -1545,6 +1545,13 @@ int main(int argc,char *argv[])
 				break;
 		}
 	}
+
+	if (optind < argc)
+		vdepath[LR] = strdup(argv[optind++]);
+
+	if (optind < argc)
+		vdepath[RL] = strdup(argv[optind++]);
+
 	if (optind < argc)
 		usage();
 

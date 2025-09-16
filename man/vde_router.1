@@ -11,7 +11,7 @@ vde_router \- Virtual Distributed Ethernet Router.
 .br
 .SH DESCRIPTION
 A
-\fBvde_router\fP 
+\fBvde_router\fP
 
 
 
@@ -28,7 +28,8 @@ Parse configuration parameters from \fBconfigfile\fP at startup
 .TP
 .B -M \fImgmt_socket
 the unix socket where the parameters (interfaces addresses, routes, etc.) can be checked and
-changed runtime. \fBunixterm\fP(1) can be used as a remote terminal for wirefilter.
+changed runtime. \fBvdeterm\fP(1) can be used as a remote terminal for
+vde_router or any PF_UNIX client such as socat(1).
 
 .TP
 .B -m \fImgmt_mode
@@ -47,8 +48,6 @@ Technologies").
 
 .SH SEE ALSO
 \fBvde_switch\fP(1),
-\fBvdeq\fP(1),
-\fBunixterm\fP(1),
 \fBvde_cryptcab\fP(1),
 \fBwirefilter\fP(1).
 .br
@@ -57,5 +56,5 @@ VDE_ROUTER is a tool by Daniele Lacamera <root@danielinux.net>
 
 VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
 
-Red-Black Tree used to implement ARP tables is a free port to userspace from the Linux kernel, by Andrea Arcangeli and David Woodhouse. 
+Red-Black Tree used to implement ARP tables is a free port to userspace from the Linux kernel, by Andrea Arcangeli and David Woodhouse.
 
