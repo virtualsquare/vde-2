@@ -1,6 +1,16 @@
 /* Copyright 2004 Renzo Davoli
  * Reseased under the GPLv2 */
 
+/* Building with these macros defines interferes with this files attempt to
+   interpose both open and open64
+	 tnx Michael Hudson-Doyle <michael.hudson@ubuntu.com> */
+#ifdef _FILE_OFFSET_BITS
+#undef _FILE_OFFSET_BITS
+#endif
+#ifdef _TIME_BITS
+#undef _TIME_BITS
+#endif
+
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <stdio.h>

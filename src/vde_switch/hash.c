@@ -49,7 +49,10 @@ struct hash_entry {
 	u_int64_t dst;
 };
 
+static int delayed_hash_gc;
 static struct hash_entry **h;
+
+static void hash_gc(void *arg); // forward declaration
 
 static int calc_hash(u_int64_t src)
 {
@@ -90,6 +93,7 @@ static int calc_hash(u_int64_t src)
  * port */
 int find_in_hash(unsigned char *dst,int vlan)
 {
+	if (delayed_hash_gc) hash_gc(NULL);
 	struct hash_entry *e = find_entry(extmac(dst,vlan));
 	if(e == NULL) return -1;
 	return(e->port);
@@ -103,6 +107,7 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 	int k = calc_hash(esrc);
 	int oldport;
 	time_t now;
+	if (delayed_hash_gc) hash_gc(NULL);
 	for(e = h[k]; e && e->dst != esrc; e = e->next)
 		;
 	if(e == NULL) {
@@ -268,7 +273,15 @@ static void gc(struct hash_entry *e, void *now)
 static void hash_gc(void *arg)
 {
 	time_t t = qtime();
+	delayed_hash_gc = 0;
 	for_all_hash(&gc, &t);
+}
+
+/* actual handler which is called every GC_INTERVAL seconds. only set a flag
+   to stay "thread-safe" */
+static void hash_gc_flag(void *arg)
+{
+	delayed_hash_gc++;
 }
 
 #define HASH_INIT(BIT) \
@@ -311,7 +324,7 @@ int hash_set_gc_interval(int p)
 {
 	qtimer_del(gc_timerno);
 	gc_interval=p;
-	gc_timerno=qtimer_add(gc_interval,0,hash_gc,NULL);
+	gc_timerno=qtimer_add(gc_interval,0,hash_gc_flag,NULL);
 	return 0;
 }
 
@@ -411,7 +424,7 @@ void hash_init(int hash_size)
 
 	gc_interval=GC_INTERVAL;
 	gc_expire=GC_EXPIRE;
-	gc_timerno=qtimer_add(gc_interval,0,hash_gc,NULL);
+	gc_timerno=qtimer_add(gc_interval,0,hash_gc_flag,NULL);
 	ADDCL(cl);
 #ifdef DEBUGOPT
 	ADDDBGCL(dl);

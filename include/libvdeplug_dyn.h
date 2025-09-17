@@ -57,6 +57,10 @@
 #include <dlfcn.h>
 #define LIBVDEPLUG_INTERFACE_VERSION 1
 
+#ifndef LIBVDEPLUG_DLOPEN_FILENAME
+#define LIBVDEPLUG_DLOPEN_FILENAME "libvdeplug.so.2"
+#endif
+
 struct vdeconn;
 typedef struct vdeconn VDECONN;
 
@@ -113,7 +117,9 @@ typedef void (* VDESTREAM_RECV_T)(VDESTREAM *vdestream, unsigned char *buf, size
 typedef void (* VDESTREAM_CLOSE_T)(VDESTREAM *vdestream);
 
 #define libvdeplug_dynopen(x) ({ \
-	(x).dl_handle=dlopen("libvdeplug.so",RTLD_NOW); \
+	(x).dl_handle=dlopen(LIBVDEPLUG_DLOPEN_FILENAME,RTLD_NOW); \
+	if (!(x).dl_handle) \
+		(x).dl_handle=dlopen("libvdeplug.so",RTLD_NOW); \
 	if ((x).dl_handle) { \
 		(x).vde_open_real=(VDE_OPEN_REAL_T) dlsym((x).dl_handle,"vde_open_real"); \
 		(x).vde_recv=(VDE_RECV_T) dlsym((x).dl_handle,"vde_recv"); \

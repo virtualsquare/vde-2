@@ -20,11 +20,15 @@
 
 char *prompt;
 static struct termios tiop;
+/* don't reset terminal too early.
+	 tnx Serge Hallyn  <serge.hallyn@ubuntu.com> */
+int termset = 0;
 
 static void cleanup(void)
 {
 	fprintf(stderr,"\n");
-	tcsetattr(STDIN_FILENO,TCSAFLUSH,&tiop);
+	if (termset)
+		tcsetattr(STDIN_FILENO,TCSAFLUSH,&tiop);
 }
 
 static void sig_handler(int sig)
@@ -135,6 +139,7 @@ int main(int argc,char *argv[])
 	newtiop.c_lflag &= ~ICANON;
 	newtiop.c_lflag &= ~ECHO;
 	tcsetattr(STDIN_FILENO,TCSAFLUSH,&newtiop);
+	termset = 1;
 	flags = fcntl(fd, F_GETFL);
 	flags |= O_NONBLOCK;
 	fcntl(fd, F_SETFL, flags);
