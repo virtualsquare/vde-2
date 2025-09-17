@@ -99,7 +99,7 @@ static int help(int fd,char *s)
 		printoutc(fd, "If \"del\" is specified, only <address> will be used to search for an existing entry.");
 		printoutc(fd, "Each virtual ethernet can be associated to more than one IP addresses. A static route for");
 		printoutc(fd, "the resulting neighborhood will be added.");
-		printoutc(fd, "Dhcp option allows to ask for a dynamic IP address.");
+		printoutc(fd, "Dhcp option allows one to ask for a dynamic IP address.");
 		printoutc(fd, "");
 		printoutc(fd, "Examples:");
 		printoutc(fd, "ifconfig");

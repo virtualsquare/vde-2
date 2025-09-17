@@ -1254,7 +1254,7 @@ static int showedges(int fd,char *s)
 		return EINVAL;
 	for (j=0;j<markov_numnodes;j++) 
 		if (ADJMAP(node,j) != 0)
-			printoutc(fd, "Edge %-2d->%-2d \"%s\"->\"%s\" weigth %lg",node,j,
+			printoutc(fd, "Edge %-2d->%-2d \"%s\"->\"%s\" weight %lg",node,j,
 					WFNAME(node)?WFNAME(node):"",
 					WFNAME(j)?WFNAME(j):"",
 					ADJMAP(node,j));
