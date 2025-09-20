@@ -9,17 +9,17 @@ jobs:
     name: "Smoke test"
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: "Check out"
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
       - name: "Install dependencies (Linux)"
         if: runner.os == 'Linux'
         run: |
           sudo apt-get install -U -y  --no-install-recommends -q cmake libvdeplug-dev libpcap-dev || true
+      - name: "Check out"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: "Build"
         run: |
           mkdir build
