@@ -1,8 +1,9 @@
 name: "CI"
 on:
   push:
+    branches:
+      - master
   pull_request:
-  workflow_dispatch:
 jobs:
   smoke:
     name: "Smoke test"
