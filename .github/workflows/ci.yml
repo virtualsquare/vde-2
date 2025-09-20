@@ -13,13 +13,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Check out"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
       - name: "Install dependencies (Linux)"
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -U -y cmake libvdeplug-dev libpcap-dev || true
+          sudo apt-get install -U -y  --no-install-recommends -q cmake libvdeplug-dev libpcap-dev || true
       - name: "Build"
         run: |
           mkdir build
