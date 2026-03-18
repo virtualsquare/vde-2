@@ -73,7 +73,7 @@ unsigned int qtimer_add(time_t period,int times,void (*call)(),void *arg)
 		n=activeqt++;
 		if (qtf == NULL) {
 			qtf=malloc(sizeof(struct qt_timer));
-			if (qth == NULL) {
+			if (qtf == NULL) {
 				return -1;
 			}
 			/*all the fields but qt_arg get initialized */

@@ -384,8 +384,13 @@ int main(int argc, char **argv)
 	}
 
 	for(;;) {
-		poll(pollv,3,-1);
-		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
+		int hup_revents;
+
+		poll(pollv,npollv,-1);
+		hup_revents = pollv[0].revents | pollv[1].revents;
+		if (npollv > 2)
+			hup_revents |= pollv[2].revents;
+		if ((hup_revents & POLLHUP) ||
 				(npollv > 2 && pollv[2].revents & POLLIN)) 
 			break;
 		if (pollv[0].revents & POLLIN) {

@@ -396,6 +396,7 @@ int vder_iface_address_del(struct vder_iface *iface, uint32_t addr)
 	uint32_t netmask = 0U;
 	pthread_mutex_lock(&Router.global_config_lock);
 	while(cur) {
+		struct vder_ip4address *next = cur->next;
 		if (cur->address == addr) {
 			if (prev) {
 				prev->next = cur->next;
@@ -404,9 +405,10 @@ int vder_iface_address_del(struct vder_iface *iface, uint32_t addr)
 			}
 			netmask = cur->netmask;
 			free(cur);
+			break;
 		}
 		prev = cur;
-		cur = cur->next;
+		cur = next;
 	}
 	pthread_mutex_unlock(&Router.global_config_lock);
 

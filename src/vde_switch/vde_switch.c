@@ -126,7 +126,7 @@ unsigned char add_type(struct swmodule *mgr,int prio)
 			printlog(LOG_ERR,"realloc fdtypes %s",strerror(errno));
 			exit(1);
 		}
-		memset(fdtypes+ntypes,0,sizeof(struct swmodule *) * maxtypes-ntypes);
+		memset(fdtypes+ntypes,0,sizeof(struct swmodule *) * (maxtypes-ntypes));
 		i=ntypes;
 	} else
 		for(i=0; fdtypes[i] != NULL; i++)

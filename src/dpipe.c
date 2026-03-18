@@ -57,7 +57,7 @@ static void alternate_fd()
 {
 	char numstr[10];
 	alternate_stdin=open("/dev/null",O_RDONLY);
-	alternate_stdout=open("/dev/null",O_RDONLY);
+	alternate_stdout=open("/dev/null",O_WRONLY);
 	close(alternate_stdin);
 	close(alternate_stdout);
 	snprintf(numstr,10,"%d",alternate_stdin);

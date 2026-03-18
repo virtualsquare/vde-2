@@ -140,6 +140,7 @@ void vxlan_process() {
 	switch (dest_addr) {
 		case 0:
 			printlog(LOG_DEBUG, "Not found");
+			break;
 		case 1:
 			plug_send(&pkt.pkt,len-offsetof(struct vxlan_pkt,pkt));
 			printlog(LOG_DEBUG, "Send to VDE");
