@@ -3,6 +3,7 @@
 #include "vder_udp.h"
 #include <stdio.h>
 #include <unistd.h>
+#include <limits.h>
 
 /* UDP header, rfc 768 */
 
@@ -18,21 +19,16 @@ int vder_udp_recv(struct vde_buff *buf)
 {
 	struct vder_udp_socket *cur = socket_list;
 	int found = 0;
-	struct vde_buff *copy = NULL;
 	uint16_t port = transport_dport(buf);
 
 	while(cur) {
 		if (cur->port == port) {
-			if (!found) {
-				enqueue(&cur->inq, buf);
-				found = 1;
-			} else {
-				copy = malloc(sizeof(struct vde_buff) + buf->len);
-				if (!copy)
-					break;
-				memcpy(copy, buf, sizeof(struct vde_buff) + buf->len);
-				enqueue(&cur->inq, copy);
-			}
+			struct vde_buff *copy = malloc(sizeof(struct vde_buff) + buf->len);
+			if (!copy)
+				break;
+			memcpy(copy, buf, sizeof(struct vde_buff) + buf->len);
+			enqueue(&cur->inq, copy);
+			found = 1;
 		}
 		cur = cur->next;
 	}
@@ -95,7 +91,15 @@ int vder_udpsocket_sendto(struct vder_udp_socket *sock, void *data, size_t len, 
 		errno = EINVAL;
 		return -1;
 	}
+	if (payload_len > INT_MAX) {
+		errno = EMSGSIZE;
+		return -1;
+	}
 	udp_len = payload_len + sizeof(struct udphdr);
+	if (udp_len > UINT16_MAX) {
+		errno = EMSGSIZE;
+		return -1;
+	}
 
 	ro = vder_get_route(dst);
 	if (!ro) {
@@ -129,13 +133,23 @@ int vder_udpsocket_sendto_broadcast(struct vder_udp_socket *sock, void *data, si
 	struct udphdr *uh;
 	uint8_t *datagram;
 	int bufsize;
+	size_t payload_len = len;
+	size_t udp_len;
 	if (len <= 0) {
 		errno = EINVAL;
 		return -1;
 	}
-	len += sizeof(struct udphdr);
+	if (payload_len > INT_MAX) {
+		errno = EMSGSIZE;
+		return -1;
+	}
+	udp_len = payload_len + sizeof(struct udphdr);
+	if (udp_len > UINT16_MAX) {
+		errno = EMSGSIZE;
+		return -1;
+	}
 
-	bufsize = sizeof(struct vde_buff) + sizeof(struct vde_ethernet_header) + sizeof(struct iphdr) + sizeof(struct udphdr) + len;
+	bufsize = sizeof(struct vde_buff) + sizeof(struct vde_ethernet_header) + sizeof(struct iphdr) + udp_len;
 	b = malloc(bufsize);
 	if (!b)
 		return -1;
@@ -144,14 +158,14 @@ int vder_udpsocket_sendto_broadcast(struct vder_udp_socket *sock, void *data, si
 	b->priority = PRIO_BESTEFFORT;
 	uh = (struct udphdr *) payload(b);
 	datagram = (uint8_t *)((payload(b) + sizeof(struct udphdr)));
-	memcpy(datagram, data, len);
+	memcpy(datagram, data, payload_len);
 
 	uh->sport = sock->port;
 	uh->dport = dstport;
-	uh->len = htons(len);
+	uh->len = htons(udp_len);
 	uh->crc = 0;
 	vder_packet_broadcast(b, iface, dst, PROTO_UDP);
-	return len;
+	return payload_len;
 }
 
 
@@ -186,5 +200,6 @@ int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len
 		len = ntohs(uh->len) - sizeof (struct udphdr);
 	memcpy(data, datagram, len);
 	*fromport = uh->sport;
+	free(b);
 	return len;
 }
