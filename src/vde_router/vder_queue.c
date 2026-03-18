@@ -140,7 +140,7 @@ int qred_may_enqueue(struct vder_queue *q, struct vde_buff *b)
 		return 1;
 	} else if (q->policy_opt.red.max > q->size) {
 		red_probability = q->policy_opt.red.P *
-				((double)q->size - (double)q->policy_opt.red.min /
+				(((double)q->size - (double)q->policy_opt.red.min) /
 				((double)q->policy_opt.red.max - (double)q->policy_opt.red.min));
 	} else if (q->policy_opt.red.limit > q->size) {
 		red_probability = q->policy_opt.red.P;
@@ -199,4 +199,3 @@ void qtoken_setup(struct vder_queue *q, uint32_t bitrate, uint32_t limit)
 	q->may_enqueue = qtoken_may_enqueue;
 	pthread_mutex_unlock(&q->lock);
 }
-
