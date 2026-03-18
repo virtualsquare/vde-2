@@ -410,13 +410,15 @@ void insert_job(void (*f)(struct autolink *al), struct autolink *al, int gap)
 
 	/* remove other jobs for same alink, if any */
 	while(j){
+		struct job *next = j->n;
 		if (al == j->al) {
 			if (jq == j) jq=j->n;
 			else pj->n=j->n;
 			free(j);
 		}
-		pj = j;
-		j = j->n;
+		else
+			pj = j;
+		j = next;
 	}
 	
 	/* insert job, ordered by time */
@@ -1475,4 +1477,3 @@ int main(int argc,char **argv)
 		 
 	}
 }
-
