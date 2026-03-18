@@ -13,8 +13,8 @@ if(ENABLE_EXPERIMENTAL)
   add_definitions(-DDEBUGOPT -DPORTCOUNTERS -DVDEPLUGIN)
 endif()
 
-# Handle ENABLE_PCAP flag
-if(ENABLE_PCAP)
+# Handle pcap support
+if(CAN_MAKE_VDE_PCAP)
   add_library(pdump MODULE pdump.c)
   target_link_libraries(pdump vdecommon pcap)
 else()
@@ -22,5 +22,10 @@ else()
 endif()
 
 # install modules
-install(TARGETS dump iplog pdump DESTINATION
+install(TARGETS dump iplog DESTINATION
 		${CMAKE_INSTALL_LIBDIR}/vde2/plugins)
+
+if(CAN_MAKE_VDE_PCAP)
+  install(TARGETS pdump DESTINATION
+		  ${CMAKE_INSTALL_LIBDIR}/vde2/plugins)
+endif()
