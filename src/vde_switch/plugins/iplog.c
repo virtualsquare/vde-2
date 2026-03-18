@@ -160,8 +160,8 @@ static void ip_find_in_hash_update(int len, unsigned char *addr, unsigned char *
 	struct ip_hash_entry *e;
 	int k = ip_hash(len, addr);
 	time_t now;
-	for(e = iph[k]; e && memcmp(e->ipaddr, addr, len) && e->len == len && 
-			e->vlan == vlan; e = e->next)
+	for(e = iph[k]; e && (e->len != len || e->vlan != vlan ||
+			memcmp(e->ipaddr, addr, len) != 0); e = e->next)
 		;
 	if(e == NULL) {
 		e = (struct ip_hash_entry *) malloc(sizeof(*e)+(len-4));
