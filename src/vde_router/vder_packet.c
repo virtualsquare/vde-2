@@ -197,7 +197,7 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 
 			if (vder_ip_input(packet)) {
 				/* If the packet is for us, process it here. */
-				//free(packet);
+				free(packet);
 				return;
 			} else {
 				struct iphdr *hdr = iphead(packet);

@@ -69,21 +69,27 @@ int vder_icmp_filter(uint32_t dst, uint8_t *foot)
 int vder_icmp_recv(struct vde_buff *vdb)
 {
 	struct icmp *ich;
-	struct iphdr *iph;
-	uint32_t tmp_ipaddr;
-	struct vde_buff *vdb_copy = malloc(vdb->len + sizeof(struct vde_buff));
 	ich = (struct icmp *) payload(vdb);
-	iph = iphead(vdb);
 	if (ich->icmp_type == ICMP_ECHO){
-		tmp_ipaddr = iph->saddr;
-		iph->saddr = iph->daddr;
-		iph->daddr = tmp_ipaddr;
-		ich->icmp_type = ICMP_ECHOREPLY;
-		ich->icmp_cksum = 0;
-		ich->icmp_cksum = htons(net_checksum(payload(vdb), vdb->len - sizeof(struct iphdr) - 14));
-		iph->check = htons(vder_ip_checksum(iph));
+		struct vde_buff *vdb_copy = malloc(vdb->len + sizeof(struct vde_buff));
+		struct icmp *ich_copy;
+		struct iphdr *iph_copy;
+		uint32_t tmp_ipaddr;
+
+		if (!vdb_copy)
+			return -1;
+		memcpy(vdb_copy, vdb, sizeof(struct vde_buff) + vdb->len);
+
+		ich_copy = (struct icmp *) payload(vdb_copy);
+		iph_copy = iphead(vdb_copy);
+		tmp_ipaddr = iph_copy->saddr;
+		iph_copy->saddr = iph_copy->daddr;
+		iph_copy->daddr = tmp_ipaddr;
+		ich_copy->icmp_type = ICMP_ECHOREPLY;
+		ich_copy->icmp_cksum = 0;
+		ich_copy->icmp_cksum = htons(net_checksum(payload(vdb_copy), vdb_copy->len - sizeof(struct iphdr) - 14));
+		iph_copy->check = htons(vder_ip_checksum(iph_copy));
+		vder_packet_send(vdb_copy, iph_copy->daddr, PROTO_ICMP);
 	}
-	memcpy(vdb_copy, vdb, sizeof(struct vde_buff) + vdb->len);
-	vder_packet_send(vdb_copy, iph->daddr, PROTO_ICMP);
 	return 0;
 }
