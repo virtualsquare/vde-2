@@ -384,7 +384,7 @@ int main(int argc, char **argv)
 	}
 
 	for(;;) {
-		poll(pollv,3,-1);
+		poll(pollv,npollv,-1);
 		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
 				(npollv > 2 && pollv[2].revents & POLLIN)) 
 			break;
