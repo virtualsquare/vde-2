@@ -1522,6 +1522,7 @@ int main(int argc,char *argv[])
 						usage();
 					}
 				}
+				break;
 			case MGMTMODEARG:
 				sscanf(optarg,"%o",&mgmtmode);
 				break;
