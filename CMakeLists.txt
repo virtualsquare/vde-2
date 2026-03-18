@@ -34,14 +34,10 @@ else()
     message(FATAL_ERROR "Unsupported OS: ${CMAKE_SYSTEM_NAME}")
 endif()
 
-if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-	SET(DEFAULT_VDEPUG4 ON)
-else()
-	set(DEFAULT_VDEPUG4 OFF)
-endif()
+set(DEFAULT_VDEPLUG4 OFF)
 
 # Options
-option(WITH_VDEPLUG4 "Use VDEPLUG4" ${DEFAULT_VDEPUG4})
+option(WITH_VDEPLUG4 "Use the external vdeplug4 compatibility library instead of the bundled libvdeplug" ${DEFAULT_VDEPLUG4})
 option(ENABLE_VXLAN "Enable VDE VXLAN" ON)
 option(ENABLE_CRYPTCAB "Enable VDE CryptCab" ON)
 option(ENABLE_VDE_OVER_NS "Enable VDE over NS" ON)

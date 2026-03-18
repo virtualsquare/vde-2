@@ -195,4 +195,8 @@ Thanks to Giuseppe Della Bianca <bepi@adria.it> for many bug reports, and
 patch proposals.
 Thanks to Daniel P. Barrange <berrange at redhat dot com> for several patches
 and the management of group ownership.
-Code organization, bugfixes, autotool support Mattia Belletti.
+Build system note:
+- CMake is the only supported build system.
+- Debian packaging metadata lives under `debian/` and is intended to build with `dpkg-buildpackage`/Salsa CI.
+
+Code organization and bugfixes Mattia Belletti.

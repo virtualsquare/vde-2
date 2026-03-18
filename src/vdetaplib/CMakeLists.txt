@@ -5,7 +5,7 @@ endif()
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
-add_definitions(-DLIBEXECDIR=\"${CMAKE_INSTALL_FULL_LIBEXECDIR}\")
+add_definitions(-DLIBEXECDIR=\"${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBEXECDIR}\")
 
 # Define the library
 add_library(libvdetap STATIC libvdetap.c)
@@ -22,4 +22,4 @@ target_link_libraries(vdetap vdecommon vdeplug)
 
 # Install the library
 install(TARGETS libvdetap ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/packages)
-install(TARGETS vdetap RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_LIBEXECDIR})
+install(TARGETS vdetap RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})

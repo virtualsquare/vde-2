@@ -16,18 +16,32 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends -q cmake libvdeplug-dev libpcap-dev
+          sudo apt-get install -y --no-install-recommends -q cmake libpcap-dev libwolfssl-dev
       - name: "Check out"
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
       - name: "Build"
         run: |
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_INSTALL_PREFIX=/opt/vde
-          make
-          sudo make install
+          cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/opt/vde -DWITH_VDEPLUG4=OFF
+          cmake --build build
+          sudo cmake --install build
       - name: "Smoke test"
         run: |
           /opt/vde/bin/vde_switch --version
+
+  debian-package:
+    name: "Debian package build"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Install dependencies"
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends -q build-essential cmake debhelper dpkg-dev libpcap-dev libwolfssl-dev pkgconf
+      - name: "Check out"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: "Build Debian packages"
+        run: |
+          dpkg-buildpackage -us -uc -b

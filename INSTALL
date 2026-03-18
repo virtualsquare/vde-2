@@ -1,10 +1,10 @@
 To build and install the project, run:
 
 ```bash
- $ mkdir build
- $ cd build
- $ cmake ..
- $ make
- $ sudo make install
+cmake -S . -B build
+cmake --build build
+sudo cmake --install build
 ```
 
+For a standalone build that does not depend on an already-installed `vdeplug4`
+library, configure with `-DWITH_VDEPLUG4=OFF`.
