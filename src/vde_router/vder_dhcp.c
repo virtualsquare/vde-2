@@ -37,7 +37,7 @@ static uint8_t dhcp_get_next_option(uint8_t *begin, uint8_t *data, int *len, uin
 	*nextopt = ++p;
 	if ((type == DHCPOPT_END) || (type == DHCPOPT_PAD)) {
 		memset(data, 0, *len);
-		len = 0;
+		*len = 0;
 		return type;
 	}
 	opt_len = *p;
