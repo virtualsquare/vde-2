@@ -209,8 +209,12 @@ static int markov_step(int i) {
 static int markovms(void) {
 	if (markov_numnodes > 1) {
 		struct timeval v;
+		long long now;
+		long long next;
+
 		gettimeofday(&v,NULL);
-		unsigned long long next=markov_next-(v.tv_sec*1000+v.tv_usec/1000);
+		now = v.tv_sec * 1000LL + v.tv_usec / 1000;
+		next = markov_next - now;
 		if (next < 0) next=0;
 		return next;
 	} else
