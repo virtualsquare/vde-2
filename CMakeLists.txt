@@ -197,6 +197,7 @@ else()
     set(CAN_MAKE_VDE_PCAP FALSE)
     if(ENABLE_PCAP)
         message(WARNING "Cannot make vde_pcapplug: libpcap headers or library not found")
+        set(ENABLE_PCAP OFF)
     endif()
 endif()
 
