@@ -136,28 +136,14 @@ int vder_parse_arp(struct vder_iface *vif, struct vde_buff *vdb)
 struct vder_arp_entry *vder_arp_get_record_by_macaddr(struct vder_iface *vif, uint8_t *mac)
 {
 	struct rb_node *node;
-	struct vder_arp_entry *found=NULL;
-	node = vif->arp_table.rb_node;
-	while(node) {
+
+	for (node = rb_first(&vif->arp_table); node; node = rb_next(node)) {
 		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
-		if (memcmp(entry->macaddr, mac, ETHERNET_ADDRESS_SIZE) == 0) {
-			found = entry;
-			break;
-		}
-		node = node->rb_left;
+		if (memcmp(entry->macaddr, mac, ETHERNET_ADDRESS_SIZE) == 0)
+			return entry;
 	}
-	if (found)
-		return found;
-	node = vif->arp_table.rb_node;
-	while(node) {
-		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
-		if (memcmp(entry->macaddr, mac, ETHERNET_ADDRESS_SIZE) == 0) {
-			found = entry;
-			break;
-		}
-		node = node->rb_right;
-	}
-	return found;
+
+	return NULL;
 }
 
 int vder_arp_get_neighbors(struct vder_iface *vif, uint32_t *neighbors, int vector_size)
@@ -167,24 +153,12 @@ int vder_arp_get_neighbors(struct vder_iface *vif, uint32_t *neighbors, int vect
 	if (vector_size <= 0)
 		return -EINVAL;
 
-	node = vif->arp_table.rb_node;
-	while(node) {
+	for (node = rb_first(&vif->arp_table); node; node = rb_next(node)) {
 		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
 		neighbors[i++] = entry->ipaddr;
 		if (i == vector_size)
 			return i;
-		node = node->rb_left;
 	}
-	node = vif->arp_table.rb_node;
-	if (!node)
-		return i;
-	node = node->rb_right;
-	while(node) {
-		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
-		neighbors[i++] = entry->ipaddr;
-		if (i == vector_size)
-			return i;
-		node = node->rb_right;
-	}
+
 	return i;
 }
