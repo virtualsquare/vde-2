@@ -1,8 +1,9 @@
 name: "CI"
 on:
   push:
+    branches:
+      - master
   pull_request:
-  workflow_dispatch:
 jobs:
   smoke:
     name: "Smoke test"
@@ -10,17 +11,16 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
     steps:
-      - name: "Check out"
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
       - name: "Install dependencies (Linux)"
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake libvdeplug-dev
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends -q cmake libvdeplug-dev libpcap-dev
+      - name: "Check out"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: "Build"
         run: |
           mkdir build

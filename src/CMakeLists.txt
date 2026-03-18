@@ -23,7 +23,7 @@ endif()
 
 if (CAN_MAKE_VDE_PCAP)
     add_executable(vde_pcapplug vde_pcapplug.c)
-    target_link_libraries(vde_pcapplug vdeplug pcap)
+    target_link_libraries(vde_pcapplug vdeplug pcap vdecommon)
 endif()
 
 if(ENABLE_VXLAN)
@@ -52,13 +52,15 @@ target_link_libraries(wirefilter vdeplug m vdecommon)
 add_executable(vdeterm vdeterm.c)
 target_link_libraries(vdeterm vdeplug vdehist vdecommon)
 
-add_executable(vde_pcapplug vde_pcapplug.c)
-target_link_libraries(vde_pcapplug vdeplug pcap vdecommon)
-
 if (NOT WITH_VDEPLUG4)
 	install(TARGETS vde_plug dpipe
         DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
-install(TARGETS unixcmd vde_plug2tap vde_autolink wirefilter vdeterm vde_pcapplug
+install(TARGETS unixcmd vde_plug2tap vde_autolink wirefilter vdeterm
         DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+if (CAN_MAKE_VDE_PCAP)
+    install(TARGETS vde_pcapplug
+            DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
