@@ -13,6 +13,7 @@
 #include <string.h>
 #include <signal.h>
 #include <syslog.h>
+#include <limits.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -406,7 +407,11 @@ static int parse_globopt(int c, char *optarg)
 			}
 			break;
 		case 'n':
-			sscanf(optarg,"%i",&numports);
+			if (sscanf(optarg,"%i",&numports) != 1 ||
+					numports < 1 || numports > INT_MAX - 1) {
+				printlog(LOG_ERR,"Invalid number of ports %s",optarg);
+				Usage();
+			}
 			break;
 		case 'v':
 			version();
@@ -601,9 +606,9 @@ int main(int argc, char **argv)
 	atexit(cleanup);
 	hash_init(hash_size);
 #ifdef FSTP
-	fst_init(numports);
+	fst_init(numports + 1);
 #endif
-	port_init(numports);
+	port_init(numports + 1);
 	init_mods();
 	loadrcfile();
 	qtimer_init();
