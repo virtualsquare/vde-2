@@ -601,9 +601,9 @@ int main(int argc, char **argv)
 	atexit(cleanup);
 	hash_init(hash_size);
 #ifdef FSTP
-	fst_init(numports);
+	fst_init(numports + 1);
 #endif
-	port_init(numports);
+	port_init(numports + 1);
 	init_mods();
 	loadrcfile();
 	qtimer_init();

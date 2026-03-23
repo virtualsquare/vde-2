@@ -41,6 +41,11 @@ static int stdqlen=128;
 
 static struct port **portv;
 
+static int external_numports(void)
+{
+	return (numports > 0) ? numports - 1 : 0;
+}
+
 #ifdef DEBUGOPT
 #define DBGPORTNEW (dl) 
 #define DBGPORTDEL (dl+1) 
@@ -730,7 +735,7 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 
 static int showinfo(FILE *fd)
 {
-	printoutc(fd,"Numports=%d",numports);
+	printoutc(fd,"Numports=%d",external_numports());
 	printoutc(fd,"HUB=%s",(pflag & HUB_TAG)?"true":"false");
 #ifdef PORTCOUNTERS
 	printoutc(fd,"counters=true");
@@ -748,50 +753,51 @@ static int portsetnumports(int val)
 	if(val > 0) {
 		/*resize structs*/
 		int i;
-		for(i=val;i<numports;i++)
+		int internal_numports = val + 1;
+		for(i=internal_numports;i<numports;i++)
 			if(portv[i] != NULL)
 				return EADDRINUSE;
-		portv=realloc(portv,val*sizeof(struct port *));
+		portv=realloc(portv,internal_numports*sizeof(struct port *));
 		if (portv == NULL) {
 			printlog(LOG_ERR,"Numport resize failed portv %s",strerror(errno));
 			exit(1);
 		}
 		for (i=0;i<NUMOFVLAN;i++) { 
 			if (vlant[i].table) {
-				vlant[i].table=ba_realloc(vlant[i].table,numports,val);
+				vlant[i].table=ba_realloc(vlant[i].table,numports,internal_numports);
 				if (vlant[i].table == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan table %s",strerror(errno));
 					exit(1);
 				}
 			}
 			if (vlant[i].bctag) {
-				vlant[i].bctag=ba_realloc(vlant[i].bctag,numports,val);
+				vlant[i].bctag=ba_realloc(vlant[i].bctag,numports,internal_numports);
 				if (vlant[i].bctag == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan bctag %s",strerror(errno));
 					exit(1);
 				}
 			}
 			if (vlant[i].bcuntag) {
-				vlant[i].bcuntag=ba_realloc(vlant[i].bcuntag,numports,val);
+				vlant[i].bcuntag=ba_realloc(vlant[i].bcuntag,numports,internal_numports);
 				if (vlant[i].bcuntag == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan bctag %s",strerror(errno));
 					exit(1);
 				}
 			}
 			if (vlant[i].notlearning) {
-				vlant[i].notlearning=ba_realloc(vlant[i].notlearning,numports,val);
+				vlant[i].notlearning=ba_realloc(vlant[i].notlearning,numports,internal_numports);
 				if (vlant[i].notlearning == NULL) {
 					printlog(LOG_ERR,"Numport resize failed vlan tables vlan notlearning %s",strerror(errno));
 					exit(1);
 				}
 			}
 		}
-		for (i=numports;i<val;i++)
+		for (i=numports;i<internal_numports;i++)
 			portv[i]=NULL;
 #ifdef FSTP
-		fstsetnumports(val);
+		fstsetnumports(internal_numports);
 #endif
-		numports=val;
+		numports=internal_numports;
 		return 0;
 	} else 
 		return EINVAL;
