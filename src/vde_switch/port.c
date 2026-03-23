@@ -17,6 +17,8 @@
 #include <grp.h>
 #include <pwd.h>
 #include <ctype.h>
+#include <limits.h>
+#include <stdint.h>
 
 #include <config.h>
 #include <vde.h>
@@ -750,14 +752,20 @@ static int showinfo(FILE *fd)
 
 static int portsetnumports(int val)
 {
-	if(val > 0) {
+	if (val > 0 && val <= INT_MAX - 1) {
 		/*resize structs*/
 		int i;
 		int internal_numports = val + 1;
+		size_t internal_numports_sz = (size_t)internal_numports;
+
+		if (internal_numports_sz > SIZE_MAX / sizeof(struct port *)) {
+			printlog(LOG_ERR,"Numport resize overflow");
+			exit(1);
+		}
 		for(i=internal_numports;i<numports;i++)
 			if(portv[i] != NULL)
 				return EADDRINUSE;
-		portv=realloc(portv,internal_numports*sizeof(struct port *));
+		portv=realloc(portv,internal_numports_sz * sizeof(struct port *));
 		if (portv == NULL) {
 			printlog(LOG_ERR,"Numport resize failed portv %s",strerror(errno));
 			exit(1);
