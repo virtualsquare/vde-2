@@ -43,6 +43,7 @@
 
 
 #if USE_WOLFSSL
+#include <wolfssl/options.h>
 #include <wolfssl/wolfcrypt/chacha.h>
 #else
 #include <mbedtls/chacha20.h>

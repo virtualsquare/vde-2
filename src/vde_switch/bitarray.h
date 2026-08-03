@@ -158,10 +158,9 @@ static inline int ba_card(bitarray x,int n)
 static inline void ba_empty(bitarray x,int n)
 { 
 	unsigned int __i; 
-	bitarrayelem __v=0; 
 	int max=__WORDSIZEROUND(n); 
 	for (__i=0; __i< max; __i++) 
-		__v |= (x)[__i]; \
+		(x)[__i] = 0; \
 }
 
 static inline void ba_copy(bitarray dst, bitarray src, int n)

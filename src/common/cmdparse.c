@@ -151,6 +151,7 @@ struct utm *utm_alloc(char *conf)
 	FILE *f;
 	struct utm *utm=NULL;
 	int line=0;
+	(void) line;
 	char buf[BUFSIZE];
 	if ((f=fopen(conf,"r")) == NULL) {
 		//fprintf(stderr,"Configuration file error %s\n",conf);
