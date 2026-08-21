@@ -125,7 +125,8 @@ struct vdemgmt *vdemgmt_open(const char *path)
 	struct vdemgmt *conn = NULL;
 	struct utm_out *out;
 	int myargc=0;
-	char *myargv = NULL, *sep;
+	char *myargv = NULL;
+	const char *sep;
 
 	/* vdemgmt connection struct */
 	CHECK( conn = (struct vdemgmt*)malloc(sizeof(struct vdemgmt)) , NULL );
