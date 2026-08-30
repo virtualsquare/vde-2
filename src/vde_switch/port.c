@@ -605,12 +605,12 @@ void handle_in_packet(struct endpoint *ep,  struct packet *packet, int len)
 		if (pflag & HUB_TAG) { /* this is a HUB */
 			int i;
 #ifndef VDE_PQ2
-			for(i = 1; i < numports; i++)
+			for(i = 0; i < numports; i++)
 				if((i != port) && (portv[i] != NULL))
 					SEND_PACKET_PORT(portv[i],i,packet,len);
 #else
 			void *tmpbuf=NULL;
-			for(i = 1; i < numports; i++)
+			for(i = 0; i < numports; i++)
 				if((i != port) && (portv[i] != NULL))
 					SEND_PACKET_PORT(portv[i],i,packet,len,&tmpbuf);
 #endif
