@@ -172,6 +172,18 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 	vb = (struct vde_buff *) temp_buffer;
 	if (vder_recv(vif, vb, MAX_PACKET_SIZE - sizeof(struct vde_buff)) >= 0) {
 		struct vde_ethernet_header *eth = ethhead(vb);
+
+		/* 0. Drop frames that are too short for the header they claim.
+		 *
+		 * ethhead(), arphead() and iphead() are plain fixed-offset macros over
+		 * vb->data: they do not look at vb->len.  Passing a short frame on makes
+		 * vder_parse_arp() and vder_ip_input() read past the end of the receive
+		 * buffer.  A well-formed 34 byte IP frame with no payload trips this too,
+		 * because the footprint copy below wants 14 + sizeof(iphdr) + 8 bytes.
+		 */
+		if ((size_t)vb->len < sizeof(struct vde_ethernet_header))
+			return;
+
 		/* 1. Filter out packets that are not for us */
 		if (memcmp(eth->dst, vif->macaddr, 6) &&
 			memcmp(eth->dst, ETH_BCAST, 6) ) {
@@ -179,9 +191,13 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 		}
 
 		if (ntohs(eth->buftype) == PTYPE_ARP) {
+			if ((size_t)vb->len < sizeof(struct vde_ethernet_header) + sizeof(struct vde_arp_header))
+				return;
 			/* Parse ARP information */
 			vder_parse_arp(vif, vb);
 		} else if (ntohs(eth->buftype) == PTYPE_IP) {
+			if ((size_t)vb->len < sizeof(struct vde_ethernet_header) + sizeof(struct iphdr))
+				return;
 
 			if (vder_filter(vb)) {
 				return;
@@ -203,8 +219,16 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 				struct iphdr *hdr = iphead(packet);
 				uint32_t sender = hdr->saddr;
 				uint8_t foot[sizeof(struct iphdr) + 8];
+				size_t avail = (size_t)packet->len - sizeof(struct vde_ethernet_header);
+				size_t footlen = (avail < sizeof(foot)) ? avail : sizeof(foot);
 
-				memcpy(foot, footprint(packet), sizeof(struct iphdr) + 8);
+				/* The leading bytes of the offending datagram, to be quoted back
+				 * in an ICMP error.  The length check above guarantees the IP
+				 * header, but not the 8 bytes that should follow it: a packet
+				 * with no payload has none.  Copy what is there, zero the rest.
+				 */
+				memset(foot, 0, sizeof(foot));
+				memcpy(foot, footprint(packet), footlen);
 				if (vder_ip_decrease_ttl(packet)) {
 					vder_icmp_ttl_expired(sender, foot);
 					return;
