@@ -1,0 +1,190 @@
+Routing between VDE networks with vde_router
+============================================
+
+vde_router(1) is the reference manual: it says what every option and every
+management command does. This is the other half - how to get a working router,
+what the pieces are for, and what to check when it does not work.
+
+Everything here runs as an ordinary user. No tap device, no network namespace,
+no root.
+
+
+1. What vde_router is for
+-------------------------
+
+A VDE switch carries ethernet frames between whatever is plugged into it. Two
+switches are two separate networks, and nothing crosses between them.
+
+vde_router is what goes in the middle. It connects to two or more switches,
+holds an address on each, and forwards IP between them - along with the ARP,
+ICMP, DHCP and filtering that make that usable.
+
+What makes it unusual is where its interfaces come from. They are not kernel
+network devices: each one is a connection to a VDE switch, opened with the
+"connect" command, and the router keeps its own ARP table, routing table and
+queues for it. The kernel is not involved and no privilege is required.
+
+You do not need it to give several machines a shared network - one switch does
+that. You need it when you want more than one network and traffic between them,
+or a single place to apply filtering, priorities or DHCP.
+
+
+2. A first router
+-----------------
+
+Two switches with a router between them:
+
+	vde_switch -s /tmp/sw0 -d
+	vde_switch -s /tmp/sw1 -d
+
+	cat > router.conf <<EOF
+	connect /tmp/sw0
+	connect /tmp/sw1
+	ifconfig eth0 add 10.0.0.254 255.255.255.0
+	ifconfig eth1 add 10.0.1.254 255.255.255.0
+	EOF
+
+	vde_router -c router.conf -M /tmp/router.mgmt -d
+
+Interfaces are named in the order they are connected, so /tmp/sw0 became eth0.
+Giving an address to an interface also installs the route for its network, so
+the router can already forward between the two.
+
+Check it:
+
+	$ echo ifconfig | socat - UNIX-CONNECT:/tmp/router.mgmt
+	$ echo route    | socat - UNIX-CONNECT:/tmp/router.mgmt
+
+vdeterm(1) gives an interactive session on the same socket. Send one command
+per connection: the router reads a command in a single operation, so a client
+that writes two at once loses the second.
+
+
+3. Putting hosts on the networks
+--------------------------------
+
+Anything that speaks to a VDE switch will do. Some ways:
+
+  vdens(1) - a namespace with a real kernel stack on the switch:
+
+	vdens vde:///tmp/sw0
+	# inside:
+	ip addr add 10.0.0.1/24 dev vde0
+	ip link set vde0 up
+	ip route add default via 10.0.0.254
+
+  qemu with a vde netdev, if your build has one:
+
+	qemu-system-x86_64 -netdev vde,id=n0,sock=/tmp/sw0 -device virtio-net,netdev=n0 ...
+
+  another vde_plug, a wirefilter, a second switch - anything that speaks the
+  protocol.
+
+Give the router the DHCP server if you would rather not configure each host:
+
+	dhcpd start eth0 10.0.0.20 10.0.0.40
+
+The offer carries the router's address on that interface as the gateway,
+together with the netmask and broadcast address derived from it.
+
+
+4. Reaching the outside
+-----------------------
+
+vde_router does not do address translation, and it has no way of its own to
+reach a network outside VDE. Its uplink has to be an interface like any other,
+connected to something that does provide the translation.
+
+The simplest is the slirp plugin, which is a userspace NAT. If vde_router was
+built against libvdeplug4 - the default on Linux - "connect" takes a vdeplug
+URL, so the uplink can live in the router process itself:
+
+	connect /tmp/sw0
+	connect slirp:///addr=10.0.2.1/dhcp=10.0.2.20
+	ifconfig eth0 add 10.0.0.254 255.255.255.0
+	ifconfig eth1 add 10.0.2.15 255.255.255.0
+	route add default 10.0.2.1
+	dhcpd start eth0 10.0.0.20 10.0.0.40
+
+That is a complete gateway: hosts on /tmp/sw0 get an address from the router
+and reach the internet through it, and no part of it needs privilege.
+
+Note that the slirp network stays inside the router. Its own DHCP server
+cannot be switched off, so keeping it on a link of its own - rather than on the
+switch your hosts are attached to - is what stops it competing with the DHCP
+server you actually want. If you would rather run slirp as a separate process,
+give it a second switch instead:
+
+	vde_plug vde:///tmp/sw1 slirp:///addr=10.0.2.1/dhcp=10.0.2.20
+
+To let the outside reach in, the slirp plugin forwards ports:
+
+	connect slirp:///addr=10.0.2.1/tcpfwd=8080:10.0.0.5:80
+
+Anything else that bridges VDE to a real network works as an uplink too - a
+switch with a tap device, for instance - but those need privilege, which is
+usually the reason to prefer slirp.
+
+
+5. Filtering and priorities
+---------------------------
+
+Rules are evaluated in the reverse of the order they were added, so the general
+rule goes in first and the exception after it:
+
+	ipfilter add src eth0 drop
+	ipfilter add src eth0 from 10.0.0.3 255.255.255.255 accept
+
+Besides accept, drop and reject, a rule can carry "prio", which does not decide
+the fate of the packet but the queue it goes into. Each interface has an
+"output" queue and thirty-two priority queues, prio0 to prio31, and each can be
+given its own discipline:
+
+	ipfilter add src eth0 tos 2 prio 3
+	queue eth0:prio3 red min 80000 max 160000 probability 0.1 limit 300000
+	queue eth0:output token limit 40000 bitrate 1000000
+
+which is how bandwidth limits and IP-based QoS are expressed.
+
+
+6. When it does not work
+------------------------
+
+Ask the router first. Nearly everything is visible over the management socket:
+
+	ifconfig	are the addresses what you think they are
+	route		is there a route, and out of which interface
+	arp		has the next hop been resolved
+	stats		are frames arriving and leaving at all
+
+A few things are worth knowing before you go looking further.
+
+The first packet towards a destination whose MAC the router has not yet
+resolved is dropped, not held: an ARP query goes out and the sender's
+retransmission gets through. A single lost packet at the start of a
+conversation is normal.
+
+ARP entries do not expire. A host that changes its MAC address while keeping
+its IP - a virtual machine rebuilt with a fresh one, say - will not be reached
+until the router is restarted.
+
+The DHCP server advertises a fixed public resolver and does not send the
+NetBIOS name server option. A network that needs either wants a DHCP server of
+its own on the segment instead.
+
+If frames seem not to arrive at all, look at the switch rather than the router:
+
+	echo port/allprint | socat - UNIX-CONNECT:/tmp/sw0.mgmt
+
+and remember that a VDE socket path is a unix socket path, so it is subject to
+the usual length limit - a long path fails as a plain connection refusal.
+
+
+See also
+--------
+
+vde_router(1), vde_switch(1), vde_plug(1), vdeterm(1), libvdeplug(3)
+
+vdeplug4 plugins, including slirp:
+	https://github.com/rd235/vdeplug4
+	https://github.com/virtualsquare/vdeplug_slirp
