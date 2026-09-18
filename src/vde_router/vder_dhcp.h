@@ -19,6 +19,7 @@ struct vder_dhcpd_settings
 	uint32_t pool_next;
 	uint32_t pool_end;
 	unsigned long lease_time;
+	uint32_t dns_server;
 	uint8_t flags;
 };
 

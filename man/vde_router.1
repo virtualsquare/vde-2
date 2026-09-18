@@ -205,16 +205,23 @@ Show the addresses the router has resolved, per interface.
 .B stats
 Show per-interface frame counters.
 .TP
-.B dhcpd start \fIdevname pool_start pool_end\fR
+.B dhcpd start \fIdevname pool_start pool_end\fR [\fIdns_server\fR]
 .B dhcpd stop \fIdevname\fR
 .br
 Serve DHCP on \fIdevname\fR from the given range. The offer carries the
 router's address on that interface as the gateway, the netmask and broadcast
 address derived from it, and a twelve hour lease.
+.IP
+The offer also carries a DNS server. Give \fIdns_server\fR to say which one;
+without it the offer names 208.67.222.222, which is only reachable if the
+router has a working uplink to the internet. A resolver of your own, reachable
+through the router, is usually what you want: it is the only way the hosts
+being served can look up names that exist on their own network.
 .RS
 .PP
 .nf
 dhcpd start eth0 10.0.0.101 10.0.0.120
+dhcpd start eth0 10.0.0.101 10.0.0.120 10.0.0.1
 .fi
 .RE
 .TP
@@ -337,9 +344,8 @@ A packet whose next hop is not yet in the ARP table is dropped rather than held
 while the query is answered, so the first packet towards a destination that has
 gone quiet is normally lost.
 .PP
-The DHCP server advertises a fixed public resolver and does not send the
-NetBIOS name server option, so a network that needs either of those wants a
-separate DHCP server rather than this one.
+The DHCP server does not send the NetBIOS name server option, so a network that
+needs it wants a separate DHCP server rather than this one.
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"

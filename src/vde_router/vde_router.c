@@ -110,7 +110,7 @@ static int help(int fd,char *s)
 		return 0;
 	} else if (match_input("dhcpd",arg)) {
 		printoutc(fd, "Syntax:");
-		printoutc(fd, "\tdhcpd start <devname> <dhcp_pool_start> <dhcp_pool_end>");
+		printoutc(fd, "\tdhcpd start <devname> <dhcp_pool_start> <dhcp_pool_end> [dns_server]");
 		printoutc(fd, "--or--");
 		printoutc(fd, "\tdhcpd stop <devname>");
 		printoutc(fd, "Start/stop DHCP server on a specific interface. Devices/machines connected to the router");
@@ -118,6 +118,7 @@ static int help(int fd,char *s)
 		printoutc(fd, "");
 		printoutc(fd, "Examples:");
 		printoutc(fd, "dhcpd start eth0 10.0.0.101 10.0.0.120");
+		printoutc(fd, "dhcpd start eth0 10.0.0.101 10.0.0.120 10.0.0.1");
 		printoutc(fd, "dhcpd stop eth0");
 		return 0;
 	} else if (match_input("olsr",arg)) {
@@ -1056,7 +1057,7 @@ static int dhcpd(int fd,char *s)
 	char *nextargs = NULL, *arg;
 	struct vder_dhcpd_settings *dhcpd_settings;
 	struct vder_iface *selected = NULL;
-	struct in_addr temp_pool_start, temp_pool_end;
+	struct in_addr temp_pool_start, temp_pool_end, temp_dns;
 	enum command_action_enum action = -1;
 
 	arg = strtok_r(s, " ", &nextargs);
@@ -1109,6 +1110,15 @@ static int dhcpd(int fd,char *s)
 			return EINVAL;
 		}
 
+		temp_dns.s_addr = 0;
+		arg = strtok_r(NULL, " ", &nextargs);
+		if (arg) {
+			if (!inet_aton(arg, &temp_dns) || !is_unicast(temp_dns.s_addr)) {
+				printoutc(fd, "Invalid dns server address \"%s\"", arg);
+				return EINVAL;
+			}
+		}
+
 		dhcpd_settings = malloc(sizeof(struct vder_dhcpd_settings));
 		if (!dhcpd_settings)
 			return ENOMEM;
@@ -1119,6 +1129,7 @@ static int dhcpd(int fd,char *s)
 		dhcpd_settings->pool_start = temp_pool_start.s_addr;
 		dhcpd_settings->pool_end = temp_pool_end.s_addr;
 		dhcpd_settings->lease_time = DEFAULT_LEASE_TIME;
+		dhcpd_settings->dns_server = temp_dns.s_addr;
 		dhcpd_settings->flags = 0;
 		selected->dhcpd_started = 1;
 		pthread_create(&selected->dhcpd, 0, dhcp_server_loop, dhcpd_settings);
