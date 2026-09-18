@@ -1405,7 +1405,7 @@ int main(int argc, char *argv[])
 
 	while(1) {
 		int c;
-		c = getopt_long (argc, argv, "hM:c:dmp:", long_options, &option_index);
+		c = getopt_long (argc, argv, "hM:c:dm:p:", long_options, &option_index);
 		if (c<0)
 			break;
 		switch (c) {
