@@ -5,6 +5,7 @@ set(EXTRA_DIST
 	libvdemgmt/openmachine.rc
 	libvdemgmt/closemachine.rc
 	vde_autolink-HOWTO
+	vde_router-HOWTO
 	vdeqemu-HOWTO
 	vdecmd
 	freebsd_tap-HOWTO
