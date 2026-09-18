@@ -120,15 +120,33 @@ size_t vder_arp_reply(struct vder_iface *oif, struct vde_buff *vdb)
 /* Parse an incoming arp packet */
 int vder_parse_arp(struct vder_iface *vif, struct vde_buff *vdb)
 {
-	struct vde_arp_header *ah;
-	struct vder_arp_entry *ae=(struct vder_arp_entry*)malloc(sizeof(struct vder_arp_entry));
-	if (!ae)
-		return -1;
-	ah = arphead(vdb);
-	memcpy(ae->macaddr,ah->s_mac,6);
-	ae->ipaddr = ah->s_addr;
+	struct vde_arp_header *ah = arphead(vdb);
+	struct vder_arp_entry *ae;
 
-	vder_add_arp_entry(vif, ae);
+	/* An ARP probe (RFC 5227) carries a sender address of 0.0.0.0.  Learning it
+	 * leaves that MAC recorded as owning 0.0.0.0, and the DHCP server looks a
+	 * client up by MAC: it then finds an address outside its pool, bails out of
+	 * dhcp_recv() and never answers that client again.  Do not learn from those.
+	 */
+	if (ah->s_addr != 0) {
+		/* This used to malloc an entry for every ARP packet and hand it to
+		 * vder_add_arp_entry(), which updates the existing node when the address
+		 * is already known and does not free what it was given - one leaked
+		 * entry per ARP packet from an address we have already seen.  Update in
+		 * place instead, and allocate only for addresses that are new.
+		 */
+		ae = vder_get_arp_entry(vif, ah->s_addr);
+		if (ae) {
+			memcpy(ae->macaddr, ah->s_mac, 6);
+		} else {
+			ae = (struct vder_arp_entry *) malloc(sizeof(struct vder_arp_entry));
+			if (!ae)
+				return -1;
+			memcpy(ae->macaddr, ah->s_mac, 6);
+			ae->ipaddr = ah->s_addr;
+			vder_add_arp_entry(vif, ae);
+		}
+	}
 
 	if(ntohs(ah->opcode) == ARP_REQUEST)
 		vder_arp_reply(vif, vdb);
