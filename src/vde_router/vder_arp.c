@@ -110,8 +110,10 @@ size_t vder_arp_reply(struct vder_iface *oif, struct vde_buff *vdb)
 	ah->s_addr = ah->d_addr;
 	ah->d_addr = ipaddr_tmp;
 	vdb_copy = malloc(sizeof(struct vde_buff) + vdb->len);
+	if (!vdb_copy)
+		return 0;
 	memcpy(vdb_copy, vdb, (sizeof(struct vde_buff) + vdb->len));
-	vdb->priority = PRIO_ARP;
+	vdb_copy->priority = PRIO_ARP;
 	return vder_sendto(oif, vdb_copy, ah->d_mac);
 }
 

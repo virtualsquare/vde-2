@@ -441,6 +441,7 @@ int vder_recv(struct vder_iface *iface, struct vde_buff *vb, int len)
 {
 	vb->len = vde_recv(iface->vdec, vb->data, len, 0);
 	vb->src = iface;
+	vb->priority = PRIO_BESTEFFORT;
 	return vb->len;
 }
 
