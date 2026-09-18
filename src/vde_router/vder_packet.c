@@ -161,8 +161,10 @@ int vder_packet_forward(struct vde_buff *vdb, uint32_t dst_ip)
 	eth->buftype = htons(PTYPE_IP);
 
 	ro = vder_get_route(dst_ip);
-	if (!ro)
+	if (!ro) {
+		errno = EHOSTUNREACH;
 		return -1;
+	}
 	if (ro->gateway != 0)
 		destination = ro->gateway;
 
@@ -170,7 +172,12 @@ int vder_packet_forward(struct vde_buff *vdb, uint32_t dst_ip)
 
 	ae = vder_get_arp_entry(ro->iface, destination);
 	if (!ae) {
+		/* We do not know the next hop's MAC yet.  Ask, drop this one, and let
+		 * the caller tell the two failures apart: a cold cache is not the same
+		 * thing as no route.
+		 */
 		vder_arp_query(ro->iface, destination);
+		errno = EAGAIN;
 		return -1;
 	}
 	return vder_sendto(ro->iface, vdb, ae->macaddr);
@@ -280,7 +287,13 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 					return;
 				}
 				if (vder_packet_forward(packet, hdr->daddr) < 0) {
-					vder_icmp_host_unreachable(sender, foot);
+					/* Silent drop while ARP is still resolving: the query is
+					 * out and the sender's retransmission will get through.
+					 * Reporting "host unreachable" here would be a lie, raised
+					 * on the first packet to every new destination.
+					 */
+					if (errno != EAGAIN)
+						vder_icmp_host_unreachable(sender, foot);
 					free(packet);
 					return;
 				} else {
