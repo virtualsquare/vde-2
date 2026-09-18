@@ -271,12 +271,17 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 				 */
 				memset(foot, 0, sizeof(foot));
 				memcpy(foot, footprint(packet), footlen);
+				/* On success the queue takes ownership and the sender loop
+				 * frees the buffer.  On failure nobody does, so we must.
+				 */
 				if (vder_ip_decrease_ttl(packet)) {
 					vder_icmp_ttl_expired(sender, foot);
+					free(packet);
 					return;
 				}
 				if (vder_packet_forward(packet, hdr->daddr) < 0) {
 					vder_icmp_host_unreachable(sender, foot);
+					free(packet);
 					return;
 				} else {
 					/* success, packet is routed. */
