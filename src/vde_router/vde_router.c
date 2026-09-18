@@ -180,7 +180,7 @@ static int help(int fd,char *s)
 		printoutc(fd, "\tincrease linearly to reach <P> between <min> and <max>. Between <max> and <limit>");
 		printoutc(fd, "\tit will be <P>. Over the physical limit <limit>, all packets will be dropped (P=1).");
 		printoutc(fd, "");
-		printoutc(fd, "- 'token' (usage: tbf limit <limit> bitrate <bitrate>");
+		printoutc(fd, "- 'token' (usage: token limit <limit> bitrate <bitrate>)");
 		printoutc(fd, "\tThis is the \"Token Bucket\" queuing policy, allowing traffic to be dequeued at");
 		printoutc(fd, "\tthe specified <bitrate>. Enqueuing will be limited to <limit> bytes, so if the");
 		printoutc(fd, "\tqueue is full all the exceeding frames will be dropped.");

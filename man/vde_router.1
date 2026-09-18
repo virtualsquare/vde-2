@@ -1,55 +1,356 @@
-.TH VDE_ROUTER 1 "December 16, 2011" "Virtual Distributed Ethernet"
+.TH VDE_ROUTER 1 "September 2026" "Virtual Distributed Ethernet"
 .SH NAME
-vde_router \- Virtual Distributed Ethernet Router.
+vde_router \- IPv4 router for Virtual Distributed Ethernet
 .SH SYNOPSIS
 .B vde_router
-\fB\-c\fI configfile\fR
-[\fB\-d\fI]
+[\fB\-c\fI configfile\fR]
 [\fB\-M\fI mgmt_socket\fR]
 [\fB\-m\fI mgmt_mode\fR]
 [\fB\-p\fI pidfile\fR]
+[\fB\-d\fR]
 .br
 .SH DESCRIPTION
-A
-\fBvde_router\fP
-
-
-
+.B vde_router
+routes IPv4 between Virtual Distributed Ethernet networks.
+.PP
+Its interfaces are not kernel network devices. Each one is a connection to a
+VDE switch, created at run time with the
+.B connect
+command, and the router keeps its own ARP tables, routing table and packet
+queues for it. Nothing is asked of the kernel: no tap device, no network
+namespace and no privileges. A
+.B vde_router
+runs as an ordinary user and is visible to the rest of the system only as the
+process it is.
+.PP
+Interfaces are named
+.IR eth0 ,
+.IR eth1 ,
+\&... in the order they are connected, and each one carries three threads: one
+that receives, one that schedules the outgoing queues and one that transmits.
+.PP
+The router implements static routing, ARP, ICMP, a DHCP server, a DHCP client,
+stateless IP filtering, per-interface priority queueing with several scheduling
+disciplines, and OLSR.
+.PP
+It answers an ARP request when the address asked for is one of its own, or when
+that address is routed through a different interface than the one the request
+arrived on \- that is, it does proxy ARP for the networks it routes, which is
+what lets hosts on either side reach each other through it.
+.SS What it does not do
+There is no address translation of any kind, no DNS, no IPv6 and no reassembly
+of fragments. A
+.B vde_router
+on its own therefore cannot reach a network outside the VDE world. To give it
+one, connect an interface to something that provides the translation \- for
+instance
+.BR vde_plug (1)
+with the slirp module, or a VDE switch attached to a tap device \- and point
+the default route at it.
+.PP
+When built against libvdeplug4, which is the default on Linux, the argument to
+.B connect
+is a vdeplug URL rather than only a socket path, so that upstream leg can live
+in the router process itself:
+.PP
+.RS
+connect slirp:///addr=10.0.2.1/dhcp=10.0.2.20
+.RE
 .SH OPTIONS
 .TP
-.B -d
-Daemonize the process and put in background.
-
+.B \-c \fIconfigfile\fR
+Read management commands from \fIconfigfile\fR at startup. See
+.B CONFIGURATION FILE
+below.
 .TP
-.B -r \fIconfigfile\fR
-Parse configuration parameters from \fBconfigfile\fP at startup
-
-
+.B \-M \fImgmt_socket\fR
+Create a unix socket at \fImgmt_socket\fR on which the running configuration \-
+interfaces, addresses, routes, filters, queues \- can be inspected and changed.
+.BR vdeterm (1)
+makes a usable terminal for it; so does
+.BR socat (1)
+or any other PF_UNIX client.
 .TP
-.B -M \fImgmt_socket
-the unix socket where the parameters (interfaces addresses, routes, etc.) can be checked and
-changed runtime. \fBvdeterm\fP(1) can be used as a remote terminal for
-vde_router or any PF_UNIX client such as socat(1).
-
+.B \-m \fImgmt_mode\fR
+Access permissions for \fImgmt_socket\fR, in octal, as for
+.BR chmod (1).
 .TP
-.B -m \fImgmt_mode
-Specify the permission for the access to \fBmgmt_socket\fP
-
+.B \-p \fIpidfile\fR
+Write the process id to \fIpidfile\fR.
 .TP
-.B -p \fIpidfile
-Save the process id to \fBpidfile\fP
-
-
+.B \-d
+Detach and run in the background.
+.TP
+.B \-h
+Print a usage summary and exit.
+.PP
+Without
+.B \-d
+the router also reads management commands from its standard input and writes a
+prompt to standard output, which makes it usable interactively. Closing its
+standard input then terminates it.
+.SH CONFIGURATION FILE
+The file named by
+.B \-c
+is a list of management commands, one per line, in the syntax described under
+.BR COMMANDS .
+Empty lines and lines whose first non-blank character is
+.B #
+are ignored.
+.PP
+The commands run in order, before the management socket is created and before
+the process detaches. A command that fails reports on standard error and
+startup continues, so the order matters: an interface has to be connected
+before it can be configured, and addressed before a route can point at it.
+.PP
+.RS
+.nf
+# two segments, a default route towards the first one
+connect /tmp/vde0
+connect /tmp/vde1
+ifconfig eth0 add 10.0.0.254 255.255.255.0
+ifconfig eth1 add 10.0.1.254 255.255.255.0
+route add default 10.0.0.1
+dhcpd start eth1 10.0.1.20 10.0.1.40
+.fi
+.RE
+.SH MANAGEMENT INTERFACE
+The management socket is a unix stream socket. A client writes one command and
+reads the answer.
+.PP
+A command that produces output has it framed between a line
+.PP
+.RS
+0000 DATA END WITH '.'
+.RE
+.PP
+and a line holding a single dot. Every command then ends with a result line,
+either
+.PP
+.RS
+1000 Success
+.RE
+.PP
+or 1 followed by the three-digit
+.BR errno (3)
+value and its description. The prompt is written after each answer.
+.PP
+Each command is read in a single operation and is limited to 127 characters.
+A client that writes two commands in one go will have the second one discarded,
+so they must be sent one at a time.
+.SH COMMANDS
+.TP
+.B help \fR[\fIcommand\fR]
+List the commands, or describe one of them.
+.TP
+.B connect \fIvde_url\fR \fR[\fImacaddress\fR]
+Create an interface and attach it to \fIvde_url\fR, which is a VDE socket path
+or, with libvdeplug4, any vdeplug URL. The new interface is named after the
+number of interfaces already present and that name is reported. A MAC address
+is generated unless one is given.
+.RS
+.PP
+.nf
+connect /var/run/vde.ctl
+connect /var/run/my_sock.ctl 00:11:22:33:44:55
+.fi
+.RE
+.TP
+.B ifconfig \fR[\fIdevname\fR [\fIaction address netmask\fR]]
+.B ifconfig \fIdevname\fR add dhcp
+.br
+Show or change the addresses of an interface. With no argument, show them all.
+\fIaction\fR is
+.B add
+or
+.BR del ;
+.B del
+matches on \fIaddress\fR alone. An interface may hold several addresses, and
+adding one also installs the route for the network it belongs to.
+.B add dhcp
+asks for an address over DHCP instead.
+.RS
+.PP
+.nf
+ifconfig
+ifconfig eth1 add 10.0.0.1 255.0.0.0
+ifconfig eth1 add dhcp
+ifconfig eth1 del 10.0.0.1
+.fi
+.RE
+.TP
+.B route \fR[\fIaction address netmask\fR [gw \fIgateway\fR] [via \fIinterface\fR] [metric \fImetric\fR]]
+.B route \fIaction\fR default \fR[\fIaddress\fR]
+.br
+Show or change the routing table. With no argument, show it. \fIaction\fR is
+.B add
+or
+.BR del .
+The keyword
+.B default
+stands in for the default route.
+.RS
+.PP
+.nf
+route add default 10.0.0.254
+route add 192.168.0.0 255.255.0.0 gw 10.0.0.253 metric 2
+route add 192.168.1.0 255.255.255.0 via eth2
+route del default
+.fi
+.RE
+.TP
+.B arp
+Show the addresses the router has resolved, per interface.
+.TP
+.B stats
+Show per-interface frame counters.
+.TP
+.B dhcpd start \fIdevname pool_start pool_end\fR
+.B dhcpd stop \fIdevname\fR
+.br
+Serve DHCP on \fIdevname\fR from the given range. The offer carries the
+router's address on that interface as the gateway, the netmask and broadcast
+address derived from it, and a twelve hour lease.
+.RS
+.PP
+.nf
+dhcpd start eth0 10.0.0.101 10.0.0.120
+.fi
+.RE
+.TP
+.B ipfilter \fR[\fIaction\fR [src \fIinterface\fR] [from \fIaddress netmask\fR] [to \fIaddress netmask\fR] [proto \fIproto\fR] [tos \fItos\fR] [sport \fIsport\fR] [dport \fIdport\fR] \fIfilter_action\fR [\fIpriority\fR]]
+Show or change the filtering table. With no argument, show it. \fIaction\fR is
+.B add
+or
+.BR del ;
+for
+.B del
+every selector must match the rule that was inserted.
+.RS
+.PP
+\fIfilter_action\fR is one of
+.BR accept ,
+.BR drop ,
+.B reject
+or
+.BR prio .
+.B reject
+answers the sender with an ICMP filtered message where
+.B drop
+stays silent.
+.B prio
+does not decide the fate of the packet: it sets the queue the packet is placed
+in, and takes \fIpriority\fR as a mandatory argument, which is how IP-based QoS
+is expressed.
+.PP
+Rules are evaluated in the reverse of the order they were added, so write the
+general rule first and the exception after it:
+.PP
+.nf
+ipfilter add src eth0 drop
+ipfilter add src eth0 from 10.0.0.3 255.255.255.255 accept
+.fi
+.RE
+.TP
+.B queue \fR[\fIdevname\fR:\fIqueuename policy\fR [\fIoptions\fR]]
+Show or change the queueing discipline. With no argument, show every queue.
+Each interface has one queue named
+.B output
+and thirty-two priority queues named
+.B prio0
+through
+.BR prio31 .
+.RS
+.PP
+The disciplines are
+.BR unlimited ,
+the default, which never refuses a frame;
+.BR fifo ,
+which takes
+.BI limit " bytes"
+and tail-drops beyond it;
+.BR red ,
+random early detection, which takes
+.BI min " bytes"
+.BI max " bytes"
+.BI probability " P"
+.BI limit " bytes"
+and drops with a probability rising linearly from zero at \fImin\fR to \fIP\fR
+at \fImax\fR; and
+.BR token ,
+a token bucket, which takes
+.BI limit " bytes"
+.BI bitrate " rate"
+and releases frames at that rate.
+.PP
+.nf
+queue eth0:output fifo limit 40000
+queue eth0:prio3 red min 80000 max 160000 probability 0.1 limit 300000
+queue eth0:prio15 unlimited
+.fi
+.RE
+.TP
+.B olsr start \fIdevname\fR [\fIdevname\fR ...]
+.B olsr stop
+.br
+Announce routes over OLSR on the given interfaces.
+.TP
+.B logout
+Close this management session, leaving the router running.
+.TP
+.B shutdown
+Stop the router.
+.SH EXAMPLES
+Route between two VDE switches, with the second one reaching the outside
+through a slirp uplink in the router itself. Neither switch, nor the router,
+needs any privilege.
+.PP
+.RS
+.nf
+vde_switch \-s /tmp/vde0 \-d
+cat > router.conf <<EOF
+connect /tmp/vde0
+connect slirp:///addr=10.0.2.1/dhcp=10.0.2.20
+ifconfig eth0 add 10.0.0.254 255.255.255.0
+ifconfig eth1 add 10.0.2.15 255.255.255.0
+route add default 10.0.2.1
+dhcpd start eth0 10.0.0.20 10.0.0.40
+EOF
+vde_router \-c router.conf \-M /tmp/router.mgmt \-d
+.fi
+.RE
+.PP
+Inspect it while it runs:
+.PP
+.RS
+.nf
+vdeterm /tmp/router.mgmt
+echo ifconfig | socat \- UNIX-CONNECT:/tmp/router.mgmt
+.fi
+.RE
+.SH LIMITATIONS
+The ARP tables have no expiry: an entry learned once is kept, and a host that
+changes its MAC address while keeping its IP will not be reached until the
+router is restarted.
+.PP
+A packet whose next hop is not yet in the ARP table is dropped rather than held
+while the query is answered, so the first packet towards a destination that has
+gone quiet is normally lost.
+.PP
+The DHCP server advertises a fixed public resolver and does not send the
+NetBIOS name server option, so a network that needs either of those wants a
+separate DHCP server rather than this one.
 .SH NOTICE
 Virtual Distributed Ethernet is not related in any way with
 www.vde.com ("Verband der Elektrotechnik, Elektronik und Informationstechnik"
 i.e. the German "Association for Electrical, Electronic & Information
 Technologies").
-
 .SH SEE ALSO
 \fBvde_switch\fP(1),
-\fBvde_cryptcab\fP(1),
-\fBwirefilter\fP(1).
+\fBvde_plug\fP(1),
+\fBvdeterm\fP(1),
+\fBwirefilter\fP(1),
+\fBlibvdeplug\fP(3).
 .br
 .SH AUTHORS
 VDE_ROUTER is a tool by Daniele Lacamera <root@danielinux.net>
@@ -57,4 +358,3 @@ VDE_ROUTER is a tool by Daniele Lacamera <root@danielinux.net>
 VDE is a project by Renzo Davoli <renzo@cs.unibo.it>
 
 Red-Black Tree used to implement ARP tables is a free port to userspace from the Linux kernel, by Andrea Arcangeli and David Woodhouse.
-
