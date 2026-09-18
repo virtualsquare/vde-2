@@ -301,7 +301,7 @@ static inline int is_netmask(uint32_t addr)
 	int i;
 	uint32_t h_netmask = ntohl(addr), valid_value = 0;
 	for (i = 31; i >= 0; i--) {
-		valid_value += (1 << i);
+		valid_value += (1U << i);
 		if (h_netmask == valid_value)
 			return 1;
 	}
