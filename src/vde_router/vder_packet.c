@@ -37,7 +37,11 @@ char *vder_ntoa(uint32_t addr)
 int vder_ip_decrease_ttl(struct vde_buff *vdb){
 	struct iphdr *iph=iphead(vdb);
 	iph->ttl--;
-	iph->check++;
+	/* The caller (vder_packet_forward) recomputes the whole header checksum.
+	 * The incremental update that used to live here was wrong anyway: a TTL
+	 * decrement is a change in the high byte of a 16 bit word, so RFC 1624
+	 * calls for adding 0x0100 in ones' complement, not for ++.
+	 */
 	if(iph->ttl < 1)
 		return -1; /* TODO: send ICMP with TTL expired */
 	else
@@ -126,6 +130,44 @@ int vder_packet_send(struct vde_buff *vdb, uint32_t dst_ip, uint8_t protocol)
 	}
 	iph->saddr = vder_get_right_localip(ro->iface, destination);
 	iph->check = htons(vder_ip_checksum(iph));
+	ae = vder_get_arp_entry(ro->iface, destination);
+	if (!ae) {
+		vder_arp_query(ro->iface, destination);
+		return -1;
+	}
+	return vder_sendto(ro->iface, vdb, ae->macaddr);
+}
+
+/**
+ * Send a packet that is being routed, as opposed to one this router originated.
+ *
+ * vder_packet_send() builds a fresh IP header because it serves packets the
+ * router itself creates: it overwrites saddr with one of our own addresses and
+ * resets ttl, id, tos and frag_off.  Using it to forward rewrites the sender
+ * out of the datagram, and since the L4 checksum still covers the original
+ * address the packet is discarded downstream.
+ *
+ * Forwarding therefore only looks up the route and refreshes the IP checksum,
+ * which the TTL decrement in the caller has just invalidated.
+ */
+int vder_packet_forward(struct vde_buff *vdb, uint32_t dst_ip)
+{
+	struct iphdr *iph = iphead(vdb);
+	struct vde_ethernet_header *eth = ethhead(vdb);
+	struct vder_route *ro;
+	struct vder_arp_entry *ae;
+	uint32_t destination = dst_ip;
+
+	eth->buftype = htons(PTYPE_IP);
+
+	ro = vder_get_route(dst_ip);
+	if (!ro)
+		return -1;
+	if (ro->gateway != 0)
+		destination = ro->gateway;
+
+	iph->check = htons(vder_ip_checksum(iph));
+
 	ae = vder_get_arp_entry(ro->iface, destination);
 	if (!ae) {
 		vder_arp_query(ro->iface, destination);
@@ -233,7 +275,7 @@ void vder_packet_recv(struct vder_iface *vif, int timeout)
 					vder_icmp_ttl_expired(sender, foot);
 					return;
 				}
-				if (vder_packet_send(packet, hdr->daddr, hdr->protocol) < 0) {
+				if (vder_packet_forward(packet, hdr->daddr) < 0) {
 					vder_icmp_host_unreachable(sender, foot);
 					return;
 				} else {
