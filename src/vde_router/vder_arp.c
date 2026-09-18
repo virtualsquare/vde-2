@@ -94,6 +94,49 @@ size_t vder_arp_query(struct vder_iface *oif, uint32_t tgt)
 	return vder_sendto(oif, vdb, ETH_BCAST);
 }
 
+extern struct vde_router Router;
+
+/**
+ * Decide whether this ARP request is ours to answer.
+ *
+ * The router used to answer every request on every interface, without ever
+ * looking at the target address.  Two rules are enough:
+ *
+ *   1. the target is one of our own addresses;
+ *   2. the target routes out of a *different* interface - proxy ARP.
+ *
+ * Rule 2 is what makes routing work: when the upstream side asks for a host on
+ * the downstream segment, we must answer or the return traffic has nowhere to
+ * go.  An address that belongs to the same interface's own subnet is for its
+ * owner to claim, so we stay quiet.
+ */
+static int vder_arp_should_reply(struct vder_iface *vif, uint32_t target)
+{
+	struct vder_ip4address *cur;
+	struct vder_iface *iface;
+	struct vder_route *ro;
+
+	if (target == 0 || target == (uint32_t)(-1))
+		return 0;
+
+	/* 1. one of ours?  (-1 marks an interface waiting for DHCP, not an address) */
+	for (iface = Router.iflist; iface; iface = iface->next) {
+		for (cur = iface->address_list; cur; cur = cur->next) {
+			if (cur->address == (uint32_t)(-1))
+				continue;
+			if (cur->address == target)
+				return 1;
+		}
+	}
+
+	/* 2. reachable through another interface? */
+	ro = vder_get_route(target);
+	if (ro && ro->iface && ro->iface != vif)
+		return 1;
+
+	return 0;
+}
+
 /**
  * Reply to given arp request, if needed
  */
@@ -148,7 +191,7 @@ int vder_parse_arp(struct vder_iface *vif, struct vde_buff *vdb)
 		}
 	}
 
-	if(ntohs(ah->opcode) == ARP_REQUEST)
+	if(ntohs(ah->opcode) == ARP_REQUEST && vder_arp_should_reply(vif, ah->d_addr))
 		vder_arp_reply(vif, vdb);
 	return 0;
 }
