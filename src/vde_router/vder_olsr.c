@@ -16,6 +16,8 @@
 
 #define OLSR_MSG_INTERVAL 2000
 #define DGRAM_MAX_SIZE 1800
+/* routes deeper than this are dropped: bounds the children chain */
+#define OLSR_MAX_METRIC 16
 #define HOST_NETMASK (htonl(0xFFFFFFFF))
 #ifndef MIN
 # define MIN(a,b) (a<b?a:b)
@@ -70,6 +72,11 @@ static struct olsr_route_entry *get_next_hop(struct olsr_route_entry *dst)
 static inline void olsr_route_add(struct olsr_route_entry *el)
 {
 	struct olsr_route_entry *nexthop;
+
+	/* cap the route depth: metric grows with the hops, so this
+	 * bounds the children chain an attacker can build up */
+	if (el->metric > OLSR_MAX_METRIC)
+		return;
 
 	if (fresher(fresh_ansn, my_ansn))
 		my_ansn = fresh_ansn + 1;
@@ -133,18 +140,34 @@ static inline void olsr_route_del(struct olsr_route_entry *r)
 
 static struct olsr_route_entry *get_route_by_address(struct olsr_route_entry *lst, uint32_t ip)
 {
-	struct olsr_route_entry *found;
-	if(lst) {
+	/* The route tree can be arbitrarily deep (attacker-driven),
+	 * so walk it iteratively with an explicit stack. */
+	struct olsr_route_entry **stack = NULL;
+	int top = 0, cap = 0;
+
+	while (lst) {
 		if (lst->destination == ip) {
+			free(stack);
 			return lst;
 		}
-		found = get_route_by_address(lst->children, ip);
-		if (found)
-			return found;
-		found = get_route_by_address(lst->next, ip);
-		if (found)
-			return found;
+		if (lst->next) {
+			if (top == cap) {
+				int ncap = cap ? cap * 2 : 16;
+				struct olsr_route_entry **ns = realloc(stack, ncap * sizeof *ns);
+				if (!ns) {
+					free(stack);
+					return NULL;
+				}
+				stack = ns;
+				cap = ncap;
+			}
+			stack[top++] = lst->next;
+		}
+		lst = lst->children;
+		if (!lst && top > 0)
+			lst = stack[--top];
 	}
+	free(stack);
 	return NULL;
 }
 
@@ -230,15 +253,34 @@ static void refresh_neighbors(struct vder_iface *iface)
 
 static void olsr_garbage_collector(struct olsr_route_entry *sublist)
 {
-	if(!sublist)
-		return;
-	if ((sublist->time_left--) <= 0) {
-		olsr_route_del(sublist);
-		free(sublist);
-		return;
+	/* iterative: the tree can be arbitrarily deep (attacker-driven) */
+	struct olsr_route_entry **stack = NULL;
+	int top = 0, cap = 0;
+
+	while (sublist) {
+		struct olsr_route_entry *cur = sublist;
+		sublist = cur->children;
+		if ((cur->time_left--) <= 0) {
+			olsr_route_del(cur);
+			free(cur);
+			sublist = NULL; /* subtree of an expired entry: skip */
+		} else if (cur->next) {
+			if (top == cap) {
+				int ncap = cap ? cap * 2 : 16;
+				struct olsr_route_entry **ns = realloc(stack, ncap * sizeof *ns);
+				if (!ns) {
+					free(stack);
+					return;
+				}
+				stack = ns;
+				cap = ncap;
+			}
+			stack[top++] = cur->next;
+		}
+		if (!sublist && top > 0)
+			sublist = stack[--top];
 	}
-	olsr_garbage_collector(sublist->children);
-	olsr_garbage_collector(sublist->next);
+	free(stack);
 }
 
 
