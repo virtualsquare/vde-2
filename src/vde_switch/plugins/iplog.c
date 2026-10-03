@@ -204,9 +204,16 @@ static void ip_find_in_hash_update(int len, unsigned char *addr, unsigned char *
 					(len==4)?4:6, hostname, 
 					srcmac[0], srcmac[1], srcmac[2], srcmac[3], srcmac[4], srcmac[5],
 					port, vlan, username);
+			if (iov[1].iov_len >= sizeof(msg))
+				iov[1].iov_len = sizeof(msg) - 1;
 			for (epn=0; (descr=port_descr(port,epn)) != NULL; epn++) {
 				int len=iov[1].iov_len;
-				int descrlen=snprintf(msg+len,sizeof(msg)-len," \"%s\"",descr);
+				int descrlen;
+				if (len >= (int)sizeof(msg) - 1)
+					break;
+				descrlen=snprintf(msg+len,sizeof(msg)-len," \"%s\"",descr);
+				if (descrlen > (int)sizeof(msg) - 1 - len)
+					descrlen = (int)sizeof(msg) - 1 - len;
 				iov[1].iov_len+=descrlen;
 			}
 			if (logfilefd >= 0) {
