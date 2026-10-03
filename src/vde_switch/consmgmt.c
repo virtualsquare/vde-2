@@ -694,8 +694,9 @@ static int debugadd(int fd,char *path) {
 			if (i>=p->nfds) {
 				if (i>=p->maxfds) {
 					int newsize=p->maxfds+DBGCLSTEP;
-					p->fds=realloc(p->fds,newsize*sizeof(int));
-					if (p->fds) {
+					int *newfds=realloc(p->fds,newsize*sizeof(int));
+					if (newfds) {
+						p->fds=newfds;
 						p->maxfds=newsize;
 						p->fds[i]=fd;
 						p->nfds++;
@@ -747,16 +748,25 @@ int eventadd(int (*fun)(),char *path,void *arg) {
 			if (i>=p->nfun) {
 				if (i>=p->maxfun) {
 					int newsize=p->maxfun+DBGCLSTEP;
-					p->fun=realloc(p->fun,newsize*sizeof(int));
-					p->funarg=realloc(p->funarg,newsize*sizeof(void *));
-					if (p->fun && p->funarg) {
-						p->maxfun=newsize;
-						p->fun[i]=fun;
-						p->funarg[i]=arg;
-						p->nfun++;
-						if (rv != ENOMEM) rv=0;
-					} else
+					intfun *newfun=realloc(p->fun,newsize*sizeof(intfun));
+					void **newfunarg;
+					if (!newfun) {
 						rv=ENOMEM;
+					} else {
+						newfunarg=realloc(p->funarg,newsize*sizeof(void *));
+						if (newfunarg) {
+							p->fun=newfun;
+							p->funarg=newfunarg;
+							p->maxfun=newsize;
+							p->fun[i]=fun;
+							p->funarg[i]=arg;
+							p->nfun++;
+							if (rv != ENOMEM) rv=0;
+						} else {
+							free(newfun);
+							rv=ENOMEM;
+						}
+					}
 				} else {
 					p->fun[i]=fun;
 					p->nfun++;
