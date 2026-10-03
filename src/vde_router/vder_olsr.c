@@ -551,10 +551,16 @@ static void recv_hello(uint8_t *buffer, int len, struct olsr_route_entry *origin
 static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *e)
 {
 	struct olsr_hmsg_tc *tc = (struct olsr_hmsg_tc *) buf;
-	uint16_t new_ansn = ntohs(tc->ansn);
+	uint16_t new_ansn;
 	int parsed = sizeof(struct olsr_hmsg_tc);
 	struct olsr_route_entry *rt;
 	struct olsr_neighbor *n;
+
+	if (size < (int)(sizeof(struct olsr_hmsg_tc) + sizeof(struct olsr_neighbor)))
+		return -1;
+
+	tc = (struct olsr_hmsg_tc *) buf;
+	new_ansn = ntohs(tc->ansn);
 
 	if (e->advertised_tc && fresher(new_ansn, e->ansn))
 	{
@@ -568,13 +574,13 @@ static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *
 
 	if (!e->advertised_tc) {
 		e->advertised_tc = malloc(size);
-		if (!e) {
+		if (!e->advertised_tc) {
 			perror("Allocating forward packet");
 			return -1;
 		}
 		memcpy(e->advertised_tc, buf, size);
 		e->ansn = new_ansn;
-		while (parsed < size) {
+		while (parsed + (int)sizeof(struct olsr_neighbor) <= size) {
 			n = (struct olsr_neighbor *) (buf + parsed);
 			parsed += sizeof(struct olsr_neighbor);
 			rt = get_route_by_address(Local_interfaces, n->addr);
@@ -584,6 +590,11 @@ static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *
 			} else if (!rt || (rt->metric > (e->metric + 1)) || (rt->nlq < n->nlq)) {
 				if (!rt) {
 					rt = malloc(sizeof (struct olsr_route_entry));
+					if (!rt) {
+						free(e->advertised_tc);
+						e->advertised_tc = NULL;
+						return -1;
+					}
 					memset(rt, 0, sizeof(struct olsr_route_entry));
 					rt->destination = n->addr;
 				} else {
@@ -658,12 +669,18 @@ static void olsr_recv(uint8_t *buffer, int len)
 				break;
 			}
 			case OLSRMSG_TC:
-				if (reconsider_topology(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin) < 1)
+			{
+				int tc_len = ntohs(msg->size) - (int)sizeof(struct olsrmsg);
+				int remain = len - parsed - (int)sizeof(struct olsrmsg);
+				if (tc_len > remain)
+					tc_len = remain;
+				if (reconsider_topology(buffer + parsed + sizeof(struct olsrmsg), tc_len, origin) < 1)
 					msg->ttl = 0;
 				else {
 					msg->hop = origin->metric;
 				}
 				break;
+			}
 			default:
 				return;
 		}
