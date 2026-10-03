@@ -97,7 +97,13 @@ int stats_init(){
 
 
 
-#define SENDCMD(cmd) memset(mgmt_outbuf, 0, sizeof(struct vdemgmt_out)); if(!mgmt_conn) { errno = ECONNREFUSED; return 0; } vdemgmt_sendcmd(mgmt_conn, cmd, mgmt_outbuf);
+#define SENDCMD(cmd) do { \
+	if (mgmt_outbuf->buf) \
+		free(mgmt_outbuf->buf); \
+	memset(mgmt_outbuf, 0, sizeof(struct vdemgmt_out)); \
+	if(!mgmt_conn) { errno = ECONNREFUSED; return 0; } \
+	vdemgmt_sendcmd(mgmt_conn, cmd, mgmt_outbuf); \
+} while(0)
 
 int mgmt_init(char *sockpath){
 	char *p,*q;
