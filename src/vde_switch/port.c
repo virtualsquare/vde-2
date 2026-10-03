@@ -174,7 +174,10 @@ static int alloc_port(unsigned int portno)
 				port->flag=0;
 				port->sender=NULL;
 				port->vlanuntag=0;
-				ba_set(vlant[0].table,i);
+				/* vlan 0 is reserved and cannot be removed, so the table is
+				 * always allocated; check defensively anyway */
+				if (vlant[0].table != NULL)
+					ba_set(vlant[0].table,i);
 			}
 		}
 		return i;
@@ -1138,7 +1141,7 @@ static int vlancreate_nocheck(int vlan)
 
 static int vlancreate(int vlan)
 {
-	if (vlan > 0 && vlan < NUMOFVLAN-1) { /*vlan NOVLAN (0xfff a.k.a. 4095) is reserved */
+	if (vlan > 0 && vlan < NUMOFVLAN) { /*vlan NOVLAN (0xfff a.k.a. 4095) is reserved */
 		if (bac_check(validvlan,vlan))
 			return EEXIST;
 		else 
@@ -1149,7 +1152,7 @@ static int vlancreate(int vlan)
 
 static int vlanremove(int vlan)
 {
-	if (vlan >= 0 && vlan < NUMOFVLAN) {
+	if (vlan > 0 && vlan < NUMOFVLAN) { /*vlan 0 is the default untagged vlan, reserved */
 		if (bac_check(validvlan,vlan)) {
 			int i,used=0;
 			ba_FORALL(vlant[vlan].table,numports,used++,i);
@@ -1181,7 +1184,7 @@ static int vlanaddport(char *arg)
 	int port,vlan;
 	if (sscanf(arg,"%i %i",&vlan,&port) != 2)
 		return EINVAL;
-	if (vlan <0 || vlan >= NUMOFVLAN-1 || port < 0 || port >= numports)
+	if (vlan <0 || vlan >= NUMOFVLAN || port < 0 || port >= numports)
 		return EINVAL;
 	if (!bac_check(validvlan,vlan) || portv[port] == NULL)
 		return ENXIO;
@@ -1201,7 +1204,7 @@ static int vlandelport(char *arg)
 	int port,vlan;
 	if (sscanf(arg,"%i %i",&vlan,&port) != 2)
 		return EINVAL;
-	if (vlan <0 || vlan >= NUMOFVLAN-1 || port < 0 || port >= numports)
+	if (vlan <0 || vlan >= NUMOFVLAN || port < 0 || port >= numports)
 		return EINVAL;
 	if (!bac_check(validvlan,vlan) || portv[port] == NULL)
 		return ENXIO;
