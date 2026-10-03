@@ -116,7 +116,7 @@ int mgmt_init(char *sockpath){
 		return 0;
 	}
 	
-	mgmt_outbuf=(struct vdemgmt_out *)malloc(sizeof(struct vdemgmt_out));
+	mgmt_outbuf=(struct vdemgmt_out *)calloc(1,sizeof(struct vdemgmt_out));
 	if(!mgmt_outbuf){
 		errno = ENOMEM;
 		return 0;
