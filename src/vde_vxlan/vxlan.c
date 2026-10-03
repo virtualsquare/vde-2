@@ -105,8 +105,10 @@ void vxlan_process() {
 	ssize_t len = recvfrom(vxlan_fd, &pkt, sizeof(pkt), 0,
 			(struct sockaddr *) &src_addr, &src_addr_len);
 
-	if (len < 0)
+	if (len < 0) {
 		printlog(LOG_ERR, "recvfrom(): %s", strerror(errno));
+		return;
+	}
 
 	printlog(LOG_DEBUG, "VXLAN packet from %s",inet_ntoa(src_addr.sin_addr));
 
