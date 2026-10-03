@@ -207,7 +207,11 @@ int main(int argc, char *argv[])
 	else if (setpgrp() == -1) {
 #endif
 		fprintf(stderr,"Err: cannot create pgrp\n");
+#if defined(VDE_FREEBSD) || defined(VDE_NETBSD)
+		perror("setpgid");
+#else
 		perror("setpgrp");
+#endif
 		exit(1);
 	}
 

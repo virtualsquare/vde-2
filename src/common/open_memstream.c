@@ -29,7 +29,7 @@
 
 /* BSD-compatible implementation of open_memstream */
 
-#if HAVE_FUNOPEN
+#ifdef HAVE_FUNOPEN
 struct memstream {
   char *buffer;
   size_t size, space;
