@@ -1154,11 +1154,20 @@ static int olsr(int fd,char *s)
 
 	if (action == ACTION_ADD) {
 		olsr_settings = malloc(sizeof(struct olsr_setup));
+		if (!olsr_settings) {
+			printoutc(fd, "Out of memory");
+			return ENOMEM;
+		}
 		memset(olsr_settings, 0, sizeof(struct olsr_setup));
 		arg = strtok_r(NULL, " ", &nextargs);
 		while (arg) {
 			if ((strlen(arg) < 4) || (strncmp(arg, "eth", 3)!= 0)) {
 				printoutc(fd, "Invalid interface \"%s\".", arg);
+				free(olsr_settings);
+				return EINVAL;
+			}
+			if (olsr_settings->n_ifaces >= (int)(sizeof(olsr_settings->ifaces) / sizeof(olsr_settings->ifaces[0]))) {
+				printoutc(fd, "Too many interfaces");
 				free(olsr_settings);
 				return EINVAL;
 			}
