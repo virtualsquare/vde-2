@@ -766,7 +766,13 @@ int eventadd(int (*fun)(),char *path,void *arg) {
 							p->nfun++;
 							if (rv != ENOMEM) rv=0;
 						} else {
-							free(newfun);
+							/* keep the bigger fun block: freeing it
+							 * would drop the only valid copy of
+							 * p->fun (the old block was released or
+							 * moved by the first realloc). maxfun
+							 * stays: the extra capacity is unused
+							 * until the next grow. */
+							p->fun=newfun;
 							rv=ENOMEM;
 						}
 					}
