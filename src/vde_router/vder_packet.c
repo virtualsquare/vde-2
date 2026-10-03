@@ -97,7 +97,8 @@ int vder_ip_input(struct vde_buff *vb)
 				recvd=1;
 			break;
 	}
-	if (!recvd && !is_broadcast)
+	if (!recvd && !is_broadcast &&
+	    vb->len >= 14 + sizeof(struct iphdr) + 8)
 		vder_icmp_service_unreachable((uint32_t)iph->saddr, footprint(vb));
 	return 1;
 }
