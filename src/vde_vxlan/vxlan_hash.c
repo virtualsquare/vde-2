@@ -146,8 +146,14 @@ int find_in_hash_update(unsigned char *src, int vlan, in_addr_t port, in_addr_t 
 		 * entry on first sight, but a spoofed source MAC must
 		 * not point an existing MAC at a new remote host. */
 		e->port=port;
+		e->last_seen = now;
+	} else if (oldport == port) {
+		/* Only the current owner (or the rebind above) keeps the
+		 * entry fresh: a rejected rebind must not extend the
+		 * min_persistence hold, or the VM would never reclaim
+		 * a MAC bound to a spoofed remote frame. */
+		e->last_seen = now;
 	}
-	e->last_seen = now;
 	if (out != NULL) *out = oldport;
 	return 1;
 }
