@@ -442,10 +442,18 @@ void cryptcab_server(char *_plugname, unsigned short udp_port, enum e_enc_type _
 			switch(p1->state + pkt.data[0]) {
 				case (ST_AUTH + PKT_DATA):
 					{
-						unsigned int len = pkt.len - 1;
+						unsigned int len;
 						unsigned char *p = (pkt.data + 1);
-						unsigned char *tail = (p + len - 12);
+						unsigned char *tail;
 						uint32_t crc;
+
+						/* minimum: 1 byte type + 12 byte tail (crc + iv) */
+						if (pkt.len < 13) {
+							vc_printlog(4, "Short data pkt discarded (%d Bytes)", pkt.len);
+							break;
+						}
+						len = pkt.len - 1;
+						tail = (p + len - 12);
 
 						crc = tail[0] + (tail[1] << 8) +
 							(tail[2] << 16) + (tail[3] << 24);
