@@ -241,8 +241,9 @@ int counters_parse(void){
 
 				/*   -- endpoint ID 0005 module unix prog   : vde_plug: user=godog PID=22006  SOCK=/tmp/vde.ctl.22006-00000 */
 				/* format from port.c:print_port() however there's room for DESC_MAXLEN bytes in portdesc */
-				if( (sscanf(q, "  -- endpoint ID %*04d module %*12c: %255c\n", portdesc) == 1) ||
-						( (strncmp(portstatus, "INACTIVE", 8) == 0) && inok && outok ) ){
+				if( (curport >= 1 && curport <= _stats->numports) &&
+				    ((sscanf(q, "  -- endpoint ID %*04d module %*12c: %255c\n", portdesc) == 1) ||
+					( (strncmp(portstatus, "INACTIVE", 8) == 0) && inok && outok ) )){
 
 					gettimeofday(cur_tv, NULL);
 					
