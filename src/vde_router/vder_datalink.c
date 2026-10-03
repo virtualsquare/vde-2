@@ -107,10 +107,12 @@ void vder_timed_dequeue_add(struct vder_queue *q, uint32_t interval)
 {
 	struct vder_timed_dequeue *new = malloc(sizeof(struct vder_timed_dequeue));
 	struct timeval now_tv;
-	pthread_mutex_lock(&Router.global_config_lock);
-	gettimeofday(&now_tv, 0);
+	/* check the allocation before taking the lock: an early return
+	 * under the lock would wedge every route/iface/filter operation */
 	if (!new)
 		return;
+	pthread_mutex_lock(&Router.global_config_lock);
+	gettimeofday(&now_tv, 0);
 	new->interval = interval;
 	new->q = q;
 	new->last_out = microseconds(now_tv);
