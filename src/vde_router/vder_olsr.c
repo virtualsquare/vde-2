@@ -343,7 +343,8 @@ static int olsr_build_hello_neighbors(uint8_t *buf, int size)
 		neighbor = local->children;
 		while (neighbor) {
 			struct olsr_link *li = (struct olsr_link *) (buf + ret);
-			if (ret + sizeof(struct olsr_link) + sizeof(struct olsr_neighbor) > size)
+			/* signed: a negative size must fail the check */
+			if (size - ret < (int)(sizeof(struct olsr_link) + sizeof(struct olsr_neighbor)))
 				return -1;
 			li->link_code = neighbor->link_type;
 			li->reserved = 0;
@@ -371,7 +372,8 @@ static int olsr_build_tc_neighbors(uint8_t *buf, int size)
 	while (local) {
 		neighbor = local->children;
 		while (neighbor) {
-			if (ret + sizeof(struct olsr_neighbor) > size)
+			/* signed: a negative size must fail the check */
+			if (size - ret < (int)sizeof(struct olsr_neighbor))
 				return -1;
 			dst->addr = neighbor->destination;
 			dst->nlq = neighbor->nlq;
@@ -394,7 +396,8 @@ static int olsr_build_mid(uint8_t *buf, int size, struct vder_iface *excluded)
 	local = Local_interfaces;
 	while (local) {
 		if (local->iface != excluded) {
-			if (ret + sizeof(uint32_t) > size)
+			/* signed: a negative size must fail the check */
+			if (size - ret < (int)sizeof(uint32_t))
 				return -1;
 			*dst = local->destination;
 			ret += sizeof(uint32_t);
@@ -431,6 +434,9 @@ static void olsr_make_dgram(struct vder_iface *vif)
 
 	/* HELLO Message */
 
+	/* the msg + hello headers must fit before the neighbour list */
+	if (size + (int)(sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_hello)) > DGRAM_MAX_SIZE)
+		return;
 	msg_hello = (struct olsrmsg *) (dgram + size);
 	size += sizeof(struct olsrmsg);
 	msg_hello->type = OLSRMSG_HELLO;
@@ -454,6 +460,8 @@ static void olsr_make_dgram(struct vder_iface *vif)
 
 	/* MID Message */
 
+	if (size + (int)sizeof(struct olsrmsg) > DGRAM_MAX_SIZE)
+		return;
 	msg_mid = (struct olsrmsg *)(dgram + size);
 	size += sizeof(struct olsrmsg);
 	msg_mid->type = OLSRMSG_MID;
@@ -474,6 +482,9 @@ static void olsr_make_dgram(struct vder_iface *vif)
 		msg_mid->size = htons(sizeof(struct olsrmsg) + r);
 	}
 
+	/* the msg + tc headers must fit before the neighbour list */
+	if (size + (int)(sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_tc)) > DGRAM_MAX_SIZE)
+		return;
 	msg_tc = (struct olsrmsg *) (dgram + size);
 	size += sizeof(struct olsrmsg);
 	msg_tc->type = OLSRMSG_TC;
