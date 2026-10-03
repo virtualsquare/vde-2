@@ -74,9 +74,14 @@ static inline void olsr_route_add(struct olsr_route_entry *el)
 	struct olsr_route_entry *nexthop;
 
 	/* cap the route depth: metric grows with the hops, so this
-	 * bounds the children chain an attacker can build up */
-	if (el->metric > OLSR_MAX_METRIC)
+	 * bounds the children chain an attacker can build up. The
+	 * caller passes ownership: a rejected entry is freed here,
+	 * so callers must not touch it after the call. */
+	if (el->metric > OLSR_MAX_METRIC) {
+		free(el->advertised_tc);
+		free(el);
 		return;
+	}
 
 	if (fresher(fresh_ansn, my_ansn))
 		my_ansn = fresh_ansn + 1;
@@ -548,8 +553,8 @@ static void recv_mid(uint8_t *buffer, int len, struct olsr_route_entry *origin)
 			e->metric = origin->metric + 1;
 			e->lq = origin->lq;
 			e->nlq = origin->nlq;
-			olsr_route_add(e);
 			arp_storm(e->destination);
+			olsr_route_add(e);
 		} else if (e->metric > (origin->metric + 1)) {
 			olsr_route_del(e);
 			e->metric = origin->metric;
@@ -597,8 +602,8 @@ static void recv_hello(uint8_t *buffer, int len, struct olsr_route_entry *origin
 			e->link_type = OLSRLINK_UNKNOWN;
 			e->lq = MIN(origin->lq, neigh->lq);
 			e->nlq = MIN(origin->nlq, neigh->nlq);
-			olsr_route_add(e);
 			arp_storm(e->destination);
+			olsr_route_add(e);
 		} else if ((e->gateway != origin) && (e->metric > (origin->metric + 1))) {
 			olsr_route_del(e);
 			e->metric = origin->metric + 1;
