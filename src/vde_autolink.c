@@ -197,10 +197,15 @@ struct autolink *find_alink_pid(int pid);
 static void catch_zombies(int signo)
 {
 	int status;
+	pid_t pid;
 	struct autolink *a;
 
-	if( (a=find_alink_pid(wait(&status))) )
-		a->wirepid = -1;
+	/* WNOHANG: a blocking wait() in the SIGCHLD handler stalls the
+	 * daemon when no zombie is pending (and is not async-signal-safe) */
+	while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+		if( (a=find_alink_pid(pid)) )
+			a->wirepid = -1;
+	}
 }
 
 static void setsighandlers()
