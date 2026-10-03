@@ -828,6 +828,7 @@ int alinkaddlink(int fd, char *arg)
 
 	char *name, *endname = NULL, *tmphosts, *token;
 	int namelen, hostlen, i, j;
+	int p;
 	struct autolink *curlink;
 
 	/* check if we have name and remotehost */
@@ -864,12 +865,14 @@ int alinkaddlink(int fd, char *arg)
 	curlink->name = name;
 
 	/* reserve a port on switch */
-	if( (curlink->portno = port_reserve()) < 0 ){
+	p = port_reserve();
+	if (p < 0) {
 		free(curlink->name);
 		free(curlink);
 		if(alinks == curlink) alinks = NULL;
 		return ENXIO;
 	}
+	curlink->portno = p;
 
 	/* alloc and set remote host array (null terminated) */
 	i=0;

@@ -102,7 +102,7 @@ void vxlan_process() {
 
 	in_addr_t dest_addr;
 
-	size_t len = recvfrom(vxlan_fd, &pkt, sizeof(pkt), 0,
+	ssize_t len = recvfrom(vxlan_fd, &pkt, sizeof(pkt), 0,
 			(struct sockaddr *) &src_addr, &src_addr_len);
 
 	if (len < 0)
