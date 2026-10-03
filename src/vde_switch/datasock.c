@@ -512,6 +512,12 @@ static void init(void)
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
 #pragma GCC diagnostic pop
+	/* refuse a planted symlink and remove a stale ctl socket:
+	 * the bind runs as root and must not be redirected */
+	if (prepare_socket_path(&sun) < 0) {
+		printlog(LOG_ERR, "Could not prepare ctl socket path '%s/ctl': %s", ctl_socket, strerror(errno));
+		exit(-1);
+	}
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		if((errno == EADDRINUSE) && still_used(&sun)){
 			printlog(LOG_ERR, "Could not bind to socket '%s/ctl': %s", ctl_socket, strerror(errno));
