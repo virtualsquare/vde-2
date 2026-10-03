@@ -301,6 +301,8 @@ static int olsr_build_hello_neighbors(uint8_t *buf, int size)
 		neighbor = local->children;
 		while (neighbor) {
 			struct olsr_link *li = (struct olsr_link *) (buf + ret);
+			if (ret + sizeof(struct olsr_link) + sizeof(struct olsr_neighbor) > size)
+				return -1;
 			li->link_code = neighbor->link_type;
 			li->reserved = 0;
 			li->link_msg_size = htons(sizeof(struct olsr_neighbor) + sizeof(struct olsr_link));
@@ -311,8 +313,6 @@ static int olsr_build_hello_neighbors(uint8_t *buf, int size)
 			dst->lq = neighbor->lq;
 			dst->reserved = 0;
 			ret += sizeof(struct olsr_neighbor);
-			if (ret >= size)
-				return ret - sizeof(struct olsr_neighbor) - sizeof(struct olsr_link);
 			neighbor = neighbor->next;
 		}
 		local = local->next;
@@ -329,14 +329,14 @@ static int olsr_build_tc_neighbors(uint8_t *buf, int size)
 	while (local) {
 		neighbor = local->children;
 		while (neighbor) {
+			if (ret + sizeof(struct olsr_neighbor) > size)
+				return -1;
 			dst->addr = neighbor->destination;
 			dst->nlq = neighbor->nlq;
 			dst->lq = neighbor->lq;
 			dst->reserved = 0;
 			ret += sizeof(struct olsr_neighbor);
 			dst = (struct olsr_neighbor *) (buf + ret);
-			if (ret >= size)
-				return ret - sizeof(struct olsr_neighbor);
 			neighbor = neighbor->next;
 		}
 		local = local->next;
@@ -352,11 +352,11 @@ static int olsr_build_mid(uint8_t *buf, int size, struct vder_iface *excluded)
 	local = Local_interfaces;
 	while (local) {
 		if (local->iface != excluded) {
+			if (ret + sizeof(uint32_t) > size)
+				return -1;
 			*dst = local->destination;
 			ret += sizeof(uint32_t);
 			dst = (uint32_t *) (buf + ret);
-			if (ret >= size)
-				return ret - sizeof(uint32_t);
 		}
 		local = local->next;
 	}
