@@ -395,6 +395,10 @@ int main(int argc, char **argv)
 			/*fprintf(stderr,"%s: RECV %d %x %x \n",myname,nx,bufin[0],bufin[1]);*/
 			if (nx==0)
 				break;
+			if (nx<0) {
+				perror("vde_plug: read stdin");
+				break;
+			}
 			vdestream_recv(vdestream, bufin, nx);
 		}
 		if (pollv[1].revents & POLLIN) {
