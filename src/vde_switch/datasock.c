@@ -182,7 +182,9 @@ static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d.%d",ctl_socket,portno,fd_data);
 #pragma GCC diagnostic pop
 
-			if ((unlink(sun_in.sun_path) < 0 && errno != ENOENT) ||
+			/* refuse a planted symlink and fail on a socket in use:
+			 * the bind runs as root and must not be redirected */
+			if (prepare_socket_path(&sun_in) < 0 ||
 					bind(fd_data, (struct sockaddr *) &sun_in, sizeof(struct sockaddr_un)) < 0){
 				printlog(LOG_ERR,"Binding to data socket %s",strerror(errno));
 				close_ep(ep);
