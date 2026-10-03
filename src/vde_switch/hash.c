@@ -314,9 +314,13 @@ static void hash_gc_flag(void *arg)
 	 }\
 	 })
 
+/* cap the table at 2^20 entries (8 MB): a huge --hashsize would
+ * make HASH_INIT calloc OOM and exit(1) */
+#define HASH_BITS_MAX 20
+
 static inline int po2round(int vx)
 {
-	if (vx == 0)
+	if (vx <= 0)
 		return 0;
 	else {
 		int i=0;
@@ -324,6 +328,10 @@ static inline int po2round(int vx)
 		while (x) { x>>=1; i++; }
 		if (vx != 1<<i)
 			printlog(LOG_WARNING,"Hash size must be a power of 2. %d rounded to %d",vx,1<<i);
+		if (i > HASH_BITS_MAX) {
+			printlog(LOG_WARNING,"Hash size capped to %d",1<<HASH_BITS_MAX);
+			i = HASH_BITS_MAX;
+		}
 		return i;
 	}
 }
