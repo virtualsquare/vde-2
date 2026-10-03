@@ -33,6 +33,10 @@ static int hash_bits;
 static int hash_mask;
 #define HASH_SIZE (1 << hash_bits)
 
+/* bound the table: a frame flood with fresh source MACs would
+ * otherwise grow it without limit until the switch is OOM-killed */
+#define HASH_MAX_ENTRIES 16384
+
 #ifdef DEBUGOPT
 #define DBGHASHNEW (dl) 
 #define DBGHASHDEL (dl+1) 
@@ -51,6 +55,7 @@ struct hash_entry {
 
 static int delayed_hash_gc;
 static struct hash_entry **h;
+static unsigned int hash_count;
 
 static void hash_gc(void *arg); // forward declaration
 
@@ -89,6 +94,16 @@ static int calc_hash(u_int64_t src)
 #define extmac(MAC,VLAN) \
 	    ((*(u_int32_t *) &((MAC)[0])) + ((u_int64_t) ((*(u_int16_t *) &((MAC)[4]))+ ((u_int64_t) (VLAN) << 16)) << 32))
 
+#define delete_hash_entry(OLD) \
+	({ \
+	 DBGOUT(DBGHASHDEL,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d", EMAC2MAC6(OLD->dst), EMAC2VLAN2(OLD->dst), OLD->port); \
+	 EVENTOUT(DBGHASHDEL,OLD->dst);\
+	 *((OLD)->prev)=(OLD)->next; \
+	 if((OLD)->next != NULL) (OLD)->next->prev = (OLD)->prev; \
+	 hash_count--; \
+	 free((OLD)); \
+	 })
+
 /* looks in global hash table 'h' for given address, and return associated
  * port */
 int find_in_hash(unsigned char *dst,int vlan)
@@ -111,6 +126,21 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 	for(e = h[k]; e && e->dst != esrc; e = e->next)
 		;
 	if(e == NULL) {
+		if (hash_count >= HASH_MAX_ENTRIES) {
+			/* table full: evict one entry to keep memory
+			 * bounded; the GC ages the rest */
+			if (h[k])
+				delete_hash_entry(h[k]);
+			else {
+				int i;
+				for (i = 0; i < HASH_SIZE; i++) {
+					if (h[i]) {
+						delete_hash_entry(h[i]);
+						break;
+					}
+				}
+			}
+		}
 		e = (struct hash_entry *) malloc(sizeof(*e));
 		if(e == NULL){
 			printlog(LOG_WARNING,"Failed to malloc hash entry %s",strerror(errno));
@@ -126,6 +156,7 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 		e->prev = &(h[k]);
 		e->port = port;
 		h[k] = e;
+		hash_count++;
 	}
 	oldport=e->port;
 	now=qtime();
@@ -139,16 +170,6 @@ int find_in_hash_update(unsigned char *src,int vlan,int port)
 	}
 	return oldport;
 }
-
-#define delete_hash_entry(OLD) \
-	({ \
-	 DBGOUT(DBGHASHDEL,"%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d", EMAC2MAC6(OLD->dst), EMAC2VLAN2(OLD->dst), OLD->port); \
-	 EVENTOUT(DBGHASHDEL,OLD->dst);\
-	 *((OLD)->prev)=(OLD)->next; \
-	 if((OLD)->next != NULL) (OLD)->next->prev = (OLD)->prev; \
-	 free((OLD)); \
-	 })
-
 
 void delete_hash(unsigned char *dst,int vlan)
 {
