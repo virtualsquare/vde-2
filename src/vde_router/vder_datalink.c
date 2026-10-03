@@ -605,8 +605,12 @@ int vder_filter(struct vde_buff *buf)
 				return 0;
 
 			case filter_reject:
-				memcpy(foot, footprint(buf), sizeof(struct iphdr) + 8);
-				vder_icmp_filter(ip->saddr, foot);
+				/* need IP header + 8 payload bytes inside the frame,
+				 * otherwise the copy would read past it */
+				if (buf->len >= 14 + sizeof(struct iphdr) + 8) {
+					memcpy(foot, footprint(buf), sizeof(struct iphdr) + 8);
+					vder_icmp_filter(ip->saddr, foot);
+				}
 				/* fall through */
 			case filter_drop:
 				return 1;
