@@ -229,7 +229,7 @@ int counters_parse(void){
 		if(*p == '\0'){
 
 			/* Port 0001 untagged_vlan=0000 INACTIVE - Unnamed Allocatable */
-			if( sscanf(q, "Port %4d %*s %s - %*s\n", &curport, portstatus) == 2 )
+			if( sscanf(q, "Port %4d %*s %9s - %*s\n", &curport, portstatus) == 2 )
 				inport=1;
 			
 			if( inport ){
