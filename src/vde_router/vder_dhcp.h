@@ -108,6 +108,6 @@ struct vder_dhcp_negotiation {
 
 void *dhcp_server_loop(void *ptr_iface);
 void *dhcp_client_loop(void *ptr_iface);
-uint8_t *vder_dhcp_lease_mac(uint32_t ipaddr);
+int vder_dhcp_lease_mac(uint32_t ipaddr, uint8_t *mac_out);
 
 #endif

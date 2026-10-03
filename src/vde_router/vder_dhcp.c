@@ -5,8 +5,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <pthread.h>
 
 static struct vder_dhcp_negotiation *Negotiation_list;
+/* The list is walked from the ARP receive/GC threads via
+ * vder_dhcp_lease_mac() while the DHCP thread inserts/evicts:
+ * all list access goes through this lock. */
+static pthread_mutex_t Negotiation_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct vder_udp_socket *udpsock;
 static struct vder_dhcpd_settings Settings;
 
@@ -22,6 +27,7 @@ static void dhcp_negotiation_evict_stalest(void)
 	struct vder_dhcp_negotiation *oldest = NULL;
 	struct vder_dhcp_negotiation *oldest_prev = NULL;
 
+	pthread_mutex_lock(&Negotiation_lock);
 	while (cur) {
 		if (!oldest || cur->last_seen < oldest->last_seen) {
 			oldest = cur;
@@ -30,12 +36,15 @@ static void dhcp_negotiation_evict_stalest(void)
 		prev = cur;
 		cur = cur->next;
 	}
-	if (!oldest)
+	if (!oldest) {
+		pthread_mutex_unlock(&Negotiation_lock);
 		return;
+	}
 	if (oldest_prev)
 		oldest_prev->next = oldest->next;
 	else
 		Negotiation_list = oldest->next;
+	pthread_mutex_unlock(&Negotiation_lock);
 	free(oldest);
 }
 
@@ -43,27 +52,41 @@ static struct vder_dhcp_negotiation *
 get_negotiation_by_xid(uint32_t xid)
 {
 	struct vder_dhcp_negotiation *cur = Negotiation_list;
+	struct vder_dhcp_negotiation *found = NULL;
+
+	pthread_mutex_lock(&Negotiation_lock);
 	while (cur) {
-		if (cur->xid == xid)
-			return cur;
+		if (cur->xid == xid) {
+			found = cur;
+			break;
+		}
 		cur = cur->next;
 	}
-	return NULL;
+	pthread_mutex_unlock(&Negotiation_lock);
+	return found;
 }
 
 /*
- * Return the MAC of the DHCP lease assigned to this IP (network
- * byte order), or NULL if the IP is not leased by this server.
+ * Copy the MAC of the DHCP lease assigned to this IP (network
+ * byte order) into mac_out; return 0 if the IP is leased by this
+ * server, -1 otherwise. The MAC is copied under the lock: the
+ * negotiation node (and its hwaddr) may be evicted after return.
  */
-uint8_t *vder_dhcp_lease_mac(uint32_t ipaddr)
+int vder_dhcp_lease_mac(uint32_t ipaddr, uint8_t *mac_out)
 {
-	struct vder_dhcp_negotiation *cur = Negotiation_list;
-	while (cur) {
-		if (cur->arp && cur->arp->ipaddr == ipaddr)
-			return cur->hwaddr;
-		cur = cur->next;
+	struct vder_dhcp_negotiation *cur;
+	int found = -1;
+
+	pthread_mutex_lock(&Negotiation_lock);
+	for (cur = Negotiation_list; cur; cur = cur->next) {
+		if (cur->arp && cur->arp->ipaddr == ipaddr) {
+			memcpy(mac_out, cur->hwaddr, 6);
+			found = 0;
+			break;
+		}
 	}
-	return NULL;
+	pthread_mutex_unlock(&Negotiation_lock);
+	return found;
 }
 
 static uint8_t dhcp_get_next_option(uint8_t *begin, uint8_t *data, int *len, uint8_t **nextopt)
@@ -209,12 +232,16 @@ static void dhcp_recv(uint8_t *buffer, int len)
 		dn->state = DHCPSTATE_DISCOVER;
 		dn->last_seen = time(NULL);
 		memcpy(dn->hwaddr, dhdr->hwaddr, HLEN_ETHER);
+		pthread_mutex_lock(&Negotiation_lock);
 		for (cur = Negotiation_list; cur; cur = cur->next)
 			n++;
+		pthread_mutex_unlock(&Negotiation_lock);
 		if (n >= DHCP_MAX_NEGOTIATIONS)
 			dhcp_negotiation_evict_stalest();
+		pthread_mutex_lock(&Negotiation_lock);
 		dn->next = Negotiation_list;
 		Negotiation_list = dn;
+		pthread_mutex_unlock(&Negotiation_lock);
 		dn->arp = vder_arp_get_record_by_macaddr(Settings.iface, dn->hwaddr);
 		if (!dn->arp) {
 			dn->arp = malloc(sizeof(struct vder_arp_entry));

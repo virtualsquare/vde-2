@@ -35,9 +35,11 @@ void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
 		} else {
 			/* A DHCP lease is the authoritative binding for its IP:
 			 * do not let an unauthenticated ARP packet point the
-			 * address at a different MAC (poisoning). */
-			uint8_t *lease_mac = vder_dhcp_lease_mac(p->ipaddr);
-			if (lease_mac && memcmp(lease_mac, p->macaddr, 6) != 0)
+			 * address at a different MAC (poisoning). The MAC is
+			 * copied out: the lease node may be evicted after. */
+			uint8_t lease_mac[6];
+			if (vder_dhcp_lease_mac(p->ipaddr, lease_mac) == 0 &&
+			    memcmp(lease_mac, p->macaddr, 6) != 0)
 				return;
 			/* Update existing entry */
 			memcpy(entry->macaddr,p->macaddr,6);
@@ -249,6 +251,7 @@ static void arp_gc_iface(struct vder_iface *vif, time_t now)
 {
 	struct vder_arp_entry **stack = NULL;
 	int top = 0, cap = 0;
+	uint8_t lease_mac[6];
 	struct rb_node *node = vif->arp_table.rb_node;
 
 	while (node || top > 0) {
@@ -269,7 +272,7 @@ static void arp_gc_iface(struct vder_iface *vif, time_t now)
 		struct vder_arp_entry *ae = stack[--top];
 		node = ae->rb_node.rb_right;
 		if ((now - ae->last_seen) > ARP_GC_TIMEOUT &&
-		    !vder_dhcp_lease_mac(ae->ipaddr)) {
+		    vder_dhcp_lease_mac(ae->ipaddr, lease_mac) != 0) {
 			rb_erase(&ae->rb_node, &vif->arp_table);
 			free(ae);
 		}
