@@ -155,19 +155,38 @@ static void copyadjmap(int newsize, double *newmap)
 	}
 }
 
+/* cap the node count: the adjacency map is numnodes^2 doubles, and
+ * the cap also keeps the calloc size out of int overflow */
+#define MARKOV_MAX_NODES 1024
+
 static void markov_resize(int numnodes)
 {
+	if (numnodes > MARKOV_MAX_NODES)
+		return;
 	if (numnodes != markov_numnodes) {
 		int i;
 		double *newadjmap=calloc(numnodes*numnodes,sizeof(double));
+		struct markov_node **newnodes;
+		if (newadjmap == NULL)
+			return;
 		if (numnodes>markov_numnodes) {
-			markov_nodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			newnodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			if (newnodes == NULL) {
+				free(newadjmap);
+				return;
+			}
+			markov_nodes=newnodes;
 			for (i=markov_numnodes;i<numnodes;i++)
 				markov_nodes[i]=markov_node_new();
 		} else {
 			for (i=numnodes;i<markov_numnodes;i++)
 				markov_node_free(markov_nodes[i]);
-			markov_nodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			newnodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			if (newnodes == NULL) {
+				free(newadjmap);
+				return;
+			}
+			markov_nodes=newnodes;
 			if (markov_current >= numnodes)
 				markov_current = 0;
 		}
