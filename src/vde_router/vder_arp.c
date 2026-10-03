@@ -22,6 +22,8 @@ void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
 {
 	struct rb_node **link, *parent;
 	uint32_t hostorder_ip = ntohl(p->ipaddr);
+
+	pthread_mutex_lock(&vif->arp_lock);
 	link = &vif->arp_table.rb_node;
 	parent = *link;
 	while (*link) {
@@ -39,36 +41,50 @@ void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
 			 * copied out: the lease node may be evicted after. */
 			uint8_t lease_mac[6];
 			if (vder_dhcp_lease_mac(p->ipaddr, lease_mac) == 0 &&
-			    memcmp(lease_mac, p->macaddr, 6) != 0)
+			    memcmp(lease_mac, p->macaddr, 6) != 0) {
+				pthread_mutex_unlock(&vif->arp_lock);
 				return;
+			}
 			/* Update existing entry */
 			memcpy(entry->macaddr,p->macaddr,6);
 			entry->last_seen = time(NULL);
+			pthread_mutex_unlock(&vif->arp_lock);
 			return;
 		}
 	}
 	p->last_seen = time(NULL);
 	rb_link_node(&p->rb_node, parent, link);
 	rb_insert_color(&p->rb_node, &vif->arp_table);
+	pthread_mutex_unlock(&vif->arp_lock);
 }
 
-struct vder_arp_entry *vder_get_arp_entry(struct vder_iface *vif, uint32_t addr)
+/*
+ * Copy the MAC of the ARP entry for this IP into mac_out; return
+ * 0 if found, -1 otherwise. The MAC is copied under the table
+ * lock: the entry may be evicted by the GC thread after return.
+ */
+int vder_get_arp_entry_mac(struct vder_iface *vif, uint32_t addr,
+			   uint8_t *mac_out)
 {
 	struct rb_node *node;
-	struct vder_arp_entry *found=NULL;
 	uint32_t hostorder_ip = ntohl(addr);
+	int found = -1;
+
+	pthread_mutex_lock(&vif->arp_lock);
 	node = vif->arp_table.rb_node;
-	while(node) {
+	while (node) {
 		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
 		if (ntohl(entry->ipaddr) > hostorder_ip)
 			node = node->rb_left;
 		else if (ntohl(entry->ipaddr) < hostorder_ip)
 			node = node->rb_right;
 		else {
-			found = entry;
+			memcpy(mac_out, entry->macaddr, 6);
+			found = 0;
 			break;
 		}
 	}
+	pthread_mutex_unlock(&vif->arp_lock);
 	return found;
 }
 
@@ -187,23 +203,15 @@ int vder_parse_arp(struct vder_iface *vif, struct vde_buff *vdb)
 	 * dhcp_recv() and never answers that client again.  Do not learn from those.
 	 */
 	if (ah->s_addr != 0) {
-		/* This used to malloc an entry for every ARP packet and hand it to
-		 * vder_add_arp_entry(), which updates the existing node when the address
-		 * is already known and does not free what it was given - one leaked
-		 * entry per ARP packet from an address we have already seen.  Update in
-		 * place instead, and allocate only for addresses that are new.
-		 */
-		ae = vder_get_arp_entry(vif, ah->s_addr);
-		if (ae) {
-			memcpy(ae->macaddr, ah->s_mac, 6);
-		} else {
-			ae = (struct vder_arp_entry *) malloc(sizeof(struct vder_arp_entry));
-			if (!ae)
-				return -1;
-			memcpy(ae->macaddr, ah->s_mac, 6);
-			ae->ipaddr = ah->s_addr;
-			vder_add_arp_entry(vif, ae);
-		}
+		/* vder_add_arp_entry() updates the existing node in place when the
+		 * address is already known; the lookup API hands out pointers the
+		 * GC thread can free, so the entry is always handed to it owned. */
+		ae = (struct vder_arp_entry *) malloc(sizeof(struct vder_arp_entry));
+		if (!ae)
+			return -1;
+		memcpy(ae->macaddr, ah->s_mac, 6);
+		ae->ipaddr = ah->s_addr;
+		vder_add_arp_entry(vif, ae);
 	}
 
 	if(ntohs(ah->opcode) == ARP_REQUEST && vder_arp_should_reply(vif, ah->d_addr))
@@ -214,14 +222,21 @@ int vder_parse_arp(struct vder_iface *vif, struct vde_buff *vdb)
 struct vder_arp_entry *vder_arp_get_record_by_macaddr(struct vder_iface *vif, uint8_t *mac)
 {
 	struct rb_node *node;
+	struct vder_arp_entry *found = NULL;
 
+	/* The caller (DHCP insert) keeps the pointer only while the
+	 * lease is alive; arp_gc_iface never evicts a leased IP, so
+	 * the entry outlives every live lease node. */
+	pthread_mutex_lock(&vif->arp_lock);
 	for (node = rb_first(&vif->arp_table); node; node = rb_next(node)) {
 		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
-		if (memcmp(entry->macaddr, mac, ETHERNET_ADDRESS_SIZE) == 0)
-			return entry;
+		if (memcmp(entry->macaddr, mac, ETHERNET_ADDRESS_SIZE) == 0) {
+			found = entry;
+			break;
+		}
 	}
-
-	return NULL;
+	pthread_mutex_unlock(&vif->arp_lock);
+	return found;
 }
 
 int vder_arp_get_neighbors(struct vder_iface *vif, uint32_t *neighbors, int vector_size)
@@ -231,13 +246,14 @@ int vder_arp_get_neighbors(struct vder_iface *vif, uint32_t *neighbors, int vect
 	if (vector_size <= 0)
 		return -EINVAL;
 
+	pthread_mutex_lock(&vif->arp_lock);
 	for (node = rb_first(&vif->arp_table); node; node = rb_next(node)) {
 		struct vder_arp_entry *entry = rb_entry(node, struct vder_arp_entry, rb_node);
 		neighbors[i++] = entry->ipaddr;
 		if (i == vector_size)
-			return i;
+			break;
 	}
-
+	pthread_mutex_unlock(&vif->arp_lock);
 	return i;
 }
 
@@ -254,6 +270,7 @@ static void arp_gc_iface(struct vder_iface *vif, time_t now)
 	uint8_t lease_mac[6];
 	struct rb_node *node = vif->arp_table.rb_node;
 
+	pthread_mutex_lock(&vif->arp_lock);
 	while (node || top > 0) {
 		while (node) {
 			if (top == cap) {
@@ -261,6 +278,7 @@ static void arp_gc_iface(struct vder_iface *vif, time_t now)
 				struct vder_arp_entry **ns = realloc(stack, ncap * sizeof *ns);
 				if (!ns) {
 					free(stack);
+					pthread_mutex_unlock(&vif->arp_lock);
 					return;
 				}
 				stack = ns;
@@ -277,6 +295,7 @@ static void arp_gc_iface(struct vder_iface *vif, time_t now)
 			free(ae);
 		}
 	}
+	pthread_mutex_unlock(&vif->arp_lock);
 	free(stack);
 }
 

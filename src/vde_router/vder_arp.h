@@ -18,7 +18,8 @@ struct vder_arp_entry {
 };
 
 void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p);
-struct vder_arp_entry *vder_get_arp_entry(struct vder_iface *vif, uint32_t addr);
+int vder_get_arp_entry_mac(struct vder_iface *vif, uint32_t addr,
+			   uint8_t *mac_out);
 size_t vder_arp_query(struct vder_iface *oif, uint32_t tgt);
 size_t vder_arp_reply(struct vder_iface *oif, struct vde_buff *vdb);
 /* Parse an incoming arp packet */;

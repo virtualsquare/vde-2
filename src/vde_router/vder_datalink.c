@@ -334,6 +334,7 @@ struct vder_iface *vder_iface_new(char *sock, uint8_t *macaddr)
 
 	sem_init(&vif->out_q.semaphore, 0, 0);
 	sem_init(&vif->prio_semaphore, 0, 0);
+	pthread_mutex_init(&vif->arp_lock, NULL);
 
 	queue_init(&vif->out_q);
 	vif->out_q.type = QTYPE_OUT;

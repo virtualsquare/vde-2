@@ -107,7 +107,7 @@ int vder_packet_send(struct vde_buff *vdb, uint32_t dst_ip, uint8_t protocol)
 	struct iphdr *iph=iphead(vdb);
 	struct vde_ethernet_header *eth = ethhead(vdb);
 	struct vder_route *ro;
-	struct vder_arp_entry *ae;
+	uint8_t ae_mac[6];
 
 	uint32_t destination = dst_ip;
 
@@ -130,12 +130,11 @@ int vder_packet_send(struct vde_buff *vdb, uint32_t dst_ip, uint8_t protocol)
 	}
 	iph->saddr = vder_get_right_localip(ro->iface, destination);
 	iph->check = htons(vder_ip_checksum(iph));
-	ae = vder_get_arp_entry(ro->iface, destination);
-	if (!ae) {
+	if (vder_get_arp_entry_mac(ro->iface, destination, ae_mac) != 0) {
 		vder_arp_query(ro->iface, destination);
 		return -1;
 	}
-	return vder_sendto(ro->iface, vdb, ae->macaddr);
+	return vder_sendto(ro->iface, vdb, ae_mac);
 }
 
 /**
@@ -155,7 +154,7 @@ int vder_packet_forward(struct vde_buff *vdb, uint32_t dst_ip)
 	struct iphdr *iph = iphead(vdb);
 	struct vde_ethernet_header *eth = ethhead(vdb);
 	struct vder_route *ro;
-	struct vder_arp_entry *ae;
+	uint8_t ae_mac[6];
 	uint32_t destination = dst_ip;
 
 	eth->buftype = htons(PTYPE_IP);
@@ -170,8 +169,7 @@ int vder_packet_forward(struct vde_buff *vdb, uint32_t dst_ip)
 
 	iph->check = htons(vder_ip_checksum(iph));
 
-	ae = vder_get_arp_entry(ro->iface, destination);
-	if (!ae) {
+	if (vder_get_arp_entry_mac(ro->iface, destination, ae_mac) != 0) {
 		/* We do not know the next hop's MAC yet.  Ask, drop this one, and let
 		 * the caller tell the two failures apart: a cold cache is not the same
 		 * thing as no route.
@@ -180,7 +178,7 @@ int vder_packet_forward(struct vde_buff *vdb, uint32_t dst_ip)
 		errno = EAGAIN;
 		return -1;
 	}
-	return vder_sendto(ro->iface, vdb, ae->macaddr);
+	return vder_sendto(ro->iface, vdb, ae_mac);
 }
 
 int vder_packet_broadcast(struct vde_buff *vdb, struct vder_iface *iface, uint32_t dst_ip, uint8_t protocol)

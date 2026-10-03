@@ -148,6 +148,7 @@ struct vder_iface {
 	VDECONN *vdec;
 	char vde_sock[1024];
 	struct rb_root arp_table;
+	pthread_mutex_t arp_lock;
 	struct vder_queue out_q;
 
 	struct vder_queue prio_q[256];
