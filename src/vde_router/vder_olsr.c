@@ -683,12 +683,18 @@ static void olsr_recv(uint8_t *buffer, int len)
 
 	while (len > parsed) {
 		struct olsr_route_entry *origin;
+		int msize;
 		msg = (struct olsrmsg *) (buffer + parsed);
+		msize = ntohs(msg->size);
+		/* require a complete message, fully inside the datagram:
+		 * guarantees forward progress and bounds the payload reads */
+		if (msize < (int)sizeof(struct olsrmsg) || parsed + msize > len)
+			break;
 		origin = get_route_by_address(Local_interfaces, msg->orig);
 		if (!origin) {
 			/* Discard this msg while it is not from known host */
 			arp_storm(msg->orig);
-			parsed += ntohs(msg->size);
+			parsed += msize;
 			continue;
 		}
 		/* We know this is a Master host and a neighbor */
@@ -734,13 +740,12 @@ static void olsr_recv(uint8_t *buffer, int len)
 				return;
 		}
 		if ((--msg->ttl) > 0) {
-			int msize = ntohs(msg->size);
 			if (outsize + msize <= (int)sizeof(outmsg)) {
 				memcpy(outmsg + outsize, msg, msize);
 				outsize += msize;
 			}
 		}
-		parsed += ntohs(msg->size);
+		parsed += msize;
 	}
 
 	if (outsize > sizeof(struct olsrhdr)) {
