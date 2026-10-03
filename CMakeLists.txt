@@ -51,6 +51,8 @@ option(ENABLE_TUNTAP "Enable tuntap support" ON)
 option(ENABLE_EXPERIMENTAL "Enable experimental features" OFF)
 option(ENABLE_PROFILE "Enable profiling options" OFF)
 set(WITH_CRYPT "wolfssl" CACHE STRING "Choose implementation for cryptcab (wolfssl or mbedtls)")
+set(VDE_MTU 1504 CACHE STRING "Maximum frame size in bytes (payload incl. trailer) for vde_switch and vde_vxlan")
+add_definitions(-DVDE_MTU=${VDE_MTU})
 set(crypt ${WITH_CRYPT})
 
 # Set compiler flags

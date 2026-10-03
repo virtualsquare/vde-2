@@ -12,6 +12,9 @@
 
 #define ETH_HEADER_SIZE 14
 /* a full ethernet 802.3 frame */
+#ifndef VDE_MTU
+#define VDE_MTU 1504
+#endif
 struct ethheader {
 	unsigned char dest[ETH_ALEN];
 	unsigned char src[ETH_ALEN];
@@ -20,7 +23,7 @@ struct ethheader {
 
 struct packet {
 	struct ethheader header;
-  unsigned char data[1504]; /*including trailer, IF ANY */
+  unsigned char data[VDE_MTU]; /*including trailer, IF ANY */
 };
 
 struct bipacket {
