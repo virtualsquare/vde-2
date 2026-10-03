@@ -634,7 +634,7 @@ int alinklinkonoff(int fd, char *arg)
 	if(!curlink) return ENXIO;
 	
 	if(value){
-		if(!curlink->wires) return ENXIO;
+		if(!curlink->wires || !curlink->wires[0]) return ENXIO;
 		if(curlink->enabled) return 0;
 		curlink->enabled = 1;
 		curlink->state = ST_DISCARD;
