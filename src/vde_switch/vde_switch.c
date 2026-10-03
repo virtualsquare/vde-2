@@ -162,11 +162,14 @@ void add_fd(int fd,unsigned char type,void *private_data)
 		}
 	}
 	if (fd >= fdpermsize) {
+		int oldsize = fdpermsize;
 		fdpermsize = ((fd >> FDPERMSIZE_LOGSTEP) + 1) << FDPERMSIZE_LOGSTEP;
 		if((fdperm = realloc(fdperm, fdpermsize * sizeof(short))) == NULL){
 			printlog(LOG_ERR,"realloc fdperm %s",strerror(errno));
 			exit(1);
 		}
+		/* new slots are unregistered (-1) */
+		memset(fdperm + oldsize, 0xFF, (fdpermsize - oldsize) * sizeof(short));
 	}
 	if (ISPRIO(type)) {
 		fds[nfds]=fds[nprio];
@@ -213,6 +216,9 @@ void remove_fd(int fd)
 		memmove(&fdpp[i], &fdpp[i + 1], (nfds - i - 1) * sizeof(struct pollplus *));
 		for(;i<nfds;i++)
 			fdperm[fds[i].fd]=i;
+		/* drop the stale mapping of the removed fd: the slot it
+		 * pointed at is reused by the next add_fd */
+		fdperm[fd] = -1;
 		free(old);
 		nfds--;
 	}
@@ -221,7 +227,7 @@ void remove_fd(int fd)
 /* read/update events/private_data */
 void *mainloop_get_private_data(int fd)
 {
-	if (fd >= 0 && fd < fdpermsize)
+	if (fd >= 0 && fd < fdpermsize && fdperm[fd] >= 0)
 		return (fdpp[fdperm[fd]]->private_data);
 	else
 		return NULL;
@@ -229,12 +235,14 @@ void *mainloop_get_private_data(int fd)
 
 void mainloop_set_private_data(int fd,void *private_data)
 {
-	if (fd >=0  && fd < fdpermsize)
+	if (fd >=0  && fd < fdpermsize && fdperm[fd] >= 0)
 		fdpp[fdperm[fd]]->private_data = private_data;
 }
 
 short mainloop_pollmask_get(int fd)
 {
+	if (fd < 0 || fd >= fdpermsize || fdperm[fd] < 0)
+		return 0;
 #if DEBUG_MAINLOOP_MASK
 	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
 #endif
@@ -243,6 +251,8 @@ short mainloop_pollmask_get(int fd)
 
 void mainloop_pollmask_add(int fd, short events)
 {
+	if (fd < 0 || fd >= fdpermsize || fdperm[fd] < 0)
+		return;
 #if DEBUG_MAINLOOP_MASK
 	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
 #endif
@@ -251,6 +261,8 @@ void mainloop_pollmask_add(int fd, short events)
 
 void mainloop_pollmask_del(int fd, short events)
 {
+	if (fd < 0 || fd >= fdpermsize || fdperm[fd] < 0)
+		return;
 #if DEBUG_MAINLOOP_MASK
 	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
 #endif
@@ -259,6 +271,8 @@ void mainloop_pollmask_del(int fd, short events)
 
 void mainloop_pollmask_set(int fd, short events)
 {
+	if (fd < 0 || fd >= fdpermsize || fdperm[fd] < 0)
+		return;
 #if DEBUG_MAINLOOP_MASK
 	if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n",fds[fdperm[fd]].fd,fd);
 #endif
