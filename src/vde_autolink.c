@@ -1247,11 +1247,13 @@ static int runscript(int fd,char *path)
 	if (f==NULL)
 		return ENOENT;
 	else {
+		/* do not echo the script lines back: the daemon runs as root,
+		 * the echo would let a mgmt user read any root-readable file;
+		 * handle_cmd dispatch is equivalent to direct mgmt commands */
+		if (fd >= 0) printoutc(fd,"vde_autolink: running script %s",path);
 		while (fgets(buf,MAXCMD,f) != NULL) {
 			if (strlen(buf) > 1 && buf[strlen(buf)-1]=='\n')
 						buf[strlen(buf)-1]= '\0';
-			if (fd >= 0) printoutc(fd,"vde_autolink[%s]: %s",
-						path,buf);
 			handle_cmd(fd, buf);
 		}
 		return 0;
