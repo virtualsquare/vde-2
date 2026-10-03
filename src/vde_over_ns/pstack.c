@@ -63,6 +63,9 @@ nstx_handlepacket(const char *ptr, size_t len,
    if (!nstxpkt->id)
      return;
    
+   if (nstxpkt->magic != NSTX_MAGIC)
+     return;
+   
    nstxitem = get_item_by_id(nstxpkt->id);
    
    if (!nstxitem)
