@@ -109,6 +109,10 @@ void vxlan_process() {
 		printlog(LOG_ERR, "recvfrom(): %s", strerror(errno));
 		return;
 	}
+	if (len < offsetof(struct vxlan_pkt, pkt) + ETH_HEADER_SIZE) {
+		printlog(LOG_DEBUG, "Short VXLAN packet dropped");
+		return;
+	}
 
 	printlog(LOG_DEBUG, "VXLAN packet from %s",inet_ntoa(src_addr.sin_addr));
 
