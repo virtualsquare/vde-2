@@ -150,8 +150,9 @@ send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 	struct sockaddr_in *destination=&(p->in_a);
 	unsigned char *crc;
 
-	if (len + 8 - 1 > MAXPKT) {
-		len = MAXPKT - 8 + 1;
+	/* room for 1 flag byte + len payload + 12 byte tail (crc + counter) */
+	if (len + 13 > MAXPKT) {
+		len = MAXPKT - 13;
 		vc_printlog(2,"Warning: Cropping down packet size to %d", len);
 	}
 
