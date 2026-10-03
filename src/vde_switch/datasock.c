@@ -90,7 +90,7 @@ static int send_datasock(int fd_ctl, int fd_data, void *packet, int len, int por
 {
 	while (send(fd_data, packet, len, 0) < 0) {
 		int rv=errno;
-#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD) || defined(VDE_NETBSD)
 		if(rv == ENOBUFS) {
 			sched_yield();
 			continue;

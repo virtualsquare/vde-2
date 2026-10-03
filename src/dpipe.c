@@ -201,7 +201,11 @@ int main(int argc, char *argv[])
 
 	if (daemonize != 0)
 		daemon(0,0);
+#if defined(VDE_FREEBSD) || defined(VDE_NETBSD)
+	else if (setpgid(0, 0) == -1) {
+#else
 	else if (setpgrp() == -1) {
+#endif
 		fprintf(stderr,"Err: cannot create pgrp\n");
 		perror("setpgrp");
 		exit(1);

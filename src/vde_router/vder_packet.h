@@ -6,6 +6,8 @@
 #ifndef _VDER_PACKET
 #define _VDER_PACKET
 
+struct iphdr;
+
 #define DEFAULT_TTL 64
 uint16_t vder_ip_checksum(struct iphdr *iph);
 void vder_packet_recv(struct vder_iface *vif, int timeout);
