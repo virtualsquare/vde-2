@@ -252,9 +252,31 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 	int fd;
 	char filename[256 + 1];
 	if(!pre_shared) {
-		if (strlen((char *)pkt->data + 1) > (256 - 11))
-			*(pkt->data + 1 + 256 - 11) = 0;
-		snprintf(filename,256,"/tmp/.%s.key",pkt->data+1);
+		const char *id = (const char *)pkt->data + 1;
+		int idlen = pkt->len - 1;
+		int i;
+		if (idlen < 0)
+			idlen = 0;
+		if (idlen > 245)
+			idlen = 245;
+		/* The login id becomes part of a file path: allow only
+		 * plain filename characters and no leading/double dots,
+		 * so the path stays inside /tmp. */
+		for (i = 0; i < idlen; i++) {
+			char c = id[i];
+			if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			      (c >= '0' && c <= '9') || c == '_' || c == '-' ||
+			      c == '.'))
+				break;
+			if (c == '.' && (i == 0 || id[i-1] == '.'))
+				break;
+		}
+		if (i < idlen) {
+			vc_printlog(2, "Login id rejected: invalid characters\n");
+			deny_access(pkt->orig);
+			return;
+		}
+		snprintf(filename,256,"/tmp/.%.*s.key",idlen,id);
 	} else
 		snprintf(filename,256,"%s",pre_shared);
 	sync();
