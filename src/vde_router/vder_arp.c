@@ -43,12 +43,14 @@ void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
 			if (vder_dhcp_lease_mac(p->ipaddr, lease_mac) == 0 &&
 			    memcmp(lease_mac, p->macaddr, 6) != 0) {
 				pthread_mutex_unlock(&vif->arp_lock);
+				free(p);
 				return;
 			}
 			/* Update existing entry */
 			memcpy(entry->macaddr,p->macaddr,6);
 			entry->last_seen = time(NULL);
 			pthread_mutex_unlock(&vif->arp_lock);
+			free(p);
 			return;
 		}
 	}
