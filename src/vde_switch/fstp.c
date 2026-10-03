@@ -692,7 +692,7 @@ static int fstprint(FILE *fd,char *arg)
 	if (*arg != 0) {
 		int vlan;
 		vlan=atoi(arg);
-		if (vlan >= 0 && vlan < NUMOFVLAN-1) {
+		if (vlan >= 0 && vlan < NUMOFVLAN) {
 			if (bac_check(validvlan,vlan))
 				fstprintactive(vlan,fd);
 			else
