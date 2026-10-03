@@ -342,6 +342,11 @@ rcv_response(struct datagram *pkt)
  * of the vde_plug attached, or from udp socket.
  * Returns a struct datagram aware of its own source.
  */
+/* cap the peer list: a UDP flood from many (spoofed) source
+ * addresses would otherwise allocate one peer per unseen address
+ * between the expiry sweeps */
+#define MAXPEERS 1024
+
 static int recv_datagram_srv(struct datagram *pkt, int nfd)
 {
 	unsigned peerlen;
@@ -381,6 +386,8 @@ static int recv_datagram_srv(struct datagram *pkt, int nfd)
 
 			pkt->orig=getpeer(ipaddress);
 			if(!pkt->orig){
+				if (numberofpeers() >= MAXPEERS)
+					return 0; /* drop the packet */
 				pkt->orig=malloc(sizeof(struct peer));
 				memset(pkt->orig,0,sizeof(struct peer));
 				pkt->orig->in_a.sin_family = AF_INET;
