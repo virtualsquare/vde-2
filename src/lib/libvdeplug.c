@@ -398,8 +398,14 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		do
 		{
 			struct sockaddr_un reqsock;
+			int n;
 			/* Here sockname is the last successful one in the previous step. */
-			sprintf(req.sock.sun_path, "%s/.%05d-%05d", sockname, pid, sockno++);
+			n = snprintf(req.sock.sun_path, sizeof(req.sock.sun_path), "%s/.%05d-%05d", sockname, pid, sockno++);
+			if (n < 0 || n >= (int)sizeof(req.sock.sun_path)) {
+				/* canonical name too long for sun_path */
+				res = -1;
+				break;
+			}
 			reqsock = req.sock;
 			res=bind(conn->fddata, (struct sockaddr *) &reqsock, sizeof (req.sock));
 		}
