@@ -24,6 +24,9 @@
 
 #define ETH_ALEN 6
 #define ETH_HEADER_SIZE 14
+#ifndef VDE_MTU
+#define VDE_MTU 1504
+#endif
 
 struct eth_hdr {
 	unsigned char dest[ETH_ALEN];
@@ -33,7 +36,7 @@ struct eth_hdr {
 
 struct eth_pkt {
 	struct eth_hdr header;
-	unsigned char data[1504]; /*including trailer, IF ANY */
+	unsigned char data[VDE_MTU]; /*including trailer, IF ANY */
 };
 
 struct vxlan_pkt {
