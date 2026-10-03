@@ -130,14 +130,14 @@ int find_in_hash_update(unsigned char *src, int vlan, in_addr_t port, in_addr_t 
 	}
 	oldport=e->port;
 	now=time(NULL);
-	if (oldport!=port) {
-		if ((now - e->last_seen) > min_persistence) {
-			e->port=port;
-			e->last_seen = now;
-		}
-	} else {
-		e->last_seen = now;
+	if (oldport!=port && port == 1 && (now - e->last_seen) > min_persistence) {
+		/* Only a locally attached VM (port 1) may re-bind an
+		 * existing MAC: a frame from the network can create an
+		 * entry on first sight, but a spoofed source MAC must
+		 * not point an existing MAC at a new remote host. */
+		e->port=port;
 	}
+	e->last_seen = now;
 	if (out != NULL) *out = oldport;
 	return 1;
 }
