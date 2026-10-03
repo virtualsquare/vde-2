@@ -197,7 +197,7 @@ for(;;){
 void
 send_vde(const char *data, size_t len)
   {
-	static unsigned int outbuf[MAXPKT];
+	static unsigned char outbuf[MAXPKT];
 	static int outp;
 	static u_int16_t outlen;
 	if(len<=0)
