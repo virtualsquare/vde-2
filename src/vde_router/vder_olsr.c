@@ -554,15 +554,22 @@ static void recv_hello(uint8_t *buffer, int len, struct olsr_route_entry *origin
 	struct olsr_link *li;
 	struct olsr_route_entry *e;
 	int parsed = 0;
+	int msg_size;
 	struct olsr_neighbor *neigh;
 
 	if (!origin)
 		return;
 
 	while (len > parsed) {
-		li = (struct olsr_link *) buffer;
+		li = (struct olsr_link *) (buffer + parsed);
 		neigh = (struct olsr_neighbor *)(buffer + parsed + sizeof(struct olsr_link));
-		parsed += ntohs(li->link_msg_size);
+		msg_size = ntohs(li->link_msg_size);
+		/* a complete record is link header + neighbor; require
+		 * forward progress and a record inside the payload */
+		if (msg_size < (int)(sizeof(struct olsr_link) + sizeof(struct olsr_neighbor)) ||
+		    parsed + msg_size > len)
+			return;
+		parsed += msg_size;
 		e = get_route_by_address(Local_interfaces, neigh->addr);
 		if (!e) {
 			e = malloc(sizeof(struct olsr_route_entry));
