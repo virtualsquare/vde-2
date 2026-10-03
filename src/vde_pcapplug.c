@@ -190,7 +190,10 @@ static void save_pidfile()
 
 void pcap_callback(u_char *u, const struct pcap_pkthdr *h, const u_char *data)
 {
-	vde_send(conn, data, h->len, 0);
+	/* caplen is the number of bytes actually captured in data;
+	 * len is the original on-wire size and can exceed the buffer
+	 * when the snapshot length truncated the capture */
+	vde_send(conn, data, h->caplen, 0);
 }
 
 void setup_fd(int fd)
