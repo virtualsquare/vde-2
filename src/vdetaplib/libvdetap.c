@@ -184,7 +184,7 @@ int ioctl(int fd, unsigned long int command, ...)
 		if (command == TUNSETIFF) {
 			struct ifreq *ifr = (struct ifreq *) data;
 			char num[5];
-			char name[10];
+			char name[64];
 			char scallerpid[6];
 
 			ifr->ifr_name[IFNAMSIZ-1] = '\0';
@@ -193,11 +193,19 @@ int ioctl(int fd, unsigned long int command, ...)
 					sprintf(name,"tap%d",tapcount++);
 				else
 					sprintf(name,"tun%d",tuncount++);
-				strncpy(ifr->ifr_name,name,IFNAMSIZ);
+				snprintf(ifr->ifr_name, IFNAMSIZ, "%.*s", IFNAMSIZ-1, name);
 			}
 			else if (strchr(ifr->ifr_name, '%') != NULL) {
-				sprintf(name,ifr->ifr_name,tapcount++);
-				strncpy(ifr->ifr_name,name,IFNAMSIZ);
+				/* ifr_name is caller-controlled: use it as data only,
+				 * substitute the first %d with the counter */
+				const char *pct = strstr(ifr->ifr_name, "%d");
+				if (pct)
+					snprintf(name, sizeof(name), "%.*s%d%s",
+						(int)(pct - ifr->ifr_name), ifr->ifr_name,
+						tapcount++, pct+2);
+				else
+					snprintf(name, sizeof(name), "%s", ifr->ifr_name);
+				snprintf(ifr->ifr_name, IFNAMSIZ, "%.*s", IFNAMSIZ-1, name);
 			}
 			if ((ifr->ifr_flags & IFF_TAP) && (
 					/* from env: single interface or VDEALLTAP */
