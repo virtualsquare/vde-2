@@ -251,10 +251,11 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 {
 	int fd;
 	char filename[256 + 1];
+	int idlen;
 	if(!pre_shared) {
 		const char *id = (const char *)pkt->data + 1;
-		int idlen = pkt->len - 1;
 		int i;
+		idlen = pkt->len - 1;
 		if (idlen < 0)
 			idlen = 0;
 		if (idlen > 245)
@@ -277,8 +278,10 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 			return;
 		}
 		snprintf(filename,256,"/tmp/.%.*s.key",idlen,id);
-	} else
+	} else {
 		snprintf(filename,256,"%s",pre_shared);
+		idlen = 0;
+	}
 	sync();
 	usleep(10000);	
 	if (((fd = open (filename, O_RDONLY)) == -1)||
@@ -290,7 +293,14 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 	}
 
 	close(fd);
-	memcpy(pkt->orig->id,pkt->data+1,FILENAMESIZE);
+	/* store only the validated id, NUL-terminated: a fixed 16-byte
+	 * copy read past the id into the datagram and left id[] without
+	 * a NUL, so the later "/tmp/.%s.key" unlink() saw unvalidated
+	 * bytes (path traversal) and read past the field. */
+	if (idlen > FILENAMESIZE-1)
+		idlen = FILENAMESIZE-1;
+	memcpy(pkt->orig->id,pkt->data+1,idlen);
+	pkt->orig->id[idlen]=0;
 	vc_printlog(2,"Sending challenge... ");
 	send_challenge(pkt->orig);
 	set_expire(pkt->orig, CMD_CHALLENGE);
