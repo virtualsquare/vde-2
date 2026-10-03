@@ -662,8 +662,11 @@ static void olsr_recv(uint8_t *buffer, int len)
 				return;
 		}
 		if ((--msg->ttl) > 0) {
-			memcpy(outmsg + outsize, msg, ntohs(msg->size));
-			outsize += ntohs(msg->size);
+			int msize = ntohs(msg->size);
+			if (outsize + msize <= (int)sizeof(outmsg)) {
+				memcpy(outmsg + outsize, msg, msize);
+				outsize += msize;
+			}
 		}
 		parsed += ntohs(msg->size);
 	}
