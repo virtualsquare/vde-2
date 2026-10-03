@@ -464,10 +464,15 @@ int vdehist_term_to_mgmt(struct vdehiststat *st)
 		return n;
 	else {
 		for (i=0;i<n && strlen(st->linebuf)<BUFSIZE;i++) {
-			if (i+1 >= n)
-				break; /* incomplete sequence at end of read */
-			if (buf[i] == 0xff && buf[i+1] == 0xff)
+			/* only multi-byte sequences may end a read: a lone
+			 * trailing IAC is incomplete; plain bytes are processed */
+			if (buf[i] == 0xff && i+1 >= n)
+				break; /* incomplete IAC at end of read */
+			if (buf[i] == 0xff && buf[i+1] == 0xff) {
 				i++;
+				if (i+1 >= n)
+					break; /* IAC IAC: escaped IAC is the last byte */
+			}
 			if(buf[i]==0) buf[i]='\n'; /*telnet encode \n as a 0 when in raw mode*/
 			if (buf[i] == 0xff && buf[i+1] != 0xff) {
 				if (i+2 >= n)
@@ -477,6 +482,8 @@ int vdehist_term_to_mgmt(struct vdehiststat *st)
 
 				if(buf[i] == 0x1b) {
 					/* ESCAPE! */
+					if (i+1 >= n)
+						break; /* incomplete escape at end of read */
 					if (buf[i+1]=='[' && st->status == HIST_COMMAND) {
 						if (i+2 >= n)
 							break; /* incomplete escape sequence */
