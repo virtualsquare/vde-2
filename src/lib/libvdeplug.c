@@ -266,6 +266,12 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			errno = EINVAL;
 			goto abort;
 		}
+		/* sockname is a PATH_MAX buffer: bound the caller-controlled name
+		 * (the canonicalize path above is skipped for P2P sockets) */
+		if (strlen(given_sockname) >= PATH_MAX) {
+			errno = ENAMETOOLONG;
+			goto abort;
+		}
 		strcpy(sockname,given_sockname); /* XXX canonicalize should be better */
 		if((conn->fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
 			goto abort;
