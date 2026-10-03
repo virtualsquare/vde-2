@@ -595,7 +595,9 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 	int times=1;
 	if (max_wirevalue(markov_current,DDUP,dir) > 0) {
 		double dupval=compute_wirevalue(DDUP,dir)/100;
-		while (drand48() < dupval)
+		/* at dup=100, drand48() < 1.0 always holds: cap the
+		 * number of duplicates so the loop terminates */
+		while (drand48() < dupval && times < 100)
 			times++;
 	}
 	while (times>0) {
