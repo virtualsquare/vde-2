@@ -1644,8 +1644,7 @@ int main(int argc,char *argv[])
 	while(1) {
 		unsigned long long delay=nextms();
 		int markovdelay=markovms();
-		if (markovdelay >= 0 &&
-				(markovdelay < delay || delay < 0)) delay=markovdelay;
+		if (markovdelay >= 0 && markovdelay < delay) delay=markovdelay;
 		pfd[0].events |= POLLIN;
 		if (WFVAL(markov_current,SPEED,LR).value > 0) {
 			struct timeval tv;
@@ -1656,7 +1655,7 @@ int main(int argc,char *argv[])
 				speeddelay=tv.tv_sec*1000 + tv.tv_usec/1000;
 				if (speeddelay > 0) {
 					pfd[0].events &= ~POLLIN;
-					if (speeddelay < delay || delay < 0) delay=speeddelay;
+					if (speeddelay < delay) delay=speeddelay;
 				}
 			}
 		}
@@ -1671,7 +1670,7 @@ int main(int argc,char *argv[])
 					speeddelay=tv.tv_sec*1000 + tv.tv_usec/1000;
 					if (speeddelay > 0) {
 						pfd[1].events &= ~POLLIN;
-						if (speeddelay < delay || delay < 0) delay=speeddelay;
+						if (speeddelay < delay) delay=speeddelay;
 					}
 				}
 			}
