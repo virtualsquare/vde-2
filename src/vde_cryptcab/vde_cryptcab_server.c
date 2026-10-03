@@ -482,8 +482,12 @@ void cryptcab_server(char *_plugname, unsigned short udp_port, enum e_enc_type _
 						len -= 12;
 						pkt_dec.len = data_encrypt_decrypt(p, pkt_dec.data, len, p1->key, tail);
 						if (crc == chksum_crc32(pkt_dec.data,pkt_dec.len)) {
-							vc_printlog(4,"Data pkt received (%d Bytes)",pkt.len);
-							vde_send(p1->plug,pkt_dec.data,pkt_dec.len,0);	
+							if (!isvalid_timestamp(pkt.data, pkt.len, p1)) {
+								vc_printlog(4,"Replayed data packet discarded (%d Bytes)",pkt.len);
+							} else {
+								vc_printlog(4,"Data pkt received (%d Bytes)",pkt.len);
+								vde_send(p1->plug,pkt_dec.data,pkt_dec.len,0);
+							}
 						} else {
 							vc_printlog(4,"CRC error, incoming data packet discarded (%d Bytes)",pkt.len);
 						}
