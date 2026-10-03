@@ -70,7 +70,7 @@ queueitem(unsigned short id, const char *name, const struct sockaddr_in *peer)
    }
    ptr->id = id;
    if (name)
-     strcpy(ptr->name, name);
+     snprintf(ptr->name, sizeof(ptr->name), "%s", name);
    if (peer)
      memcpy(&ptr->peer, peer, sizeof(struct sockaddr_in));
    ptr->timeout = time(NULL) + qtimeout;
