@@ -155,10 +155,16 @@ for(;;){
 		vde_len=0;
 		vde_len+=((unsigned char)(ret->data[0]))<<8;
 		vde_len+=(unsigned char)(ret->data[1]);
+		/* the length prefix is peer-controlled: bound it to the buffer */
+		if (vde_len > MAXPKT-2)
+			return NULL;
 	  
 		ret->len=2;
 		while(ret->len < (vde_len + 2)){
-		ret->len += read(ifd, ret->data+ret->len, ((vde_len+2) - ret->len));
+			c=read(ifd, ret->data+ret->len, ((vde_len+2) - ret->len));
+			if (c <= 0)
+				return NULL; /* read() error or EOF: don't corrupt the loop */
+			ret->len += c;
 	  }
 	}
 	// fprintf(stderr,"Read %d.\n",vde_len);
