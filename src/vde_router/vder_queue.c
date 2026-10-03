@@ -89,8 +89,14 @@ struct vde_buff *dequeue(struct vder_queue *q)
 }
 
 /* Unlimited policy */
+/* hard cap: "unlimited" must not mean unbounded memory, a single
+ * flooding VM would otherwise OOM the router */
+#define QUNLIMITED_MAX_BYTES (1024 * 1024)
+
 int qunlimited_may_enqueue(struct vder_queue *q, struct vde_buff *b)
 {
+	if (q->size >= QUNLIMITED_MAX_BYTES)
+		return 0;
 	return 1;
 }
 
