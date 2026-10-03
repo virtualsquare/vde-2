@@ -506,6 +506,10 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		if (ssh_client) {
 			char *endofip=strchr(ssh_client,' ');
 			if (endofip) *endofip=0;
+			/* descrlen is the would-be length: a truncated first
+			 * snprintf would underflow MAXDESCR-descrlen */
+			if (descrlen >= MAXDESCR)
+				descrlen = MAXDESCR - 1;
 			snprintf(req.description+descrlen,MAXDESCR-descrlen," SSH=%s", ssh_client);
 			if (endofip) *endofip=' ';
 		}
