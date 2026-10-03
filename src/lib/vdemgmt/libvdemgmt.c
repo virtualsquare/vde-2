@@ -267,7 +267,9 @@ int vdemgmt_sendcmd(struct vdemgmt *conn, const char *cmd, struct vdemgmt_out *o
 		}
 		if( p->tag == ASYNTAG ){
 			t=atab_find(conn->atab, p->buf+SKIPHEAD);
-			if(t) t->callback(t->event, rv, p->buf+strlen(t->event)+SKIPHEAD+1);
+			/* the payload pointer assumes head+event+delimiter exist in the line */
+			if(t && p->sz >= (size_t)(SKIPHEAD+strlen(t->event)+1))
+				t->callback(t->event, rv, p->buf+strlen(t->event)+SKIPHEAD+1);
 		}
 		p=p->next;
 	}
@@ -356,7 +358,9 @@ void vdemgmt_asyncrecv(struct vdemgmt *conn)
 		outtag=utm_run(conn->asyncrecv_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM);
 		CHECK( outtag, -1 );
 		t=atab_find(conn->atab, out->buf+SKIPHEAD);
-		if(t) t->callback(t->event, outtag, out->buf+strlen(t->event)+SKIPHEAD+1);
+		/* the payload pointer assumes head+event+delimiter exist in the line */
+		if(t && out->sz >= (size_t)(SKIPHEAD+strlen(t->event)+1))
+			t->callback(t->event, outtag, out->buf+strlen(t->event)+SKIPHEAD+1);
 		free(out->buf) ; out->buf = NULL ; out->sz = 0;
 	} while ( conn->pbuf->len > conn->pbuf->pos );
 
