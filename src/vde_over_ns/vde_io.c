@@ -204,6 +204,11 @@ send_vde(const char *data, size_t len)
 		outlen=2;
 		outlen+=(unsigned char)data[1];
 		outlen+=((unsigned char)(data[0]))<<8;
+	} else if (outp==0) {
+		/* no 2-byte length prefix available: flush as-is,
+		 * otherwise the recursion below never advances */
+		write(ofd,data,len);
+		return;
 	}
 	
 	if(len>=outlen){
