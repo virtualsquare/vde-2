@@ -10,6 +10,35 @@ static struct vder_dhcp_negotiation *Negotiation_list;
 static struct vder_udp_socket *udpsock;
 static struct vder_dhcpd_settings Settings;
 
+/* bound the negotiation list: a flood of unique xids would grow
+ * it without limit; the stalest negotiation is evicted at the cap.
+ * The ARP entry stays in the ARP table, where the ARP GC reaps it. */
+#define DHCP_MAX_NEGOTIATIONS 256
+
+static void dhcp_negotiation_evict_stalest(void)
+{
+	struct vder_dhcp_negotiation *cur = Negotiation_list;
+	struct vder_dhcp_negotiation *prev = NULL;
+	struct vder_dhcp_negotiation *oldest = NULL;
+	struct vder_dhcp_negotiation *oldest_prev = NULL;
+
+	while (cur) {
+		if (!oldest || cur->last_seen < oldest->last_seen) {
+			oldest = cur;
+			oldest_prev = prev;
+		}
+		prev = cur;
+		cur = cur->next;
+	}
+	if (!oldest)
+		return;
+	if (oldest_prev)
+		oldest_prev->next = oldest->next;
+	else
+		Negotiation_list = oldest->next;
+	free(oldest);
+}
+
 static struct vder_dhcp_negotiation *
 get_negotiation_by_xid(uint32_t xid)
 {
@@ -162,8 +191,10 @@ static void dhcp_recv(uint8_t *buffer, int len)
 {
 	struct dhcphdr *dhdr = (struct dhcphdr *) buffer;
 	struct vder_dhcp_negotiation *dn = get_negotiation_by_xid(dhdr->xid);
+	struct vder_dhcp_negotiation *cur;
 	uint8_t *nextopt, opt_data[20], opt_type;
 	int opt_len = 20;
+	int n = 0;
 
 
 	if (!is_options_valid(dhdr->options, len - sizeof(struct dhcphdr)))
@@ -176,7 +207,12 @@ static void dhcp_recv(uint8_t *buffer, int len)
 		memset(dn, 0, sizeof(struct vder_dhcp_negotiation));
 		dn->xid = dhdr->xid;
 		dn->state = DHCPSTATE_DISCOVER;
+		dn->last_seen = time(NULL);
 		memcpy(dn->hwaddr, dhdr->hwaddr, HLEN_ETHER);
+		for (cur = Negotiation_list; cur; cur = cur->next)
+			n++;
+		if (n >= DHCP_MAX_NEGOTIATIONS)
+			dhcp_negotiation_evict_stalest();
 		dn->next = Negotiation_list;
 		Negotiation_list = dn;
 		dn->arp = vder_arp_get_record_by_macaddr(Settings.iface, dn->hwaddr);
@@ -189,6 +225,8 @@ static void dhcp_recv(uint8_t *buffer, int len)
 			Settings.pool_next = htonl(ntohl(Settings.pool_next) + 1);
 			vder_add_arp_entry(Settings.iface, dn->arp);
 		}
+	} else {
+		dn->last_seen = time(NULL);
 	}
 
 	if (!ip_inrange(dn->arp->ipaddr))

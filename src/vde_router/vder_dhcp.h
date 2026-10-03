@@ -2,6 +2,7 @@
 #define __VDER_DHCPD
 
 #include "vder_arp.h"
+#include <time.h>
 
 #define DHCPD_PORT (htons(67))
 #define DHCP_CLIENT_PORT (htons(68))
@@ -102,6 +103,7 @@ struct vder_dhcp_negotiation {
 	uint32_t assigned_address;
 	enum dhcp_negotiation_state state;
 	struct vder_arp_entry *arp;
+	time_t last_seen;
 };
 
 void *dhcp_server_loop(void *ptr_iface);
