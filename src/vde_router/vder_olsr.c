@@ -649,8 +649,14 @@ static void olsr_recv(uint8_t *buffer, int len)
 				msg->ttl = 0;
 				break;
 			case OLSRMSG_MID:
-				recv_mid(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin);
+			{
+				int mid_len = ntohs(msg->size) - (int)sizeof(struct olsrmsg);
+				int remain = len - parsed - (int)sizeof(struct olsrmsg);
+				if (mid_len > remain)
+					mid_len = remain;
+				recv_mid(buffer + parsed + sizeof(struct olsrmsg), mid_len, origin);
 				break;
+			}
 			case OLSRMSG_TC:
 				if (reconsider_topology(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin) < 1)
 					msg->ttl = 0;
