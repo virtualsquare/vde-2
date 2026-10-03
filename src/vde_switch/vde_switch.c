@@ -270,6 +270,7 @@ static void main_loop()
 	time_t now;
 	int n,i;
 	while(1) {
+		qtimer_check();
 		n=poll(fds,nfds,-1);
 		now=qtime();
 		if(n < 0){ 

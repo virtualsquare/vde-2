@@ -36,6 +36,7 @@ int maxqt; //size of active timer array
 static time_t gqtime; // global time in secs, secs from the epoch
 static int activeqt; // number of active timers
 static int countqt; // counter for timer ID
+static volatile sig_atomic_t qtimer_alarm; // set by the SIGALRM handler
 
 time_t qtime() // returns global time (faster than time())
 {
@@ -105,7 +106,12 @@ void qtimer_del(unsigned int n)
 	}
 }
 
-static void sig_alarm(int sig)
+/*
+ * Fire the due timers and compact the table. Runs in the main
+ * context (see qtimer_check): the callbacks malloc/free, which is
+ * not safe from inside the signal handler.
+ */
+static void qtimer_process(void)
 {
 	int i;
 	int j;
@@ -132,6 +138,23 @@ static void sig_alarm(int sig)
 		}
 	}
 	activeqt=j;
+}
+
+static void sig_alarm(int sig)
+{
+	(void) sig;
+	qtimer_alarm = 1;
+}
+
+/* Process due timers from the main context; call it often */
+void qtimer_check(void)
+{
+	if (qtimer_alarm) {
+		qtimer_alarm = 0;
+		qtime_csenter();
+		qtimer_process();
+		qtime_csexit();
+	}
 }
 
 void qtimer_init()
