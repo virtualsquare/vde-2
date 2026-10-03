@@ -209,6 +209,8 @@ ssize_t vdeplug_recv(void *opaque, void *buf, size_t count)
 	return vde_send(conn,(char *)buf,count,0);
 }
 
+static volatile sig_atomic_t sig_pending = 0;
+
 static void cleanup(void)
 {
 	vdestream_close(vdestream);
@@ -217,12 +219,10 @@ static void cleanup(void)
 
 static void sig_handler(int sig)
 {
-	cleanup();
+	/* cleanup() frees/unlinks: not async-signal-safe, defer it to
+	 * the main loop */
+	sig_pending = sig;
 	signal(sig, SIG_DFL);
-	if (sig == SIGTERM)
-		_exit(0);
-	else
-		kill(getpid(), sig);
 }
 
 static void setsighandlers()
@@ -384,6 +384,10 @@ int main(int argc, char **argv)
 	pollv[2].fd=vde_ctlfd(conn);
 
 	for(;;) {
+		if (sig_pending) {
+			cleanup();
+			_exit(0);
+		}
 		poll(pollv,3,-1);
 		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
 				pollv[2].revents & POLLIN)
