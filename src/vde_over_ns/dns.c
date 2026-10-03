@@ -551,6 +551,12 @@ dns_extractpkt(const unsigned char *buf, int len)
 	nsh=(struct ns_answer_header *)ptr;
 	ptr+=sizeof(struct ns_answer_header);
 	remain-=sizeof(struct ns_answer_header);
+	if (ntohs(nsh->datalen) > remain) {
+		syslog(LOG_ERR, "dns_extractpkt: answer datalen past end of packet\n");
+		free(offsets);
+		dns_free(pkt);
+		return NULL;
+	}
 	//printf("REMAIN=%u, datalen=%u, type= 0x%02x, sizeof ns_answer_header=%u\n",remain,ntohs(nsh->datalen), ntohs(nsh->type),sizeof(struct ns_answer_header));
 	if (ntohs(nsh->type) != NSTYPE_TXT){
 		ptr+=ntohs(nsh->datalen);
@@ -558,8 +564,17 @@ dns_extractpkt(const unsigned char *buf, int len)
 		continue;
 	}
 	rrp->len = ntohs(nsh->datalen);
-	rrp->data = malloc(rrp->len);
-	memcpy(rrp->data, ptr,rrp->len);
+	rrp->data = NULL;
+	if (rrp->len) {
+		rrp->data = malloc(rrp->len);
+		if (!rrp->data) {
+			syslog(LOG_ERR, "dns_extractpkt: out of memory\n");
+			free(offsets);
+			dns_free(pkt);
+			return NULL;
+		}
+		memcpy(rrp->data, ptr,rrp->len);
+	}
 	remain -= rrp->len;
 	ptr += rrp->len;
    }
