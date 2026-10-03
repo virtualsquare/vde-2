@@ -1126,7 +1126,7 @@ static int vlancreate_nocheck(int vlan)
 	vlant[vlan].bcuntag=ba_alloc(numports);
 	vlant[vlan].notlearning=ba_alloc(numports);
 	if (vlant[vlan].table == NULL || vlant[vlan].bctag == NULL || 
-			vlant[vlan].bcuntag == NULL) 
+			vlant[vlan].bcuntag == NULL || vlant[vlan].notlearning == NULL) 
 		return ENOMEM;
 	else {
 #ifdef FSTP
