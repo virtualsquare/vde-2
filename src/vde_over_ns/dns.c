@@ -554,6 +554,18 @@ dns_extractpkt(const unsigned char *buf, int len)
 	       rrp->link = j;
 	  }
 	ptr=_skip_lbl(ptr,&remain);
+	if (!ptr) {
+		syslog(LOG_ERR, "dns_extractpkt: _skip_lbl choked in an\n");
+		free(offsets);
+		dns_free(pkt);
+		return NULL;
+	}
+	if (remain < sizeof(struct ns_answer_header)) {
+		syslog(LOG_ERR, "dns_extractpkt: too few bytes in an\n");
+		free(offsets);
+		dns_free(pkt);
+		return NULL;
+	}
 	nsh=(struct ns_answer_header *)ptr;
 	ptr+=sizeof(struct ns_answer_header);
 	remain-=sizeof(struct ns_answer_header);
