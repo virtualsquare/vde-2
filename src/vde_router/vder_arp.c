@@ -7,6 +7,7 @@
 #include "vder_arp.h"
 #include "vde_headers.h"
 #include "vder_datalink.h"
+#include "vder_dhcp.h"
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
@@ -28,6 +29,12 @@ void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
 		} else if (ntohl(entry->ipaddr) < hostorder_ip){
 			link = &(*link)->rb_right;
 		} else {
+			/* A DHCP lease is the authoritative binding for its IP:
+			 * do not let an unauthenticated ARP packet point the
+			 * address at a different MAC (poisoning). */
+			uint8_t *lease_mac = vder_dhcp_lease_mac(p->ipaddr);
+			if (lease_mac && memcmp(lease_mac, p->macaddr, 6) != 0)
+				return;
 			/* Update existing entry */
 			memcpy(entry->macaddr,p->macaddr,6);
 			return;

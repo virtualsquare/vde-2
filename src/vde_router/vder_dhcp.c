@@ -22,6 +22,21 @@ get_negotiation_by_xid(uint32_t xid)
 	return NULL;
 }
 
+/*
+ * Return the MAC of the DHCP lease assigned to this IP (network
+ * byte order), or NULL if the IP is not leased by this server.
+ */
+uint8_t *vder_dhcp_lease_mac(uint32_t ipaddr)
+{
+	struct vder_dhcp_negotiation *cur = Negotiation_list;
+	while (cur) {
+		if (cur->arp && cur->arp->ipaddr == ipaddr)
+			return cur->hwaddr;
+		cur = cur->next;
+	}
+	return NULL;
+}
+
 static uint8_t dhcp_get_next_option(uint8_t *begin, uint8_t *data, int *len, uint8_t **nextopt)
 {
 	uint8_t *p;
