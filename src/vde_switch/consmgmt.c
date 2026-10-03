@@ -618,12 +618,11 @@ static void init(void)
 		}
 		sun.sun_family = PF_UNIX;
 		snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",mgmt_socket);
+		if (prepare_socket_path(&sun) < 0)
+			return;
 		if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-			if((errno == EADDRINUSE) && still_used(&sun)) return;
-			else if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-				printlog(LOG_ERR,"mgmt bind %s",strerror(errno));
-				return;
-			}
+			printlog(LOG_ERR,"mgmt bind %s",strerror(errno));
+			return;
 		}
 		setmgmtperm(sun.sun_path);
 		if(listen(mgmtconnfd, 15) < 0){
