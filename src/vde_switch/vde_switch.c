@@ -174,6 +174,8 @@ void add_fd(int fd,unsigned char type,void *private_data)
 	if (ISPRIO(type)) {
 		fds[nfds]=fds[nprio];
 		fdpp[nfds]=fdpp[nprio];
+		if (nprio != nfds)
+			fdperm[fds[nfds].fd] = nfds;
 		index=nprio;
 		nprio++;
 	} else
@@ -214,7 +216,10 @@ void remove_fd(int fd)
 		if (ISPRIO(fdpp[i]->type)) nprio--;
 		memmove(&fds[i], &fds[i + 1], (nfds - i - 1) * sizeof(struct pollfd));
 		memmove(&fdpp[i], &fdpp[i + 1], (nfds - i - 1) * sizeof(struct pollplus *));
-		for(;i<nfds;i++)
+		/* the last slot is a stale copy of the live tail: update
+		 * only the live ones, or the tail fd maps to a dead slot
+		 * and aliases the next add_fd */
+		for(;i<nfds-1;i++)
 			fdperm[fds[i].fd]=i;
 		/* drop the stale mapping of the removed fd: the slot it
 		 * pointed at is reused by the next add_fd */
