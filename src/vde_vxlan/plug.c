@@ -60,9 +60,11 @@ void plug_process() {
 	int nx = vde_recv(conn, (void *) &pkt.pkt,
 		sizeof(pkt) - offsetof(struct vxlan_pkt, pkt), 0);
 
-	if (nx < 0)
+	if (nx < 0) {
 		printlog(LOG_ERR, "vde_recv(): %s",
 				strerror(errno));
+		return;
+	}
 
 	printlog(LOG_DEBUG, "VDE packet");
 
