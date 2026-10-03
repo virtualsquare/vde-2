@@ -301,7 +301,7 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 
 			i = index(data, '"');
 			j = rindex(data, '"');
-			if( i && j && j > i && portnum ){
+			if( i && j && j > i && portnum >= 1 && portnum <= _stats->numports ){
 				strncpy(tmpstr, i+1, j - i );
 				strncpy(_stats->ports[portnum-1].desc, tmpstr, DESC_MAXLEN);
 			}
@@ -310,7 +310,8 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 
 		case D_EP|D_MINUS:
 			debug("ENDPOINT MINUS\n");
-			if( sscanf(data, "ep/- Port %02d", &portnum) == 1 ){
+			if( sscanf(data, "ep/- Port %02d", &portnum) == 1 &&
+			    portnum >= 1 && portnum <= _stats->numports ){
 				PORTDOWN(portnum-1);
 				if(events[EVENT_PORT_DOWN])
 					events[EVENT_PORT_DOWN](portnum-1);
@@ -319,7 +320,8 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 
 		case D_EP|D_PLUS:
 			debug("ENDPOINT PLUS\n");
-			if( sscanf(data, "ep/+ Port %02d", &portnum) == 1 ){
+			if( sscanf(data, "ep/+ Port %02d", &portnum) == 1 &&
+			    portnum >= 1 && portnum <= _stats->numports ){
 				PORTUP(portnum-1);
 				if(events[EVENT_PORT_UP])
 					events[EVENT_PORT_UP](portnum-1);
@@ -328,14 +330,16 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 		
 		case D_PORT|D_MINUS:
 			debug("PORT MINUS\n");
-			if( sscanf(data, "/- %02d", &portnum) == 1 ){
+			if( sscanf(data, "/- %02d", &portnum) == 1 &&
+			    portnum >= 1 && portnum <= _stats->numports ){
 				PORTDOWN(portnum-1);
 			}
 		break;
 
 		case D_PORT|D_PLUS:
 			debug("PORT PLUS\n");
-			if( sscanf(data, "/+ %02d", &portnum) == 1 ){
+			if( sscanf(data, "/+ %02d", &portnum) == 1 &&
+			    portnum >= 1 && portnum <= _stats->numports ){
 				PORTUP(portnum-1);
 			}
 		break;
