@@ -1380,11 +1380,11 @@ static int runscript(int fd,char *path)
 	if (f==NULL)
 		return errno;
 	else {
+		/* do not echo the script lines back: the daemon runs as root,
+		 * the echo would let a mgmt user read any root-readable file;
+		 * handle_cmd dispatch is equivalent to direct mgmt commands */
 		while (fgets(buf,MAXCMD,f) != NULL) {
 			delnl(buf);
-			if (fd >= 0) {
-				printoutc(fd,"%s (%s) %s",prompt,path,buf);
-			}
 			handle_cmd(fd, buf);
 		}
 		fclose(f);
