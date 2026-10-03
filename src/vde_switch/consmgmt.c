@@ -389,7 +389,8 @@ static void handle_io(unsigned char type,int fd,int revents,void *private_data)
 		int n=0;
 
 		if (revents & POLLIN) {
-			n = read(fd, buf, sizeof(buf));
+			/* leave room for the NUL in buf[n]=0 below */
+			n = read(fd, buf, sizeof(buf)-1);
 			if(n < 0){
 				printlog(LOG_WARNING,"Reading from mgmt %s",strerror(errno));
 				return;
