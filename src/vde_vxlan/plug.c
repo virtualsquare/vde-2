@@ -18,6 +18,7 @@
  */
 
 #include <stdlib.h>
+#include <stddef.h>
 #include <poll.h>
 
 #include <libvdeplug.h>
@@ -56,7 +57,8 @@ void plug_process() {
 
 	in_addr_t dest_addr;
 
-	int nx = vde_recv(conn, (void *) &pkt.pkt, sizeof(pkt), 0);
+	int nx = vde_recv(conn, (void *) &pkt.pkt,
+		sizeof(pkt) - offsetof(struct vxlan_pkt, pkt), 0);
 
 	if (nx < 0)
 		printlog(LOG_ERR, "vde_recv(): %s",
