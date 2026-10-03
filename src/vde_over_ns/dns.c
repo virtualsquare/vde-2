@@ -531,6 +531,12 @@ dns_extractpkt(const unsigned char *buf, int len)
 	     dns_free(pkt);
 	     return NULL;
 	  }
+	if (remain < 4) {
+	     syslog(LOG_ERR, "dns_extractpkt: qtype/qclass past end of packet\n");
+	     free(offsets);
+	     dns_free(pkt);
+	     return NULL;
+	}
 	ptr += 4;
 	remain -= 4;
      }
