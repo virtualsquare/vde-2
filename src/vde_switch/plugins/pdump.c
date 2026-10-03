@@ -53,10 +53,12 @@ static int set_dumper(FILE *console) {
 	}
 	if ((fp = fdopen(fd, "w")) == NULL) {
 		printoutc(console, "%s() fdopen(): %s", __FUNCTION__, strerror(errno));
+		close(fd);
 		return -1;
 	}
 	if ((dumper = pcap_dump_fopen(desc, fp)) == NULL) {
 		printoutc(console, "%s() pcap_dump_fopen(): %s", __FUNCTION__, pcap_geterr(desc));
+		fclose(fp);
 		return -1;
 	}
 	return 0;
@@ -86,8 +88,12 @@ static int setfname(FILE *fd, char *arg)
 	if(strlen(arg)){
 		free(dumpfile);
 		dumpfile = strdup(arg);
-		if(dumper)
+		if(dumper) {
 			pcap_dump_close(dumper);
+			/* clear it: a failed set_dumper below must not
+			 * leave a dangling pointer for the next packet */
+			dumper = NULL;
+		}
 		if (set_dumper(fd)) {
 			printoutc(fd, "ERROR: cannot dump to %s", dumpfile);
 			return EINVAL;
