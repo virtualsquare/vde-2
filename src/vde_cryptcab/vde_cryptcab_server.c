@@ -262,8 +262,10 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 			idlen = 245;
 		/* The login id becomes part of a file path: allow only
 		 * plain filename characters and no leading/double dots,
-		 * so the path stays inside /tmp. */
-		for (i = 0; i < idlen; i++) {
+		 * so the path stays inside /tmp. The client pads the id
+		 * with NULs to FILENAMESIZE: the effective id ends at the
+		 * first NUL, which is not an invalid character. */
+		for (i = 0; i < idlen && id[i] != '\0'; i++) {
 			char c = id[i];
 			if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 			      (c >= '0' && c <= '9') || c == '_' || c == '-' ||
@@ -272,8 +274,14 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 			if (c == '.' && (i == 0 || id[i-1] == '.'))
 				break;
 		}
-		if (i < idlen) {
+		if (i < idlen && id[i] != '\0') {
 			vc_printlog(2, "Login id rejected: invalid characters\n");
+			deny_access(pkt->orig);
+			return;
+		}
+		idlen = i;
+		if (idlen == 0) {
+			vc_printlog(2, "Login id rejected: empty\n");
 			deny_access(pkt->orig);
 			return;
 		}
