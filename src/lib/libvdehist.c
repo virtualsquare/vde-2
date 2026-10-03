@@ -31,6 +31,9 @@
 #define BUFSIZE 1024
 #define HISTORYSIZE 32
 
+/* cap the command list: the peer's 'help' output is untrusted */
+#define MAXCOMMANDS 1024
+
 extern char *prompt;
 
 static char **commandlist;
@@ -189,6 +192,7 @@ static void vdehist_create_commandlist(int vdefd)
 	FILE *ms=open_memstream(&buf,&bufsize);
 	if (ms && vdefd >= 0) {
 		int status=CC_HEADER;
+		int ncommands=0;
 		vdehist_vdewrite(vdefd,"help\n",5);
 		while (status != CC_TERM && vdehist_readln(vdefd,linebuf,BUFSIZE,&readlnbuf) != NULL) {
 			if (status == CC_HEADER) {
@@ -207,15 +211,22 @@ static void vdehist_create_commandlist(int vdefd)
 						if (strncmp(lastcommand,linebuf,strlen(lastcommand)) == 0 &&
 								linebuf[strlen(lastcommand)] == '/')
 							free(lastcommand);
-						else
+						else if (ncommands < MAXCOMMANDS) {
 							fwrite(&lastcommand, sizeof(char *), 1, ms);
+							ncommands++;
+						} else
+							free(lastcommand);
 					}
 					lastcommand=strdup(linebuf);
 				}
 			}
 		}
-		if (lastcommand) 
-			fwrite(&lastcommand, sizeof(char *), 1, ms);
+		if (lastcommand) {
+			if (ncommands < MAXCOMMANDS)
+				fwrite(&lastcommand, sizeof(char *), 1, ms);
+			else
+				free(lastcommand);
+		}
 		lastcommand = NULL;
 		fwrite(&lastcommand, sizeof(char *), 1, ms);
 		fclose(ms);
