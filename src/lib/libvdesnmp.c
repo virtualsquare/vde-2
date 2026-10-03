@@ -284,6 +284,7 @@ int counters_parse(void){
 
 void port_debug_handler(const char *event, const int tag, const char *data){
 	int portnum=0;
+	int descr_len;
 	char *i, *j;
 	char tmpstr[DESC_MAXLEN];
 	
@@ -302,7 +303,10 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 			i = index(data, '"');
 			j = rindex(data, '"');
 			if( i && j && j > i && portnum >= 1 && portnum <= _stats->numports ){
-				strncpy(tmpstr, i+1, j - i );
+				descr_len = j - i;
+				if (descr_len > DESC_MAXLEN - 1)
+					descr_len = DESC_MAXLEN - 1;
+				strncpy(tmpstr, i+1, descr_len);
 				strncpy(_stats->ports[portnum-1].desc, tmpstr, DESC_MAXLEN);
 			}
 			debug("parsed descr[%p %p]: %s", i, j, tmpstr);
