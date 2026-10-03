@@ -389,7 +389,7 @@ static int rec_setqlen_ep(struct endpoint *ep, int fd_ctl, int len)
 	struct endpoint *this=ep;
 	if (this != NULL) {
 		if (this->fd_ctl==fd_ctl) {
-			ep->vdepq_max = len;
+			this->vdepq_max = len;
 			return 0;
 		} else
 			return rec_setqlen_ep(this->next, fd_ctl, len);
