@@ -14,6 +14,7 @@
 #include <syslog.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <libgen.h>
 #include <sched.h>
 #include <sys/types.h>
@@ -255,8 +256,18 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 		} else if (len > 0) {
 			struct sockaddr_un sa_un;
 			reqbuf[len]=0;
+			if (len < (int)(offsetof(struct request_v3, version) + sizeof(uint32_t))) {
+				printlog(LOG_WARNING, "Short request (%d bytes) dropped", len);
+				remove_fd(fd);
+				return;
+			}
 			if(req->v1.magic == SWITCH_MAGIC){
 				if(req->v3.version == 3) {
+					if (len < (int)(offsetof(struct request_v3, sock) + sizeof(struct sockaddr_un))) {
+						printlog(LOG_WARNING, "Short v3 request (%d bytes) dropped", len);
+						remove_fd(fd);
+						return;
+					}
 					memcpy(&sa_un, &req->v3.sock, sizeof(struct sockaddr_un));
 					ep=new_port_v1_v3(fd, req->v3.type, &sa_un);
 					if (ep != NULL) {
@@ -272,6 +283,11 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 							"vde_switch doesn't support", req->v3.version);
 					remove_fd(fd);
 				} else {
+					if (len < (int)(offsetof(struct request_v1, u) + offsetof(struct req_v1_new_control_s, name) + sizeof(struct sockaddr_un))) {
+						printlog(LOG_WARNING, "Short v1 request (%d bytes) dropped", len);
+						remove_fd(fd);
+						return;
+					}
 					memcpy(&sa_un, &req->v1.u.new_control.name, sizeof(struct sockaddr_un));
 					ep=new_port_v1_v3(fd, req->v1.type, &sa_un);
 					if (ep != NULL) {
