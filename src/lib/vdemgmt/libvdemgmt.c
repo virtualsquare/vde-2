@@ -127,6 +127,8 @@ struct vdemgmt *vdemgmt_open(const char *path)
 	int myargc=0;
 	char *myargv = NULL;
 	const char *sep;
+	const char *p;
+	const char *end;
 
 	/* vdemgmt connection struct */
 	CHECK( conn = (struct vdemgmt*)malloc(sizeof(struct vdemgmt)) , NULL );
@@ -152,12 +154,25 @@ struct vdemgmt *vdemgmt_open(const char *path)
 	out=utmout_alloc();
 	CHECK( utm_run(conn->open_utm,conn->pbuf,conn->fd,myargc,&myargv,out,DBGM), -1 );
 
-	/* split banner / prompt and extract version */
-	for( sep=out->buf+out->sz-1 ; ! strstr(sep, "\n") ; sep--);
-	conn->banner = strndup(out->buf, sep - out->buf-1);
-	conn->prompt = strndup(sep+1, (out->buf+out->sz)-sep+1);
-	sep=strstr(conn->banner, "V.")+2;
-	conn->version = strndup(sep, strstr(sep, "\n")-sep);
+	/* split banner / prompt and extract version; the peer controls
+	 * this data, so validate it before parsing */
+	for (p = out->buf + out->sz - 1; p >= out->buf; p--)
+		if (*p == '\n')
+			break;
+	if (p <= out->buf)
+		goto error; /* no newline, or empty banner */
+	sep = p;
+	conn->banner = strndup(out->buf, sep - out->buf);
+	if (out->buf + out->sz > sep + 1)
+		conn->prompt = strndup(sep + 1, (out->buf + out->sz) - (sep + 1));
+	sep = strstr(conn->banner, "V.");
+	if (sep != NULL) {
+		sep += 2;
+		end = strstr(sep, "\n");
+		if (end == NULL)
+			end = sep + strlen(sep);
+		conn->version = strndup(sep, end - sep);
+	}
 
 	utmout_free(out);
 
