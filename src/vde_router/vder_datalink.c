@@ -11,6 +11,7 @@
 #include "vder_queue.h"
 #include "vder_packet.h"
 #include "vder_icmp.h"
+#include "vder_arp.h"
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
@@ -141,6 +142,7 @@ void vderouter_init(void)
 {
 	memset(&Router, 0, sizeof(Router));
 	pthread_create(&Router.timer, 0, vder_timer_loop, NULL);
+	pthread_create(&Router.arp_gc, 0, vder_arp_gc_loop, NULL);
 	pthread_mutex_init(&Router.global_config_lock, NULL);
 	Router.smallest_interval = 100000;
 

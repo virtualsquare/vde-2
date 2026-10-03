@@ -75,6 +75,7 @@ struct vde_router {
 	struct vder_timed_dequeue *timed_dequeue;
 	pthread_mutex_t global_config_lock;
 	pthread_t timer;
+	pthread_t arp_gc;
 	uint32_t smallest_interval;
 };
 

@@ -12,7 +12,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <time.h>
+#include <pthread.h>
 #include "rbtree.h"
+
+extern struct vde_router Router;
 
 void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
 {
@@ -37,9 +41,11 @@ void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p)
 				return;
 			/* Update existing entry */
 			memcpy(entry->macaddr,p->macaddr,6);
+			entry->last_seen = time(NULL);
 			return;
 		}
 	}
+	p->last_seen = time(NULL);
 	rb_link_node(&p->rb_node, parent, link);
 	rb_insert_color(&p->rb_node, &vif->arp_table);
 }
@@ -231,4 +237,63 @@ int vder_arp_get_neighbors(struct vder_iface *vif, uint32_t *neighbors, int vect
 	}
 
 	return i;
+}
+
+/*
+ * Evict entries of one interface unseen for longer than
+ * ARP_GC_TIMEOUT. DHCP-leased IPs are kept: the lease record is
+ * the authoritative binding. Iterative walk: the table can be
+ * large.
+ */
+static void arp_gc_iface(struct vder_iface *vif, time_t now)
+{
+	struct vder_arp_entry **stack = NULL;
+	int top = 0, cap = 0;
+	struct rb_node *node = vif->arp_table.rb_node;
+
+	while (node || top > 0) {
+		while (node) {
+			if (top == cap) {
+				int ncap = cap ? cap * 2 : 16;
+				struct vder_arp_entry **ns = realloc(stack, ncap * sizeof *ns);
+				if (!ns) {
+					free(stack);
+					return;
+				}
+				stack = ns;
+				cap = ncap;
+			}
+			stack[top++] = rb_entry(node, struct vder_arp_entry, rb_node);
+			node = node->rb_left;
+		}
+		struct vder_arp_entry *ae = stack[--top];
+		node = ae->rb_node.rb_right;
+		if ((now - ae->last_seen) > ARP_GC_TIMEOUT &&
+		    !vder_dhcp_lease_mac(ae->ipaddr)) {
+			rb_erase(&ae->rb_node, &vif->arp_table);
+			free(ae);
+		}
+	}
+	free(stack);
+}
+
+void vder_arp_gc(void)
+{
+	struct vder_iface *vif = Router.iflist;
+	time_t now = time(NULL);
+
+	while (vif) {
+		arp_gc_iface(vif, now);
+		vif = vif->next;
+	}
+}
+
+void *vder_arp_gc_loop(void *arg)
+{
+	(void) arg;
+	for (;;) {
+		sleep(60);
+		vder_arp_gc();
+	}
+	return NULL;
 }
