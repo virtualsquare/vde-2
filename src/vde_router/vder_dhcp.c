@@ -279,6 +279,10 @@ static int dhclient_recv_offer(struct dhcp_client_cookie *cli, uint8_t *data, in
 		printf("bad xid\n");
 		return 0;
 	}
+	/* the offer must be addressed to us: same client hardware
+	 * address as the one sent in the DISCOVER */
+	if (memcmp(dhdr->hwaddr, cli->iface->macaddr, HLEN_ETHER) != 0)
+		return 0;
 
 	if (!is_options_valid(dhdr->options, len - sizeof(struct dhcphdr))) {
 		printf("bad options\n");
@@ -314,8 +318,12 @@ static int dhclient_recv_ack(struct dhcp_client_cookie *cli, uint8_t *data, int 
 	uint8_t *nextopt, opt_data[20], opt_type;
 	int opt_len = 20;
 	uint8_t msg_type = 0xFF;
+	uint32_t server_id = 0;
 
 	if (dhdr->xid != cli->xid)
+		return 0;
+	/* the ack must be addressed to us */
+	if (memcmp(dhdr->hwaddr, cli->iface->macaddr, HLEN_ETHER) != 0)
 		return 0;
 
 	if (!is_options_valid(dhdr->options, len - sizeof(struct dhcphdr)))
@@ -326,11 +334,19 @@ static int dhclient_recv_ack(struct dhcp_client_cookie *cli, uint8_t *data, int 
 	while (opt_type != DHCPOPT_END) {
 		if (opt_type == DHCPOPT_MSGTYPE)
 			msg_type = opt_data[0];
+		if ((opt_type == DHCPOPT_SERVERID) && (opt_len == 4))
+			memcpy(&server_id, opt_data, 4);
 
 		opt_len = 20;
 		opt_type = dhcp_get_next_option(NULL, opt_data, &opt_len, &nextopt);
 	}
 	if (msg_type != DHCP_MSG_ACK)
+		return 0;
+	/* the ack must confirm the offered address, from the server
+	 * that sent the offer */
+	if (dhdr->yiaddr != cli->address)
+		return 0;
+	if (server_id != cli->server_id)
 		return 0;
 	return 1;
 }
@@ -439,7 +455,7 @@ void *dhcp_client_loop(void *iface)
 					perror("udp recv");
 					return NULL;
 				}
-				if (len > 0) {
+				if ((len > 0) && (from_port == DHCPD_PORT)) {
 					if (dhclient_recv_offer(&client, buffer, len)) {
 						client.state = DHCPSTATE_REQUEST;
 					}
@@ -454,7 +470,7 @@ void *dhcp_client_loop(void *iface)
 				}
 				if (len == 0)
 					break;
-				if (dhclient_recv_ack(&client, buffer, len))
+				if ((from_port == DHCPD_PORT) && dhclient_recv_ack(&client, buffer, len))
 					client.state = DHCPSTATE_ACK;
 				else {
 					if (client.address)
