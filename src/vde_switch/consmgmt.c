@@ -270,6 +270,8 @@ static int handle_cmd(int type,int fd,char *inbuf)
 		char *outbuf;
 		size_t outbufsize;
 		FILE *f=open_memstream(&outbuf,&outbufsize);
+		if (f == NULL) /* ENOMEM: outbuf/outbufsize would be garbage */
+			return ENOMEM;
 		for (p=clh;p!=NULL && (p->doit==NULL || strncmp(p->path,inbuf,strlen(p->path))!=0); p=p->next)
 			;
 		if (p!=NULL)
