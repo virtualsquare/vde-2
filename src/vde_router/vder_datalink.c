@@ -88,8 +88,12 @@ static void *vder_timer_loop(void *arg)
 			cur = cur->next;
 		}
 		pthread_mutex_unlock(&Router.global_config_lock);
-		interval.tv_sec = 0;
-		interval.tv_nsec = Router.smallest_interval / 1000;
+		/* smallest_interval is in us; convert to sec/nsec and keep a
+		 * non-zero sleep (sub-us intervals would busy-spin) */
+		interval.tv_sec = Router.smallest_interval / 1000000;
+		interval.tv_nsec = (Router.smallest_interval % 1000000) * 1000;
+		if (interval.tv_sec == 0 && interval.tv_nsec == 0)
+			interval.tv_nsec = 1000;
 		if (Router.timed_dequeue)
 			nanosleep(&interval, NULL);
 		else
