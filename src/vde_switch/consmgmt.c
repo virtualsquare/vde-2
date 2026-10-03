@@ -778,6 +778,7 @@ int eventadd(int (*fun)(),char *path,void *arg) {
 					}
 				} else {
 					p->fun[i]=fun;
+					p->funarg[i]=arg;
 					p->nfun++;
 					if (rv != ENOMEM) rv=0;
 				}
