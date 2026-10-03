@@ -1299,6 +1299,52 @@ static int delmgmtconn(int i,struct pollfd *pfd,int nfds)
 	return nfds;
 }
 
+/*
+ * Prepare a path for binding a unix socket: refuse symlinks and
+ * non-socket files (a local attacker must not be able to redirect
+ * the root-owned bind), remove a stale socket that is not in use.
+ * Returns 0 when the path can be bound.
+ */
+static int prepare_mgmt_path(struct sockaddr_un *sun)
+{
+	struct stat st;
+
+	if (lstat(sun->sun_path, &st) < 0) {
+		if (errno == ENOENT)
+			return 0;
+		fprintf(stderr, "%s: lstat %s: %s", progname, sun->sun_path, strerror(errno));
+		return -1;
+	}
+	if (S_ISLNK(st.st_mode)) {
+		fprintf(stderr, "%s: refusing to bind on symlink %s", progname, sun->sun_path);
+		return -1;
+	}
+	if (!S_ISSOCK(st.st_mode)) {
+		fprintf(stderr, "%s: %s exists and is not a socket", progname, sun->sun_path);
+		return -1;
+	}
+	/* a socket is already there: is it in use? */
+	{
+		int test_fd;
+		if ((test_fd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0)
+			return -1;
+		if (connect(test_fd, (struct sockaddr *) sun, sizeof(*sun)) < 0) {
+			if (errno != ECONNREFUSED) {
+				close(test_fd);
+				return -1;
+			}
+			/* stale socket: remove it */
+			unlink(sun->sun_path);
+		} else {
+			/* in use: another instance is running */
+			close(test_fd);
+			return -1;
+		}
+		close(test_fd);
+	}
+	return 0;
+}
+
 static int openmgmt(char *mgmt)
 {
 	int mgmtconnfd;
@@ -1320,6 +1366,10 @@ static int openmgmt(char *mgmt)
 	}
 	sun.sun_family = PF_UNIX;
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",mgmt);
+	if (prepare_mgmt_path(&sun) < 0) {
+		fprintf(stderr,"%s: mgmt socket path %s: %s",progname,mgmt,strerror(errno));
+		exit(1);
+	}
 	if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		fprintf(stderr,"%s: mgmt bind %s",progname,strerror(errno));
 		exit(1);
