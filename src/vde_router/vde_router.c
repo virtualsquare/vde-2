@@ -1342,6 +1342,9 @@ int config_readline (int fd, char *l)
 			}
 		}
 	}
+	/* the last line of the file may lack a trailing newline */
+	if (len < MAXCMD)
+		l[len] = (char)0;
 	return len;
 }
 
