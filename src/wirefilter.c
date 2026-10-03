@@ -434,8 +434,12 @@ int writepacket(int dir,const unsigned char *buf,int size)
 		if (nobit>0) {
 			unsigned char noisedpacket[BUFSIZE];
 			memcpy(noisedpacket,buf,size);
+			/* noise applies to the payload (size-2 bytes, after the
+			 * 2-byte length prefix): bound the bit offset to it,
+			 * otherwise the index runs past noisedpacket[] when
+			 * size == BUFSIZE */
 			while(nobit>0) {
-				int flippedbit=(drand48()*size*8);
+				int flippedbit=(drand48()*(size-2)*8);
 				noisedpacket[(flippedbit >> 3) + 2] ^= 1<<(flippedbit & 0x7);
 				nobit--;
 			}
