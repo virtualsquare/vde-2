@@ -277,11 +277,19 @@ void vdehist_mgmt_to_term(struct vdehiststat *st)
 	//fprintf(stderr,"mgmt2term\n");
 	if (st->mgmtfd) {
 		n=vdehist_vderead(st->mgmtfd,buf,BUFSIZE);
+		if (n < 0)
+			n = 0;
 		//fprintf(stderr,"mgmt2term n=%d\n",n);
 		buf[n]=0;
 		while (n>0) {
 			for(ib=0;ib<n;ib++)
 			{
+				if (st->vbufindex >= BUFSIZE - 2) {
+					/* line longer than vlinebuf: discard the partial
+					 * line (the newline path writes two bytes past
+					 * the current index) */
+					st->vbufindex = 0;
+				}
 				st->vlinebuf[(st->vbufindex)++]=buf[ib];
 				if (buf[ib] == '\n') {
 					st->vlinebuf[(st->vbufindex)-1]='\r';
