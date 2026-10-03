@@ -268,9 +268,9 @@ _skip_lbl (const unsigned char *ptr, u_int16_t *len)
 	 (*len)--;
 	 break;
       }
-      *len -= *ptr;
-      if (*len < 1)
+      if (*len <= *ptr)
 	return NULL;
+      *len -= *ptr;
       ptr += *ptr+1;
    }
    
