@@ -174,6 +174,8 @@ int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len
 	struct vde_buff *b;
 	struct udphdr *uh;
 	uint8_t *datagram;
+	size_t udp_len;
+	size_t avail;
 
 	if (len <= 0) {
 		errno = EINVAL;
@@ -196,8 +198,20 @@ int vder_udpsocket_recvfrom(struct vder_udp_socket *sock, void *data, size_t len
 	} while(!b);
 	uh = (struct udphdr *) payload(b);
 	datagram = (uint8_t *)(payload(b) + sizeof(struct udphdr));
-	if (ntohs(uh->len) < len)
-		len = ntohs(uh->len) - sizeof (struct udphdr);
+	udp_len = ntohs(uh->len);
+	if (udp_len < sizeof(struct udphdr)) {
+		free(b);
+		return 0;
+	}
+	if (b->len < 14 + sizeof(struct iphdr) + sizeof(struct udphdr)) {
+		free(b);
+		return 0;
+	}
+	avail = b->len - 14 - sizeof(struct iphdr) - sizeof(struct udphdr);
+	if (udp_len - sizeof(struct udphdr) < avail)
+		avail = udp_len - sizeof(struct udphdr);
+	if (len > avail)
+		len = avail;
 	memcpy(data, datagram, len);
 	*fromport = uh->sport;
 	free(b);
