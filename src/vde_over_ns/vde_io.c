@@ -155,10 +155,16 @@ for(;;){
 		vde_len=0;
 		vde_len+=((unsigned char)(ret->data[0]))<<8;
 		vde_len+=(unsigned char)(ret->data[1]);
+		/* the length prefix is peer-controlled: bound it to the buffer */
+		if (vde_len > MAXPKT-2)
+			return NULL;
 	  
 		ret->len=2;
 		while(ret->len < (vde_len + 2)){
-		ret->len += read(ifd, ret->data+ret->len, ((vde_len+2) - ret->len));
+			c=read(ifd, ret->data+ret->len, ((vde_len+2) - ret->len));
+			if (c <= 0)
+				return NULL; /* read() error or EOF: don't corrupt the loop */
+			ret->len += c;
 	  }
 	}
 	// fprintf(stderr,"Read %d.\n",vde_len);
@@ -191,7 +197,7 @@ for(;;){
 void
 send_vde(const char *data, size_t len)
   {
-	static unsigned int outbuf[MAXPKT];
+	static unsigned char outbuf[MAXPKT];
 	static int outp;
 	static u_int16_t outlen;
 	if(len<=0)
@@ -204,6 +210,15 @@ send_vde(const char *data, size_t len)
 		outlen=2;
 		outlen+=(unsigned char)data[1];
 		outlen+=((unsigned char)(data[0]))<<8;
+		if (outlen > (u_int16_t)sizeof(outbuf)) {
+			/* declared packet bigger than the reassembly buffer: drop */
+			return;
+		}
+	} else if (outp==0) {
+		/* no 2-byte length prefix available: flush as-is,
+		 * otherwise the recursion below never advances */
+		write(ofd,data,len);
+		return;
 	}
 	
 	if(len>=outlen){
@@ -212,6 +227,12 @@ send_vde(const char *data, size_t len)
 		return;
 	}
 		
+	if (outp + (int)len > (int)sizeof(outbuf)) {
+		/* fragment would overflow the reassembly buffer: drop the
+		 * packet in progress */
+		outp = 0;
+		return;
+	}
 	memcpy(outbuf+outp,data,len);
 	outp+=len;
 	if(outp>=outlen){

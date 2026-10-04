@@ -14,6 +14,7 @@
 #include <syslog.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <libgen.h>
 #include <sched.h>
 #include <sys/types.h>
@@ -181,7 +182,9 @@ static struct endpoint *new_port_v1_v3(int fd_ctl, int type_port,
 			snprintf(sun_in.sun_path,sizeof(sun_in.sun_path),"%s/%03d.%d",ctl_socket,portno,fd_data);
 #pragma GCC diagnostic pop
 
-			if ((unlink(sun_in.sun_path) < 0 && errno != ENOENT) ||
+			/* refuse a planted symlink and fail on a socket in use:
+			 * the bind runs as root and must not be redirected */
+			if (prepare_socket_path(&sun_in) < 0 ||
 					bind(fd_data, (struct sockaddr *) &sun_in, sizeof(struct sockaddr_un)) < 0){
 				printlog(LOG_ERR,"Binding to data socket %s",strerror(errno));
 				close_ep(ep);
@@ -255,8 +258,18 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 		} else if (len > 0) {
 			struct sockaddr_un sa_un;
 			reqbuf[len]=0;
+			if (len < (int)(offsetof(struct request_v3, version) + sizeof(uint32_t))) {
+				printlog(LOG_WARNING, "Short request (%d bytes) dropped", len);
+				remove_fd(fd);
+				return;
+			}
 			if(req->v1.magic == SWITCH_MAGIC){
 				if(req->v3.version == 3) {
+					if (len < (int)(offsetof(struct request_v3, sock) + sizeof(struct sockaddr_un))) {
+						printlog(LOG_WARNING, "Short v3 request (%d bytes) dropped", len);
+						remove_fd(fd);
+						return;
+					}
 					memcpy(&sa_un, &req->v3.sock, sizeof(struct sockaddr_un));
 					ep=new_port_v1_v3(fd, req->v3.type, &sa_un);
 					if (ep != NULL) {
@@ -272,6 +285,11 @@ static void handle_io(unsigned char type,int fd,int revents,void *arg)
 							"vde_switch doesn't support", req->v3.version);
 					remove_fd(fd);
 				} else {
+					if (len < (int)(offsetof(struct request_v1, u) + offsetof(struct req_v1_new_control_s, name) + sizeof(struct sockaddr_un))) {
+						printlog(LOG_WARNING, "Short v1 request (%d bytes) dropped", len);
+						remove_fd(fd);
+						return;
+					}
 					memcpy(&sa_un, &req->v1.u.new_control.name, sizeof(struct sockaddr_un));
 					ep=new_port_v1_v3(fd, req->v1.type, &sa_un);
 					if (ep != NULL) {
@@ -496,6 +514,12 @@ static void init(void)
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 	snprintf(sun.sun_path,sizeof(sun.sun_path),"%s/ctl",ctl_socket);
 #pragma GCC diagnostic pop
+	/* refuse a planted symlink and remove a stale ctl socket:
+	 * the bind runs as root and must not be redirected */
+	if (prepare_socket_path(&sun) < 0) {
+		printlog(LOG_ERR, "Could not prepare ctl socket path '%s/ctl': %s", ctl_socket, strerror(errno));
+		exit(-1);
+	}
 	if(bind(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
 		if((errno == EADDRINUSE) && still_used(&sun)){
 			printlog(LOG_ERR, "Could not bind to socket '%s/ctl': %s", ctl_socket, strerror(errno));

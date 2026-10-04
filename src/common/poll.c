@@ -48,6 +48,12 @@ static int prepare_select(struct pollfd *ufds, nfds_t nfds, int timeout,
 			return 0;
 		}
 
+		if (currfd->fd >= FD_SETSIZE)
+		{
+			errno = EINVAL;
+			return 0;
+		}
+
 		if (currfd->events & POLLIN)
 			FD_SET(currfd->fd, rfds);
 		if (currfd->events & POLLOUT)

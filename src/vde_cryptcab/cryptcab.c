@@ -63,8 +63,11 @@ isvalid_timestamp(unsigned char *block, int size, struct peer *p)
 {
 	int i;
 	unsigned long long pktcounter=0;
+	/* the counter is the last 8 bytes of the datagram
+	 * ([flag][payload][crc 4][counter 8]); shift as 64-bit:
+	 * an int shift is UB for i>=4 */
 	for(i=0;i<8;i++){
-		pktcounter+=block[size-12+i]<<(i*8);
+		pktcounter+=(unsigned long long)block[size-8+i]<<(i*8);
 	}
 	if(pktcounter>p->counter){
 		p->counter=pktcounter;
@@ -150,8 +153,9 @@ send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 	struct sockaddr_in *destination=&(p->in_a);
 	unsigned char *crc;
 
-	if (len + 8 - 1 > MAXPKT) {
-		len = MAXPKT - 8 + 1;
+	/* room for 1 flag byte + len payload + 12 byte tail (crc + counter) */
+	if (len + 13 > MAXPKT) {
+		len = MAXPKT - 13;
 		vc_printlog(2,"Warning: Cropping down packet size to %d", len);
 	}
 

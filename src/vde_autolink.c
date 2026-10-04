@@ -197,10 +197,15 @@ struct autolink *find_alink_pid(int pid);
 static void catch_zombies(int signo)
 {
 	int status;
+	pid_t pid;
 	struct autolink *a;
 
-	if( (a=find_alink_pid(wait(&status))) )
-		a->wirepid = -1;
+	/* WNOHANG: a blocking wait() in the SIGCHLD handler stalls the
+	 * daemon when no zombie is pending (and is not async-signal-safe) */
+	while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+		if( (a=find_alink_pid(pid)) )
+			a->wirepid = -1;
+	}
 }
 
 static void setsighandlers()
@@ -629,7 +634,7 @@ int alinklinkonoff(int fd, char *arg)
 	if(!curlink) return ENXIO;
 	
 	if(value){
-		if(!curlink->wires) return ENXIO;
+		if(!curlink->wires || !curlink->wires[0]) return ENXIO;
 		if(curlink->enabled) return 0;
 		curlink->enabled = 1;
 		curlink->state = ST_DISCARD;
@@ -1242,11 +1247,13 @@ static int runscript(int fd,char *path)
 	if (f==NULL)
 		return ENOENT;
 	else {
+		/* do not echo the script lines back: the daemon runs as root,
+		 * the echo would let a mgmt user read any root-readable file;
+		 * handle_cmd dispatch is equivalent to direct mgmt commands */
+		if (fd >= 0) printoutc(fd,"vde_autolink: running script %s",path);
 		while (fgets(buf,MAXCMD,f) != NULL) {
 			if (strlen(buf) > 1 && buf[strlen(buf)-1]=='\n')
 						buf[strlen(buf)-1]= '\0';
-			if (fd >= 0) printoutc(fd,"vde_autolink[%s]: %s",
-						path,buf);
 			handle_cmd(fd, buf);
 		}
 		return 0;

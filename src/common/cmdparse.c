@@ -30,6 +30,9 @@
 
 #define BUFSIZE 256
 #define TIMEOUT 10000
+/* cap the IN-state line buffer: a peer streaming non-matching bytes
+ * would otherwise grow it without bound (OOM of the mgmt client) */
+#define IN_MAX 1048576
 
 enum command {ERR, IN, THROW, SEND, SHIFT, IF, GOTO, COPY, EXIT, EXITRV, SKIP, IFARG, RVATOI, OUTSHIFT, OUTTAG};
 
@@ -250,6 +253,10 @@ int utm_run(struct utm *utm, struct utm_buf *buf, int fd, int argc, char **argv,
 					int ltimeout=0;
 					do {
 						if (len==linebufsize) {
+							if (linebufsize >= IN_MAX) {
+								ltimeout=1;
+								break; /* peer keeps sending non-matching bytes */
+							}
 							linebufsize += BUFSIZE;
 							linebuf=realloc(linebuf,sizeof(char)*(linebufsize+1));
 							if(!linebuf){ perror("utm_run"); exit(-1); }

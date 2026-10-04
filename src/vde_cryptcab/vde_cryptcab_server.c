@@ -251,12 +251,45 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 {
 	int fd;
 	char filename[256 + 1];
+	int idlen;
 	if(!pre_shared) {
-		if (strlen((char *)pkt->data + 1) > (256 - 11))
-			*(pkt->data + 1 + 256 - 11) = 0;
-		snprintf(filename,256,"/tmp/.%s.key",pkt->data+1);
-	} else
+		const char *id = (const char *)pkt->data + 1;
+		int i;
+		idlen = pkt->len - 1;
+		if (idlen < 0)
+			idlen = 0;
+		if (idlen > 245)
+			idlen = 245;
+		/* The login id becomes part of a file path: allow only
+		 * plain filename characters and no leading/double dots,
+		 * so the path stays inside /tmp. The client pads the id
+		 * with NULs to FILENAMESIZE: the effective id ends at the
+		 * first NUL, which is not an invalid character. */
+		for (i = 0; i < idlen && id[i] != '\0'; i++) {
+			char c = id[i];
+			if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			      (c >= '0' && c <= '9') || c == '_' || c == '-' ||
+			      c == '.'))
+				break;
+			if (c == '.' && (i == 0 || id[i-1] == '.'))
+				break;
+		}
+		if (i < idlen && id[i] != '\0') {
+			vc_printlog(2, "Login id rejected: invalid characters\n");
+			deny_access(pkt->orig);
+			return;
+		}
+		idlen = i;
+		if (idlen == 0) {
+			vc_printlog(2, "Login id rejected: empty\n");
+			deny_access(pkt->orig);
+			return;
+		}
+		snprintf(filename,256,"/tmp/.%.*s.key",idlen,id);
+	} else {
 		snprintf(filename,256,"%s",pre_shared);
+		idlen = 0;
+	}
 	sync();
 	usleep(10000);	
 	if (((fd = open (filename, O_RDONLY)) == -1)||
@@ -268,7 +301,14 @@ rcv_login(struct datagram *pkt, char *pre_shared)
 	}
 
 	close(fd);
-	memcpy(pkt->orig->id,pkt->data+1,FILENAMESIZE);
+	/* store only the validated id, NUL-terminated: a fixed 16-byte
+	 * copy read past the id into the datagram and left id[] without
+	 * a NUL, so the later "/tmp/.%s.key" unlink() saw unvalidated
+	 * bytes (path traversal) and read past the field. */
+	if (idlen > FILENAMESIZE-1)
+		idlen = FILENAMESIZE-1;
+	memcpy(pkt->orig->id,pkt->data+1,idlen);
+	pkt->orig->id[idlen]=0;
 	vc_printlog(2,"Sending challenge... ");
 	send_challenge(pkt->orig);
 	set_expire(pkt->orig, CMD_CHALLENGE);
@@ -310,6 +350,11 @@ rcv_response(struct datagram *pkt)
  * of the vde_plug attached, or from udp socket.
  * Returns a struct datagram aware of its own source.
  */
+/* cap the peer list: a UDP flood from many (spoofed) source
+ * addresses would otherwise allocate one peer per unseen address
+ * between the expiry sweeps */
+#define MAXPEERS 1024
+
 static int recv_datagram_srv(struct datagram *pkt, int nfd)
 {
 	unsigned peerlen;
@@ -349,6 +394,8 @@ static int recv_datagram_srv(struct datagram *pkt, int nfd)
 
 			pkt->orig=getpeer(ipaddress);
 			if(!pkt->orig){
+				if (numberofpeers() >= MAXPEERS)
+					return 0; /* drop the packet */
 				pkt->orig=malloc(sizeof(struct peer));
 				memset(pkt->orig,0,sizeof(struct peer));
 				pkt->orig->in_a.sin_family = AF_INET;
@@ -442,18 +489,30 @@ void cryptcab_server(char *_plugname, unsigned short udp_port, enum e_enc_type _
 			switch(p1->state + pkt.data[0]) {
 				case (ST_AUTH + PKT_DATA):
 					{
-						unsigned int len = pkt.len - 1;
+						unsigned int len;
 						unsigned char *p = (pkt.data + 1);
-						unsigned char *tail = (p + len - 12);
+						unsigned char *tail;
 						uint32_t crc;
+
+						/* minimum: 1 byte type + 12 byte tail (crc + iv) */
+						if (pkt.len < 13) {
+							vc_printlog(4, "Short data pkt discarded (%d Bytes)", pkt.len);
+							break;
+						}
+						len = pkt.len - 1;
+						tail = (p + len - 12);
 
 						crc = tail[0] + (tail[1] << 8) +
 							(tail[2] << 16) + (tail[3] << 24);
 						len -= 12;
 						pkt_dec.len = data_encrypt_decrypt(p, pkt_dec.data, len, p1->key, tail);
 						if (crc == chksum_crc32(pkt_dec.data,pkt_dec.len)) {
-							vc_printlog(4,"Data pkt received (%d Bytes)",pkt.len);
-							vde_send(p1->plug,pkt_dec.data,pkt_dec.len,0);	
+							if (!isvalid_timestamp(pkt.data, pkt.len, p1)) {
+								vc_printlog(4,"Replayed data packet discarded (%d Bytes)",pkt.len);
+							} else {
+								vc_printlog(4,"Data pkt received (%d Bytes)",pkt.len);
+								vde_send(p1->plug,pkt_dec.data,pkt_dec.len,0);
+							}
 						} else {
 							vc_printlog(4,"CRC error, incoming data packet discarded (%d Bytes)",pkt.len);
 						}

@@ -31,6 +31,9 @@
 #define BUFSIZE 1024
 #define HISTORYSIZE 32
 
+/* cap the command list: the peer's 'help' output is untrusted */
+#define MAXCOMMANDS 1024
+
 extern char *prompt;
 
 static char **commandlist;
@@ -189,6 +192,7 @@ static void vdehist_create_commandlist(int vdefd)
 	FILE *ms=open_memstream(&buf,&bufsize);
 	if (ms && vdefd >= 0) {
 		int status=CC_HEADER;
+		int ncommands=0;
 		vdehist_vdewrite(vdefd,"help\n",5);
 		while (status != CC_TERM && vdehist_readln(vdefd,linebuf,BUFSIZE,&readlnbuf) != NULL) {
 			if (status == CC_HEADER) {
@@ -207,15 +211,22 @@ static void vdehist_create_commandlist(int vdefd)
 						if (strncmp(lastcommand,linebuf,strlen(lastcommand)) == 0 &&
 								linebuf[strlen(lastcommand)] == '/')
 							free(lastcommand);
-						else
+						else if (ncommands < MAXCOMMANDS) {
 							fwrite(&lastcommand, sizeof(char *), 1, ms);
+							ncommands++;
+						} else
+							free(lastcommand);
 					}
 					lastcommand=strdup(linebuf);
 				}
 			}
 		}
-		if (lastcommand) 
-			fwrite(&lastcommand, sizeof(char *), 1, ms);
+		if (lastcommand) {
+			if (ncommands < MAXCOMMANDS)
+				fwrite(&lastcommand, sizeof(char *), 1, ms);
+			else
+				free(lastcommand);
+		}
 		lastcommand = NULL;
 		fwrite(&lastcommand, sizeof(char *), 1, ms);
 		fclose(ms);
@@ -277,11 +288,19 @@ void vdehist_mgmt_to_term(struct vdehiststat *st)
 	//fprintf(stderr,"mgmt2term\n");
 	if (st->mgmtfd) {
 		n=vdehist_vderead(st->mgmtfd,buf,BUFSIZE);
+		if (n < 0)
+			n = 0;
 		//fprintf(stderr,"mgmt2term n=%d\n",n);
 		buf[n]=0;
 		while (n>0) {
 			for(ib=0;ib<n;ib++)
 			{
+				if (st->vbufindex >= BUFSIZE - 2) {
+					/* line longer than vlinebuf: discard the partial
+					 * line (the newline path writes two bytes past
+					 * the current index) */
+					st->vbufindex = 0;
+				}
 				st->vlinebuf[(st->vbufindex)++]=buf[ib];
 				if (buf[ib] == '\n') {
 					st->vlinebuf[(st->vbufindex)-1]='\r';
@@ -447,16 +466,29 @@ int vdehist_term_to_mgmt(struct vdehiststat *st)
 		return n;
 	else {
 		for (i=0;i<n && strlen(st->linebuf)<BUFSIZE;i++) {
-			if (buf[i] == 0xff && buf[i+1] == 0xff)
+			/* only multi-byte sequences may end a read: a lone
+			 * trailing IAC is incomplete; plain bytes are processed */
+			if (buf[i] == 0xff && i+1 >= n)
+				break; /* incomplete IAC at end of read */
+			if (buf[i] == 0xff && buf[i+1] == 0xff) {
 				i++;
+				if (i+1 >= n)
+					break; /* IAC IAC: escaped IAC is the last byte */
+			}
 			if(buf[i]==0) buf[i]='\n'; /*telnet encode \n as a 0 when in raw mode*/
 			if (buf[i] == 0xff && buf[i+1] != 0xff) {
+				if (i+2 >= n)
+					break; /* incomplete telnet option */
 				i+=telnet_options(st,buf+i);
 			} else 
 
 				if(buf[i] == 0x1b) {
 					/* ESCAPE! */
+					if (i+1 >= n)
+						break; /* incomplete escape at end of read */
 					if (buf[i+1]=='[' && st->status == HIST_COMMAND) {
+						if (i+2 >= n)
+							break; /* incomplete escape sequence */
 						st->edited=1;
 						switch (buf[i+2]) {
 							case 'A': //fprintf(stderr,"UP\n");

@@ -389,7 +389,7 @@ static int rec_setqlen_ep(struct endpoint *ep, int fd_ctl, int len)
 	struct endpoint *this=ep;
 	if (this != NULL) {
 		if (this->fd_ctl==fd_ctl) {
-			ep->vdepq_max = len;
+			this->vdepq_max = len;
 			return 0;
 		} else
 			return rec_setqlen_ep(this->next, fd_ctl, len);
@@ -950,7 +950,7 @@ static int epqlen(char *arg)
 
 static char *port_getuser(uid_t uid)
 {
-	static char buf[6];
+	static char buf[16];
 	struct passwd *pw;
 	if (uid == -1) 
 		return "NONE";
@@ -959,7 +959,7 @@ static char *port_getuser(uid_t uid)
 		if (pw != NULL)
 			return pw->pw_name;
 		else {
-			sprintf(buf,"%d",uid);
+			snprintf(buf, sizeof(buf), "%lu", (unsigned long)uid);
 			return buf;
 		}
 	}
@@ -967,7 +967,7 @@ static char *port_getuser(uid_t uid)
 
 static char *port_getgroup(gid_t gid)
 {
-	static char buf[6];
+	static char buf[16];
 	struct group *gr;
 	if (gid == -1) 
 		return "NONE";
@@ -976,7 +976,7 @@ static char *port_getgroup(gid_t gid)
 		if (gr != NULL)
 			return gr->gr_name;
 		else {
-			sprintf(buf,"%d",gid);
+			snprintf(buf, sizeof(buf), "%lu", (unsigned long)gid);
 			return buf;
 		}
 	}
@@ -1126,7 +1126,7 @@ static int vlancreate_nocheck(int vlan)
 	vlant[vlan].bcuntag=ba_alloc(numports);
 	vlant[vlan].notlearning=ba_alloc(numports);
 	if (vlant[vlan].table == NULL || vlant[vlan].bctag == NULL || 
-			vlant[vlan].bcuntag == NULL) 
+			vlant[vlan].bcuntag == NULL || vlant[vlan].notlearning == NULL) 
 		return ENOMEM;
 	else {
 #ifdef FSTP

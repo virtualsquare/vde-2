@@ -7,16 +7,19 @@
 #define __VDER_ARP
 #include "vde_router.h"
 #include <stdint.h>
+#include <time.h>
 
 /* Interface */
 struct vder_arp_entry {
 	struct rb_node rb_node;
 	uint32_t ipaddr;
 	uint8_t macaddr[6];
+	time_t last_seen;
 };
 
 void vder_add_arp_entry(struct vder_iface *vif, struct vder_arp_entry *p);
-struct vder_arp_entry *vder_get_arp_entry(struct vder_iface *vif, uint32_t addr);
+int vder_get_arp_entry_mac(struct vder_iface *vif, uint32_t addr,
+			   uint8_t *mac_out);
 size_t vder_arp_query(struct vder_iface *oif, uint32_t tgt);
 size_t vder_arp_reply(struct vder_iface *oif, struct vde_buff *vdb);
 /* Parse an incoming arp packet */;
@@ -28,6 +31,12 @@ struct vder_arp_entry *vder_arp_get_record_by_macaddr(struct vder_iface *vif, ui
 
 /* O(N) list of neighbors (required by olsr) */
 int vder_arp_get_neighbors(struct vder_iface *vif, uint32_t *neighbors, int vector_size);
+
+/* Evict ARP entries unseen for ARP_GC_TIMEOUT seconds (DHCP-leased
+ * IPs are kept). Runs on its own thread, started by vderouter_init(). */
+#define ARP_GC_TIMEOUT 300
+void vder_arp_gc(void);
+void *vder_arp_gc_loop(void *arg);
 
 #endif
 

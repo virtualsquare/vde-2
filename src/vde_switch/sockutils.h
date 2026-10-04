@@ -7,5 +7,6 @@
 #define _SOCKUTILS_H
 
 int still_used(struct sockaddr_un *sun);
+int prepare_socket_path(struct sockaddr_un *sun);
 
 #endif

@@ -268,9 +268,9 @@ _skip_lbl (const unsigned char *ptr, u_int16_t *len)
 	 (*len)--;
 	 break;
       }
-      *len -= *ptr;
-      if (*len < 1)
+      if (*len < (u_int16_t)*ptr + 2)
 	return NULL;
+      *len -= *ptr + 1;
       ptr += *ptr+1;
    }
    
@@ -531,6 +531,12 @@ dns_extractpkt(const unsigned char *buf, int len)
 	     dns_free(pkt);
 	     return NULL;
 	  }
+	if (remain < 4) {
+	     syslog(LOG_ERR, "dns_extractpkt: qtype/qclass past end of packet\n");
+	     free(offsets);
+	     dns_free(pkt);
+	     return NULL;
+	}
 	ptr += 4;
 	remain -= 4;
      }
@@ -548,9 +554,27 @@ dns_extractpkt(const unsigned char *buf, int len)
 	       rrp->link = j;
 	  }
 	ptr=_skip_lbl(ptr,&remain);
+	if (!ptr) {
+		syslog(LOG_ERR, "dns_extractpkt: _skip_lbl choked in an\n");
+		free(offsets);
+		dns_free(pkt);
+		return NULL;
+	}
+	if (remain < sizeof(struct ns_answer_header)) {
+		syslog(LOG_ERR, "dns_extractpkt: too few bytes in an\n");
+		free(offsets);
+		dns_free(pkt);
+		return NULL;
+	}
 	nsh=(struct ns_answer_header *)ptr;
 	ptr+=sizeof(struct ns_answer_header);
 	remain-=sizeof(struct ns_answer_header);
+	if (ntohs(nsh->datalen) > remain) {
+		syslog(LOG_ERR, "dns_extractpkt: answer datalen past end of packet\n");
+		free(offsets);
+		dns_free(pkt);
+		return NULL;
+	}
 	//printf("REMAIN=%u, datalen=%u, type= 0x%02x, sizeof ns_answer_header=%u\n",remain,ntohs(nsh->datalen), ntohs(nsh->type),sizeof(struct ns_answer_header));
 	if (ntohs(nsh->type) != NSTYPE_TXT){
 		ptr+=ntohs(nsh->datalen);
@@ -558,8 +582,17 @@ dns_extractpkt(const unsigned char *buf, int len)
 		continue;
 	}
 	rrp->len = ntohs(nsh->datalen);
-	rrp->data = malloc(rrp->len);
-	memcpy(rrp->data, ptr,rrp->len);
+	rrp->data = NULL;
+	if (rrp->len) {
+		rrp->data = malloc(rrp->len);
+		if (!rrp->data) {
+			syslog(LOG_ERR, "dns_extractpkt: out of memory\n");
+			free(offsets);
+			dns_free(pkt);
+			return NULL;
+		}
+		memcpy(rrp->data, ptr,rrp->len);
+	}
 	remain -= rrp->len;
 	ptr += rrp->len;
    }

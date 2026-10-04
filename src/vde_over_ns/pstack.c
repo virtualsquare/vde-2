@@ -63,10 +63,16 @@ nstx_handlepacket(const char *ptr, size_t len,
    if (!nstxpkt->id)
      return;
    
+   if (nstxpkt->magic != NSTX_MAGIC)
+     return;
+   
    nstxitem = get_item_by_id(nstxpkt->id);
    
    if (!nstxitem)
      nstxitem = alloc_item(nstxpkt->id);
+   
+   if (!nstxitem)
+     return; /* table full: drop the fragment */
    
    if (add_data(nstxitem, nstxpkt, len)) {
       netpacket = dealloc_item(nstxitem, &netpacketlen);
@@ -90,9 +96,19 @@ static struct nstx_item * get_item_by_id(unsigned int id) {
 }
 
 static struct nstx_item * alloc_item(unsigned int id) {
-   struct nstx_item *ptr;
+   struct nstx_item *ptr, *cur;
+   int n;
+   
+   /* bound the table: a peer streaming fragments keeps every entry
+    * fresh past the 30s timeout (memory exhaustion of the daemon) */
+   for (n = 0, cur = nstx_list; cur; cur = cur->next)
+     n++;
+   if (n >= NSTX_MAX_ITEMS)
+     return NULL;
    
    ptr = malloc(sizeof(struct nstx_item));
+   if (!ptr)
+     return NULL;
    memset(ptr, 0, sizeof(struct nstx_item));
    ptr->next = nstx_list;
    if (ptr->next)

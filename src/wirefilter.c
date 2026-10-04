@@ -155,19 +155,38 @@ static void copyadjmap(int newsize, double *newmap)
 	}
 }
 
+/* cap the node count: the adjacency map is numnodes^2 doubles, and
+ * the cap also keeps the calloc size out of int overflow */
+#define MARKOV_MAX_NODES 1024
+
 static void markov_resize(int numnodes)
 {
+	if (numnodes > MARKOV_MAX_NODES)
+		return;
 	if (numnodes != markov_numnodes) {
 		int i;
 		double *newadjmap=calloc(numnodes*numnodes,sizeof(double));
+		struct markov_node **newnodes;
+		if (newadjmap == NULL)
+			return;
 		if (numnodes>markov_numnodes) {
-			markov_nodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			newnodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			if (newnodes == NULL) {
+				free(newadjmap);
+				return;
+			}
+			markov_nodes=newnodes;
 			for (i=markov_numnodes;i<numnodes;i++)
 				markov_nodes[i]=markov_node_new();
 		} else {
 			for (i=numnodes;i<markov_numnodes;i++)
 				markov_node_free(markov_nodes[i]);
-			markov_nodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			newnodes=realloc(markov_nodes,numnodes*(sizeof(struct markov_node *)));
+			if (newnodes == NULL) {
+				free(newadjmap);
+				return;
+			}
+			markov_nodes=newnodes;
 			if (markov_current >= numnodes)
 				markov_current = 0;
 		}
@@ -434,8 +453,12 @@ int writepacket(int dir,const unsigned char *buf,int size)
 		if (nobit>0) {
 			unsigned char noisedpacket[BUFSIZE];
 			memcpy(noisedpacket,buf,size);
+			/* noise applies to the payload (size-2 bytes, after the
+			 * 2-byte length prefix): bound the bit offset to it,
+			 * otherwise the index runs past noisedpacket[] when
+			 * size == BUFSIZE */
 			while(nobit>0) {
-				int flippedbit=(drand48()*size*8);
+				int flippedbit=(drand48()*(size-2)*8);
 				noisedpacket[(flippedbit >> 3) + 2] ^= 1<<(flippedbit & 0x7);
 				nobit--;
 			}
@@ -591,7 +614,9 @@ void handle_packet(int dir,const unsigned char *buf,int size)
 	int times=1;
 	if (max_wirevalue(markov_current,DDUP,dir) > 0) {
 		double dupval=compute_wirevalue(DDUP,dir)/100;
-		while (drand48() < dupval)
+		/* at dup=100, drand48() < 1.0 always holds: cap the
+		 * number of duplicates so the loop terminates */
+		while (drand48() < dupval && times < 100)
 			times++;
 	}
 	while (times>0) {
@@ -1355,11 +1380,11 @@ static int runscript(int fd,char *path)
 	if (f==NULL)
 		return errno;
 	else {
+		/* do not echo the script lines back: the daemon runs as root,
+		 * the echo would let a mgmt user read any root-readable file;
+		 * handle_cmd dispatch is equivalent to direct mgmt commands */
 		while (fgets(buf,MAXCMD,f) != NULL) {
 			delnl(buf);
-			if (fd >= 0) {
-				printoutc(fd,"%s (%s) %s",prompt,path,buf);
-			}
 			handle_cmd(fd, buf);
 		}
 		fclose(f);
