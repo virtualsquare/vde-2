@@ -87,6 +87,14 @@ Give the router the DHCP server if you would rather not configure each host:
 The offer carries the router's address on that interface as the gateway,
 together with the netmask and broadcast address derived from it.
 
+It carries a DNS server too. Without a fourth argument that is 208.67.222.222,
+which only answers if the router has an uplink, and which knows nothing about
+the names on the network being served - a name that does not exist there does
+not fail, it resolves to whatever the public domain happens to hold. Point it
+at a resolver of your own instead:
+
+	dhcpd start eth0 10.0.0.20 10.0.0.40 10.0.0.1
+
 
 4. Reaching the outside
 -----------------------
@@ -168,9 +176,8 @@ ARP entries do not expire. A host that changes its MAC address while keeping
 its IP - a virtual machine rebuilt with a fresh one, say - will not be reached
 until the router is restarted.
 
-The DHCP server advertises a fixed public resolver and does not send the
-NetBIOS name server option. A network that needs either wants a DHCP server of
-its own on the segment instead.
+The DHCP server does not send the NetBIOS name server option. A network that
+needs it wants a DHCP server of its own on the segment instead.
 
 If frames seem not to arrive at all, look at the switch rather than the router:
 

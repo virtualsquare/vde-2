@@ -81,7 +81,7 @@ static void dhcpd_make_reply(struct vder_dhcp_negotiation *dn, uint8_t reply_typ
 	uint32_t server_address = vder_get_right_localip(Settings.iface, Settings.pool_next);
 	uint32_t netmask = vder_get_netmask(Settings.iface, server_address);
 	uint32_t bcast = vder_get_broadcast(server_address, netmask);
-	uint32_t dns_server = OPENDNS;
+	uint32_t dns_server = Settings.dns_server ? Settings.dns_server : OPENDNS;
 
 	int sent = 0;
 
