@@ -34,7 +34,7 @@
 #include <linux/if_tun.h>
 #endif
 
-#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD) || defined(VDE_NETBSD)
 #define TAP_PREFIX "/dev/"
 #endif
 
@@ -202,7 +202,7 @@ int open_tap(char *dev)
 }
 #endif
 
-#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD) || defined(VDE_NETBSD)
 int open_tap(char *dev)
 {
 	int fd;
@@ -217,7 +217,6 @@ int open_tap(char *dev)
 		{ 
 			snprintf(path, strlen(dev) + prefixlen + 1, "%s%s", TAP_PREFIX, dev);
 			fd=open(path, O_RDWR);
-			free(path);
 		}
 		else
 			fd = -1;
@@ -226,8 +225,10 @@ int open_tap(char *dev)
 	if (fd < 0)
 	{
 		printlog(LOG_ERR,"Failed to open tap device %s: %s", (*dev == '/') ? dev : path, strerror(errno));
+		free(path);
 		return(-1);
 	}
+	free(path);
 	return fd;
 }
 #endif

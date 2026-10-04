@@ -24,6 +24,7 @@
 
 #include <netinet/in.h>
 #include <sys/un.h>
+#include <sys/socket.h>
 
 #include "vxlan_hash.h"
 #include "log.h"
