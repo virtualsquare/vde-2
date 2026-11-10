@@ -1,3 +1,8 @@
+VDE 2.3.4, 2026-11-10
+	* vde_cryptcab: drop mbedTLS support; wolfSSL is now the only crypto
+	  backend (links against the system wolfSSL, or a custom build via
+	  -DWOLFSSL_ROOT)
+
 VDE 2.3.3, 2022-05-02
 	* Several bug fixes
 	* new hash function
