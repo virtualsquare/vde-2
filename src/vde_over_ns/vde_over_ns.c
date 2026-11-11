@@ -264,6 +264,10 @@ void nstx_getpacket (void) {
 
 
 
+/* cap on the pending send items: the list is only drained as fast
+   as DNS queries can be emitted, and a VM can flood FROMTUN frames */
+#define NSTX_SEND_MAX 256
+
 static struct nstx_senditem * alloc_senditem(void) {
    struct nstx_senditem *ptr = nstx_sendlist;
 
@@ -275,7 +279,8 @@ static struct nstx_senditem * alloc_senditem(void) {
       ptr->next = malloc(sizeof(struct nstx_senditem));
       ptr = ptr->next;
    }
-
+   if (!ptr)
+      return NULL;
    memset(ptr, 0, sizeof(struct nstx_senditem));
    
    return ptr;
@@ -285,10 +290,24 @@ static void
 queue_senditem(const char *buf, int len) {
    static int id = 0;
    struct nstx_senditem *item;
+   unsigned char *data;
+   int count = 0;
    
+   for (item = nstx_sendlist; item; item = item->next)
+	count++;
+   if (count >= NSTX_SEND_MAX)
+	return;
+   
+   data = malloc(len);
+   if (!data)
+	return;
    item = alloc_senditem();
-   item->data = malloc(len);
-   memcpy(item->data, buf, len);
+   if (!item) {
+	free(data);
+	return;
+   }
+   memcpy(data, buf, len);
+   item->data = data;
    item->len = len;
    item->id = ++id;
 }

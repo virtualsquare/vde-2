@@ -11,6 +11,7 @@
 #include "vder_queue.h"
 #include "vder_packet.h"
 #include "vder_icmp.h"
+#include "vder_arp.h"
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
@@ -87,8 +88,12 @@ static void *vder_timer_loop(void *arg)
 			cur = cur->next;
 		}
 		pthread_mutex_unlock(&Router.global_config_lock);
-		interval.tv_sec = 0;
-		interval.tv_nsec = Router.smallest_interval / 1000;
+		/* smallest_interval is in us; convert to sec/nsec and keep a
+		 * non-zero sleep (sub-us intervals would busy-spin) */
+		interval.tv_sec = Router.smallest_interval / 1000000;
+		interval.tv_nsec = (Router.smallest_interval % 1000000) * 1000;
+		if (interval.tv_sec == 0 && interval.tv_nsec == 0)
+			interval.tv_nsec = 1000;
 		if (Router.timed_dequeue)
 			nanosleep(&interval, NULL);
 		else
@@ -102,10 +107,12 @@ void vder_timed_dequeue_add(struct vder_queue *q, uint32_t interval)
 {
 	struct vder_timed_dequeue *new = malloc(sizeof(struct vder_timed_dequeue));
 	struct timeval now_tv;
-	pthread_mutex_lock(&Router.global_config_lock);
-	gettimeofday(&now_tv, 0);
+	/* check the allocation before taking the lock: an early return
+	 * under the lock would wedge every route/iface/filter operation */
 	if (!new)
 		return;
+	pthread_mutex_lock(&Router.global_config_lock);
+	gettimeofday(&now_tv, 0);
 	new->interval = interval;
 	new->q = q;
 	new->last_out = microseconds(now_tv);
@@ -141,6 +148,7 @@ void vderouter_init(void)
 {
 	memset(&Router, 0, sizeof(Router));
 	pthread_create(&Router.timer, 0, vder_timer_loop, NULL);
+	pthread_create(&Router.arp_gc, 0, vder_arp_gc_loop, NULL);
 	pthread_mutex_init(&Router.global_config_lock, NULL);
 	Router.smallest_interval = 100000;
 
@@ -326,6 +334,7 @@ struct vder_iface *vder_iface_new(char *sock, uint8_t *macaddr)
 
 	sem_init(&vif->out_q.semaphore, 0, 0);
 	sem_init(&vif->prio_semaphore, 0, 0);
+	pthread_mutex_init(&vif->arp_lock, NULL);
 
 	queue_init(&vif->out_q);
 	vif->out_q.type = QTYPE_OUT;
@@ -605,8 +614,12 @@ int vder_filter(struct vde_buff *buf)
 				return 0;
 
 			case filter_reject:
-				memcpy(foot, footprint(buf), sizeof(struct iphdr) + 8);
-				vder_icmp_filter(ip->saddr, foot);
+				/* need IP header + 8 payload bytes inside the frame,
+				 * otherwise the copy would read past it */
+				if (buf->len >= 14 + sizeof(struct iphdr) + 8) {
+					memcpy(foot, footprint(buf), sizeof(struct iphdr) + 8);
+					vder_icmp_filter(ip->saddr, foot);
+				}
 				/* fall through */
 			case filter_drop:
 				return 1;

@@ -99,7 +99,10 @@ static inline bitarray ba_realloc(bitarray b,int n,int m)
 	if(nb != NULL) 
 		for(__i=__WORDSIZEROUND(n);__i<__WORDSIZEROUND(m);__i++) 
 			nb[__i]=0; 
-	nb[__WORDSIZEROUND(n)-1] &= (-1UL) >>((0U-(n))%__VDEWORDSIZE);
+	/* mask the old last word only while it lies inside the new
+	 * allocation: on a shrink it would write past the end */
+	if (__WORDSIZEROUND(n) > 0 && __WORDSIZEROUND(n) <= __WORDSIZEROUND(m))
+		nb[__WORDSIZEROUND(n)-1] &= (-1UL) >>((0U-(n))%__VDEWORDSIZE);
 	return nb;
 }
 

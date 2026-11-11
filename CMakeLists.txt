@@ -52,20 +52,20 @@ option(ENABLE_PCAP "Enable pcap support" ON)
 option(ENABLE_TUNTAP "Enable tuntap support" ON)
 option(ENABLE_EXPERIMENTAL "Enable experimental features" OFF)
 option(ENABLE_PROFILE "Enable profiling options" OFF)
-set(WITH_CRYPT "wolfssl" CACHE STRING "Choose implementation for cryptcab (wolfssl or mbedtls)")
+# wolfSSL is the crypto backend for vde_cryptcab. By default the system
+# wolfSSL is linked; set WOLFSSL_ROOT to the prefix of a custom wolfSSL
+# installation (with include/ and lib/ below it) to use that instead.
+set(WOLFSSL_ROOT "" CACHE PATH "Prefix of a custom wolfSSL installation; empty uses the system wolfSSL")
 set(VDE_MTU 1504 CACHE STRING "Maximum frame size in bytes (payload incl. trailer) for vde_switch and vde_vxlan")
 add_definitions(-DVDE_MTU=${VDE_MTU})
-set(crypt ${WITH_CRYPT})
 
 # Set compiler flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall --std=gnu17")
 
 # Check for required libraries
 find_library(DL_LIBRARY dl)
-find_library(HAVE_WOLFSSL wolfssl)
 find_library(PTHREAD_LIBRARY pthread)
 find_library(PCAP_LIBRARY pcap)
-find_library(HAVE_MBEDTLS mbedtls)
 find_library(VDEPLUG4_LIBRARY vdeplug_mod)
 
 # Check for headers
@@ -100,8 +100,6 @@ cm_check_include(sys/syslimits.h HAVE_SYS_SYSLIMITS_H)
 cm_check_include(sysexits.h HAVE_SYSEXITS_H)
 cm_check_include(pcap.h HAVE_PCAP_H)
 
-cm_check_include(wolfssl/wolfcrypt/chacha.h HAVE_WOLFSSL_CHACHA_H)
-cm_check_include(mbedtls/chacha20.h HAVE_MBEDTLS_CHACHA20_H)
 
 # Check for functions
 cm_check_function(atexit HAVE_ATEXIT)
@@ -159,35 +157,30 @@ set(MODULES_EXT ${CMAKE_SHARED_LIBRARY_SUFFIX})
 
 cm_define_var(MODULES_EXT \"${CMAKE_SHARED_LIBRARY_SUFFIX}\")
 
-if(${crypt} STREQUAL "wolfssl")
-  if(HAVE_WOLFSSL AND HAVE_WOLFSSL_CHACHA_H)
-    set(CAN_MAKE_CRYPTCAB ON)
-  else()
-    set(CAN_MAKE_CRYPTCAB OFF)
-  endif()
+# Locate wolfSSL: system installation by default, or a custom one via WOLFSSL_ROOT.
+set(WOLFSSL_SEARCH_PATHS)
+if(WOLFSSL_ROOT)
+  set(WOLFSSL_SEARCH_PATHS HINTS ${WOLFSSL_ROOT}/include ${WOLFSSL_ROOT}/lib ${WOLFSSL_ROOT}/lib64)
+endif()
+find_path(HAVE_WOLFSSL_CHACHA_H wolfssl/wolfcrypt/chacha.h ${WOLFSSL_SEARCH_PATHS})
+find_library(HAVE_WOLFSSL_LIB wolfssl ${WOLFSSL_SEARCH_PATHS})
+
+if(HAVE_WOLFSSL_LIB AND HAVE_WOLFSSL_CHACHA_H)
+  set(CAN_MAKE_CRYPTCAB ON)
+  set(SSL_LIB ${HAVE_WOLFSSL_LIB})
   add_definitions(-DUSE_WOLFSSL=1)
-  set(SSL_LIB "wolfssl")
   cm_define_var(HAVE_WOLFSSL 1)
-elseif(${crypt} STREQUAL "mbedtls")
-  if(HAVE_MBEDTLS AND HAVE_MBEDTLS_CHACHA20_H)
-    set(CAN_MAKE_CRYPTCAB ON)
-  else()
-    set(CAN_MAKE_CRYPTCAB OFF)
+  if(WOLFSSL_ROOT)
+    include_directories(${WOLFSSL_ROOT}/include)
   endif()
-  add_definitions(-DUSE_WOLFSSL=0)
-  cm_define_var(HAVE_MBEDTLS 1)
-  set(SSL_LIB "mbedcrypto")
 else()
-  message(FATAL_ERROR "Unsupported crypt option: ${crypt}. At the moment, only wolfssl and mbedlts are supported. Contributions are appreciated! :-)")
+  set(CAN_MAKE_CRYPTCAB OFF)
+  set(SSL_LIB "wolfssl")
 endif()
 
 # Configure features based on options and available libraries
-if(CAN_MAKE_CRYPTCAB AND NOT ENABLE_CRYPTCAB)
-    set(ENABLE_CRYPTCAB OFF)
-elseif(CAN_MAKE_CRYPTCAB AND ENABLE_CRYPTCAB)
-    set(ENABLE_CRYPTCAB ON)
-elseif(NOT CAN_MAKE_CRYPTCAB AND ENABLE_CRYPTCAB)
-    message(WARNING "Cannot make vde_cryptcab: required library (${SSL_LIB}) not found")
+if(ENABLE_CRYPTCAB AND NOT CAN_MAKE_CRYPTCAB)
+    message(WARNING "Cannot make vde_cryptcab: wolfSSL not found (install libwolfssl-dev or set -DWOLFSSL_ROOT to a wolfSSL prefix)")
     set(ENABLE_CRYPTCAB OFF)
 endif()
 
@@ -305,6 +298,7 @@ message(STATUS "")
 message(STATUS " use VDEPLUG4............ ${WITH_VDEPLUG4}")
 message(STATUS " VDE VXLAN............... ${ENABLE_VXLAN}")
 message(STATUS " VDE CryptCab............ ${ENABLE_CRYPTCAB}")
+message(STATUS " wolfSSL library......... ${HAVE_WOLFSSL_LIB}")
 message(STATUS " VDE Router.............. ${ENABLE_ROUTER}")
 message(STATUS " TAP support............. ${ENABLE_TUNTAP}")
 message(STATUS " pcap support............ ${ENABLE_PCAP}")

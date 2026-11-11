@@ -45,16 +45,20 @@ struct plugin vde_plugin_data={
 static int set_dumper(FILE *console) {
 	int fd;
 	FILE *fp;
-	if ((fd = open(dumpfile, O_WRONLY | O_CREAT, 0600)) < 0) {
+	/* O_EXCL: never truncate an existing file (the mgmt command is
+	 * reachable by any local user with the mgmt socket) */
+	if ((fd = open(dumpfile, O_WRONLY | O_CREAT | O_EXCL, 0600)) < 0) {
 		printoutc(console, "%s() open(%s): %s", __FUNCTION__, dumpfile, strerror(errno));
 		return -1;
 	}
 	if ((fp = fdopen(fd, "w")) == NULL) {
 		printoutc(console, "%s() fdopen(): %s", __FUNCTION__, strerror(errno));
+		close(fd);
 		return -1;
 	}
 	if ((dumper = pcap_dump_fopen(desc, fp)) == NULL) {
 		printoutc(console, "%s() pcap_dump_fopen(): %s", __FUNCTION__, pcap_geterr(desc));
+		fclose(fp);
 		return -1;
 	}
 	return 0;
@@ -84,8 +88,12 @@ static int setfname(FILE *fd, char *arg)
 	if(strlen(arg)){
 		free(dumpfile);
 		dumpfile = strdup(arg);
-		if(dumper)
+		if(dumper) {
 			pcap_dump_close(dumper);
+			/* clear it: a failed set_dumper below must not
+			 * leave a dangling pointer for the next packet */
+			dumper = NULL;
+		}
 		if (set_dumper(fd)) {
 			printoutc(fd, "ERROR: cannot dump to %s", dumpfile);
 			return EINVAL;

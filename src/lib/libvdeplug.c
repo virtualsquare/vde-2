@@ -266,6 +266,12 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			errno = EINVAL;
 			goto abort;
 		}
+		/* sockname is a PATH_MAX buffer: bound the caller-controlled name
+		 * (the canonicalize path above is skipped for P2P sockets) */
+		if (strlen(given_sockname) >= PATH_MAX) {
+			errno = ENAMETOOLONG;
+			goto abort;
+		}
 		strcpy(sockname,given_sockname); /* XXX canonicalize should be better */
 		if((conn->fddata = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
 			goto abort;
@@ -273,7 +279,13 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		memset(sockun.sun_path,0,sizeof(sockun.sun_path));
 		snprintf(sockun.sun_path, sizeof(sockun.sun_path)-1, "%s", sockname);
 		/* the socket already exists */
-		if(stat(sockun.sun_path,&sockstat) == 0) {
+		if(lstat(sockun.sun_path,&sockstat) == 0) {
+			if (S_ISLNK(sockstat.st_mode)) {
+				/* a pre-planted symlink would let bind() clobber an
+				 * arbitrary path */
+				errno = EADDRINUSE;
+				goto abort;
+			}
 			if (S_ISSOCK(sockstat.st_mode)) {
 				/* the socket is already in use */
 				res = connect(conn->fddata, (struct sockaddr *) &sockun, sizeof(sockun));
@@ -354,7 +366,13 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 			if (res < 0)
 				goto abort;
 			snprintf(sockun.sun_path, sizeof(sockun.sun_path), "%s+", sockname);
-			if(stat(sockun.sun_path,&sockstat) == 0) {
+			if(lstat(sockun.sun_path,&sockstat) == 0) {
+				if (S_ISLNK(sockstat.st_mode)) {
+					/* a pre-planted symlink would let bind() clobber
+					 * an arbitrary path */
+					errno = EADDRINUSE;
+					goto abort;
+				}
 				if (S_ISSOCK(sockstat.st_mode)) {
 					/* the socket is already in use */
 					res = connect(conn->fddata, (struct sockaddr *) &sockun, sizeof(sockun));
@@ -398,8 +416,22 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		do
 		{
 			struct sockaddr_un reqsock;
+			struct stat reqstat;
+			int n;
 			/* Here sockname is the last successful one in the previous step. */
-			sprintf(req.sock.sun_path, "%s/.%05d-%05d", sockname, pid, sockno++);
+			n = snprintf(req.sock.sun_path, sizeof(req.sock.sun_path), "%s/.%05d-%05d", sockname, pid, sockno++);
+			if (n < 0 || n >= (int)sizeof(req.sock.sun_path)) {
+				/* canonical name too long for sun_path */
+				res = -1;
+				break;
+			}
+			if (lstat(req.sock.sun_path, &reqstat) == 0 &&
+					S_ISLNK(reqstat.st_mode)) {
+				/* pre-planted symlink: skip to the next name */
+				res = -1;
+				errno = EADDRINUSE;
+				continue;
+			}
 			reqsock = req.sock;
 			res=bind(conn->fddata, (struct sockaddr *) &reqsock, sizeof (req.sock));
 		}
@@ -416,7 +448,15 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 				do 
 				{
 					struct sockaddr_un reqsock;
+					struct stat reqstat;
 					sprintf(req.sock.sun_path, "%s/vde.%05d-%05d", fallback_dirname[i], pid, sockno++);
+					if (lstat(req.sock.sun_path, &reqstat) == 0 &&
+							S_ISLNK(reqstat.st_mode)) {
+						/* pre-planted symlink: skip to the next name */
+						res = -1;
+						errno = EADDRINUSE;
+						continue;
+					}
 					reqsock = req.sock;
 					res = bind(conn->fddata, (struct sockaddr *) &reqsock, sizeof (req.sock));
 				}
@@ -472,6 +512,10 @@ VDECONN *vde_open_real(char *given_sockname, char *descr,int interface_version,
 		if (ssh_client) {
 			char *endofip=strchr(ssh_client,' ');
 			if (endofip) *endofip=0;
+			/* descrlen is the would-be length: a truncated first
+			 * snprintf would underflow MAXDESCR-descrlen */
+			if (descrlen >= MAXDESCR)
+				descrlen = MAXDESCR - 1;
 			snprintf(req.description+descrlen,MAXDESCR-descrlen," SSH=%s", ssh_client);
 			if (endofip) *endofip=' ';
 		}

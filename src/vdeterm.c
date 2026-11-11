@@ -92,7 +92,7 @@ static char *copy_header_prompt (int vdefd,int termfd,char *sock)
 		struct pollfd wfd={vdefd,POLLIN|POLLHUP,0};
 		poll(&wfd,1,-1);
 		while ((n=read(vdefd,buf,BUFSIZE))>0) {
-			if (buf[n-2]=='$' &&
+			if (n >= 2 && buf[n-2]=='$' &&
 					buf[n-1]==' ') {
 				n-=2;
 				buf[n]=0;

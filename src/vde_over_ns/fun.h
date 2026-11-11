@@ -31,6 +31,9 @@
 /* constants */
 
 #define NSTX_TIMEOUT 30
+/* bound the reassembly table: a peer streaming fragments keeps every
+ * entry fresh past the timeout (256 x 16 x ~2KB ~= 8 MB worst case) */
+#define NSTX_MAX_ITEMS 256
 #define NSTX_MAGIC 0xb4		/* Huh? [sky] */
 				/* Well, that seems really like a */
 				/* *magic* number ;-) [frodo] */

@@ -270,6 +270,8 @@ static int handle_cmd(int type,int fd,char *inbuf)
 		char *outbuf;
 		size_t outbufsize;
 		FILE *f=open_memstream(&outbuf,&outbufsize);
+		if (f == NULL) /* ENOMEM: outbuf/outbufsize would be garbage */
+			return ENOMEM;
 		for (p=clh;p!=NULL && (p->doit==NULL || strncmp(p->path,inbuf,strlen(p->path))!=0); p=p->next)
 			;
 		if (p!=NULL)
@@ -389,7 +391,8 @@ static void handle_io(unsigned char type,int fd,int revents,void *private_data)
 		int n=0;
 
 		if (revents & POLLIN) {
-			n = read(fd, buf, sizeof(buf));
+			/* leave room for the NUL in buf[n]=0 below */
+			n = read(fd, buf, sizeof(buf)-1);
 			if(n < 0){
 				printlog(LOG_WARNING,"Reading from mgmt %s",strerror(errno));
 				return;
@@ -618,12 +621,11 @@ static void init(void)
 		}
 		sun.sun_family = PF_UNIX;
 		snprintf(sun.sun_path,sizeof(sun.sun_path),"%s",mgmt_socket);
+		if (prepare_socket_path(&sun) < 0)
+			return;
 		if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-			if((errno == EADDRINUSE) && still_used(&sun)) return;
-			else if(bind(mgmtconnfd, (struct sockaddr *) &sun, sizeof(sun)) < 0){
-				printlog(LOG_ERR,"mgmt bind %s",strerror(errno));
-				return;
-			}
+			printlog(LOG_ERR,"mgmt bind %s",strerror(errno));
+			return;
 		}
 		setmgmtperm(sun.sun_path);
 		if(listen(mgmtconnfd, 15) < 0){
@@ -695,8 +697,9 @@ static int debugadd(int fd,char *path) {
 			if (i>=p->nfds) {
 				if (i>=p->maxfds) {
 					int newsize=p->maxfds+DBGCLSTEP;
-					p->fds=realloc(p->fds,newsize*sizeof(int));
-					if (p->fds) {
+					int *newfds=realloc(p->fds,newsize*sizeof(int));
+					if (newfds) {
+						p->fds=newfds;
 						p->maxfds=newsize;
 						p->fds[i]=fd;
 						p->nfds++;
@@ -748,18 +751,34 @@ int eventadd(int (*fun)(),char *path,void *arg) {
 			if (i>=p->nfun) {
 				if (i>=p->maxfun) {
 					int newsize=p->maxfun+DBGCLSTEP;
-					p->fun=realloc(p->fun,newsize*sizeof(int));
-					p->funarg=realloc(p->funarg,newsize*sizeof(void *));
-					if (p->fun && p->funarg) {
-						p->maxfun=newsize;
-						p->fun[i]=fun;
-						p->funarg[i]=arg;
-						p->nfun++;
-						if (rv != ENOMEM) rv=0;
-					} else
+					intfun *newfun=realloc(p->fun,newsize*sizeof(intfun));
+					void **newfunarg;
+					if (!newfun) {
 						rv=ENOMEM;
+					} else {
+						newfunarg=realloc(p->funarg,newsize*sizeof(void *));
+						if (newfunarg) {
+							p->fun=newfun;
+							p->funarg=newfunarg;
+							p->maxfun=newsize;
+							p->fun[i]=fun;
+							p->funarg[i]=arg;
+							p->nfun++;
+							if (rv != ENOMEM) rv=0;
+						} else {
+							/* keep the bigger fun block: freeing it
+							 * would drop the only valid copy of
+							 * p->fun (the old block was released or
+							 * moved by the first realloc). maxfun
+							 * stays: the extra capacity is unused
+							 * until the next grow. */
+							p->fun=newfun;
+							rv=ENOMEM;
+						}
+					}
 				} else {
 					p->fun[i]=fun;
+					p->funarg[i]=arg;
 					p->nfun++;
 					if (rv != ENOMEM) rv=0;
 				}

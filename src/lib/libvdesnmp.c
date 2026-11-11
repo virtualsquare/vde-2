@@ -97,7 +97,13 @@ int stats_init(){
 
 
 
-#define SENDCMD(cmd) memset(mgmt_outbuf, 0, sizeof(struct vdemgmt_out)); if(!mgmt_conn) { errno = ECONNREFUSED; return 0; } vdemgmt_sendcmd(mgmt_conn, cmd, mgmt_outbuf);
+#define SENDCMD(cmd) do { \
+	if (mgmt_outbuf->buf) \
+		free(mgmt_outbuf->buf); \
+	memset(mgmt_outbuf, 0, sizeof(struct vdemgmt_out)); \
+	if(!mgmt_conn) { errno = ECONNREFUSED; return 0; } \
+	vdemgmt_sendcmd(mgmt_conn, cmd, mgmt_outbuf); \
+} while(0)
 
 int mgmt_init(char *sockpath){
 	char *p,*q;
@@ -110,7 +116,7 @@ int mgmt_init(char *sockpath){
 		return 0;
 	}
 	
-	mgmt_outbuf=(struct vdemgmt_out *)malloc(sizeof(struct vdemgmt_out));
+	mgmt_outbuf=(struct vdemgmt_out *)calloc(1,sizeof(struct vdemgmt_out));
 	if(!mgmt_outbuf){
 		errno = ENOMEM;
 		return 0;
@@ -229,7 +235,7 @@ int counters_parse(void){
 		if(*p == '\0'){
 
 			/* Port 0001 untagged_vlan=0000 INACTIVE - Unnamed Allocatable */
-			if( sscanf(q, "Port %4d %*s %s - %*s\n", &curport, portstatus) == 2 )
+			if( sscanf(q, "Port %4d %*s %9s - %*s\n", &curport, portstatus) == 2 )
 				inport=1;
 			
 			if( inport ){
@@ -241,8 +247,9 @@ int counters_parse(void){
 
 				/*   -- endpoint ID 0005 module unix prog   : vde_plug: user=godog PID=22006  SOCK=/tmp/vde.ctl.22006-00000 */
 				/* format from port.c:print_port() however there's room for DESC_MAXLEN bytes in portdesc */
-				if( (sscanf(q, "  -- endpoint ID %*04d module %*12c: %255c\n", portdesc) == 1) ||
-						( (strncmp(portstatus, "INACTIVE", 8) == 0) && inok && outok ) ){
+				if( (curport >= 1 && curport <= _stats->numports) &&
+				    ((sscanf(q, "  -- endpoint ID %*04d module %*12c: %254c\n", portdesc) == 1) ||
+					( (strncmp(portstatus, "INACTIVE", 8) == 0) && inok && outok ) )){
 
 					gettimeofday(cur_tv, NULL);
 					
@@ -284,6 +291,7 @@ int counters_parse(void){
 
 void port_debug_handler(const char *event, const int tag, const char *data){
 	int portnum=0;
+	int descr_len;
 	char *i, *j;
 	char tmpstr[DESC_MAXLEN];
 	
@@ -301,8 +309,11 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 
 			i = index(data, '"');
 			j = rindex(data, '"');
-			if( i && j && j > i && portnum ){
-				strncpy(tmpstr, i+1, j - i );
+			if( i && j && j > i && portnum >= 1 && portnum <= _stats->numports ){
+				descr_len = j - i;
+				if (descr_len > DESC_MAXLEN - 1)
+					descr_len = DESC_MAXLEN - 1;
+				strncpy(tmpstr, i+1, descr_len);
 				strncpy(_stats->ports[portnum-1].desc, tmpstr, DESC_MAXLEN);
 			}
 			debug("parsed descr[%p %p]: %s", i, j, tmpstr);
@@ -310,7 +321,8 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 
 		case D_EP|D_MINUS:
 			debug("ENDPOINT MINUS\n");
-			if( sscanf(data, "ep/- Port %02d", &portnum) == 1 ){
+			if( sscanf(data, "ep/- Port %02d", &portnum) == 1 &&
+			    portnum >= 1 && portnum <= _stats->numports ){
 				PORTDOWN(portnum-1);
 				if(events[EVENT_PORT_DOWN])
 					events[EVENT_PORT_DOWN](portnum-1);
@@ -319,7 +331,8 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 
 		case D_EP|D_PLUS:
 			debug("ENDPOINT PLUS\n");
-			if( sscanf(data, "ep/+ Port %02d", &portnum) == 1 ){
+			if( sscanf(data, "ep/+ Port %02d", &portnum) == 1 &&
+			    portnum >= 1 && portnum <= _stats->numports ){
 				PORTUP(portnum-1);
 				if(events[EVENT_PORT_UP])
 					events[EVENT_PORT_UP](portnum-1);
@@ -328,14 +341,16 @@ void port_debug_handler(const char *event, const int tag, const char *data){
 		
 		case D_PORT|D_MINUS:
 			debug("PORT MINUS\n");
-			if( sscanf(data, "/- %02d", &portnum) == 1 ){
+			if( sscanf(data, "/- %02d", &portnum) == 1 &&
+			    portnum >= 1 && portnum <= _stats->numports ){
 				PORTDOWN(portnum-1);
 			}
 		break;
 
 		case D_PORT|D_PLUS:
 			debug("PORT PLUS\n");
-			if( sscanf(data, "/+ %02d", &portnum) == 1 ){
+			if( sscanf(data, "/+ %02d", &portnum) == 1 &&
+			    portnum >= 1 && portnum <= _stats->numports ){
 				PORTUP(portnum-1);
 			}
 		break;

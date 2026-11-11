@@ -16,6 +16,8 @@
 
 #define OLSR_MSG_INTERVAL 2000
 #define DGRAM_MAX_SIZE 1800
+/* routes deeper than this are dropped: bounds the children chain */
+#define OLSR_MAX_METRIC 16
 #define HOST_NETMASK (htonl(0xFFFFFFFF))
 #ifndef MIN
 # define MIN(a,b) (a<b?a:b)
@@ -70,6 +72,16 @@ static struct olsr_route_entry *get_next_hop(struct olsr_route_entry *dst)
 static inline void olsr_route_add(struct olsr_route_entry *el)
 {
 	struct olsr_route_entry *nexthop;
+
+	/* cap the route depth: metric grows with the hops, so this
+	 * bounds the children chain an attacker can build up. The
+	 * caller passes ownership: a rejected entry is freed here,
+	 * so callers must not touch it after the call. */
+	if (el->metric > OLSR_MAX_METRIC) {
+		free(el->advertised_tc);
+		free(el);
+		return;
+	}
 
 	if (fresher(fresh_ansn, my_ansn))
 		my_ansn = fresh_ansn + 1;
@@ -133,18 +145,34 @@ static inline void olsr_route_del(struct olsr_route_entry *r)
 
 static struct olsr_route_entry *get_route_by_address(struct olsr_route_entry *lst, uint32_t ip)
 {
-	struct olsr_route_entry *found;
-	if(lst) {
+	/* The route tree can be arbitrarily deep (attacker-driven),
+	 * so walk it iteratively with an explicit stack. */
+	struct olsr_route_entry **stack = NULL;
+	int top = 0, cap = 0;
+
+	while (lst) {
 		if (lst->destination == ip) {
+			free(stack);
 			return lst;
 		}
-		found = get_route_by_address(lst->children, ip);
-		if (found)
-			return found;
-		found = get_route_by_address(lst->next, ip);
-		if (found)
-			return found;
+		if (lst->next) {
+			if (top == cap) {
+				int ncap = cap ? cap * 2 : 16;
+				struct olsr_route_entry **ns = realloc(stack, ncap * sizeof *ns);
+				if (!ns) {
+					free(stack);
+					return NULL;
+				}
+				stack = ns;
+				cap = ncap;
+			}
+			stack[top++] = lst->next;
+		}
+		lst = lst->children;
+		if (!lst && top > 0)
+			lst = stack[--top];
 	}
+	free(stack);
 	return NULL;
 }
 
@@ -230,15 +258,34 @@ static void refresh_neighbors(struct vder_iface *iface)
 
 static void olsr_garbage_collector(struct olsr_route_entry *sublist)
 {
-	if(!sublist)
-		return;
-	if ((sublist->time_left--) <= 0) {
-		olsr_route_del(sublist);
-		free(sublist);
-		return;
+	/* iterative: the tree can be arbitrarily deep (attacker-driven) */
+	struct olsr_route_entry **stack = NULL;
+	int top = 0, cap = 0;
+
+	while (sublist) {
+		struct olsr_route_entry *cur = sublist;
+		sublist = cur->children;
+		if ((cur->time_left--) <= 0) {
+			olsr_route_del(cur);
+			free(cur);
+			sublist = NULL; /* subtree of an expired entry: skip */
+		} else if (cur->next) {
+			if (top == cap) {
+				int ncap = cap ? cap * 2 : 16;
+				struct olsr_route_entry **ns = realloc(stack, ncap * sizeof *ns);
+				if (!ns) {
+					free(stack);
+					return;
+				}
+				stack = ns;
+				cap = ncap;
+			}
+			stack[top++] = cur->next;
+		}
+		if (!sublist && top > 0)
+			sublist = stack[--top];
 	}
-	olsr_garbage_collector(sublist->children);
-	olsr_garbage_collector(sublist->next);
+	free(stack);
 }
 
 
@@ -301,6 +348,9 @@ static int olsr_build_hello_neighbors(uint8_t *buf, int size)
 		neighbor = local->children;
 		while (neighbor) {
 			struct olsr_link *li = (struct olsr_link *) (buf + ret);
+			/* signed: a negative size must fail the check */
+			if (size - ret < (int)(sizeof(struct olsr_link) + sizeof(struct olsr_neighbor)))
+				return -1;
 			li->link_code = neighbor->link_type;
 			li->reserved = 0;
 			li->link_msg_size = htons(sizeof(struct olsr_neighbor) + sizeof(struct olsr_link));
@@ -311,8 +361,6 @@ static int olsr_build_hello_neighbors(uint8_t *buf, int size)
 			dst->lq = neighbor->lq;
 			dst->reserved = 0;
 			ret += sizeof(struct olsr_neighbor);
-			if (ret >= size)
-				return ret - sizeof(struct olsr_neighbor) - sizeof(struct olsr_link);
 			neighbor = neighbor->next;
 		}
 		local = local->next;
@@ -329,14 +377,15 @@ static int olsr_build_tc_neighbors(uint8_t *buf, int size)
 	while (local) {
 		neighbor = local->children;
 		while (neighbor) {
+			/* signed: a negative size must fail the check */
+			if (size - ret < (int)sizeof(struct olsr_neighbor))
+				return -1;
 			dst->addr = neighbor->destination;
 			dst->nlq = neighbor->nlq;
 			dst->lq = neighbor->lq;
 			dst->reserved = 0;
 			ret += sizeof(struct olsr_neighbor);
 			dst = (struct olsr_neighbor *) (buf + ret);
-			if (ret >= size)
-				return ret - sizeof(struct olsr_neighbor);
 			neighbor = neighbor->next;
 		}
 		local = local->next;
@@ -352,11 +401,12 @@ static int olsr_build_mid(uint8_t *buf, int size, struct vder_iface *excluded)
 	local = Local_interfaces;
 	while (local) {
 		if (local->iface != excluded) {
+			/* signed: a negative size must fail the check */
+			if (size - ret < (int)sizeof(uint32_t))
+				return -1;
 			*dst = local->destination;
 			ret += sizeof(uint32_t);
 			dst = (uint32_t *) (buf + ret);
-			if (ret >= size)
-				return ret - sizeof(uint32_t);
 		}
 		local = local->next;
 	}
@@ -389,6 +439,9 @@ static void olsr_make_dgram(struct vder_iface *vif)
 
 	/* HELLO Message */
 
+	/* the msg + hello headers must fit before the neighbour list */
+	if (size + (int)(sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_hello)) > DGRAM_MAX_SIZE)
+		return;
 	msg_hello = (struct olsrmsg *) (dgram + size);
 	size += sizeof(struct olsrmsg);
 	msg_hello->type = OLSRMSG_HELLO;
@@ -412,6 +465,8 @@ static void olsr_make_dgram(struct vder_iface *vif)
 
 	/* MID Message */
 
+	if (size + (int)sizeof(struct olsrmsg) > DGRAM_MAX_SIZE)
+		return;
 	msg_mid = (struct olsrmsg *)(dgram + size);
 	size += sizeof(struct olsrmsg);
 	msg_mid->type = OLSRMSG_MID;
@@ -432,6 +487,9 @@ static void olsr_make_dgram(struct vder_iface *vif)
 		msg_mid->size = htons(sizeof(struct olsrmsg) + r);
 	}
 
+	/* the msg + tc headers must fit before the neighbour list */
+	if (size + (int)(sizeof(struct olsrmsg) + sizeof(struct olsr_hmsg_tc)) > DGRAM_MAX_SIZE)
+		return;
 	msg_tc = (struct olsrmsg *) (dgram + size);
 	size += sizeof(struct olsrmsg);
 	msg_tc->type = OLSRMSG_TC;
@@ -495,8 +553,8 @@ static void recv_mid(uint8_t *buffer, int len, struct olsr_route_entry *origin)
 			e->metric = origin->metric + 1;
 			e->lq = origin->lq;
 			e->nlq = origin->nlq;
-			olsr_route_add(e);
 			arp_storm(e->destination);
+			olsr_route_add(e);
 		} else if (e->metric > (origin->metric + 1)) {
 			olsr_route_del(e);
 			e->metric = origin->metric;
@@ -512,15 +570,22 @@ static void recv_hello(uint8_t *buffer, int len, struct olsr_route_entry *origin
 	struct olsr_link *li;
 	struct olsr_route_entry *e;
 	int parsed = 0;
+	int msg_size;
 	struct olsr_neighbor *neigh;
 
 	if (!origin)
 		return;
 
 	while (len > parsed) {
-		li = (struct olsr_link *) buffer;
+		li = (struct olsr_link *) (buffer + parsed);
 		neigh = (struct olsr_neighbor *)(buffer + parsed + sizeof(struct olsr_link));
-		parsed += ntohs(li->link_msg_size);
+		msg_size = ntohs(li->link_msg_size);
+		/* a complete record is link header + neighbor; require
+		 * forward progress and a record inside the payload */
+		if (msg_size < (int)(sizeof(struct olsr_link) + sizeof(struct olsr_neighbor)) ||
+		    parsed + msg_size > len)
+			return;
+		parsed += msg_size;
 		e = get_route_by_address(Local_interfaces, neigh->addr);
 		if (!e) {
 			e = malloc(sizeof(struct olsr_route_entry));
@@ -537,8 +602,8 @@ static void recv_hello(uint8_t *buffer, int len, struct olsr_route_entry *origin
 			e->link_type = OLSRLINK_UNKNOWN;
 			e->lq = MIN(origin->lq, neigh->lq);
 			e->nlq = MIN(origin->nlq, neigh->nlq);
-			olsr_route_add(e);
 			arp_storm(e->destination);
+			olsr_route_add(e);
 		} else if ((e->gateway != origin) && (e->metric > (origin->metric + 1))) {
 			olsr_route_del(e);
 			e->metric = origin->metric + 1;
@@ -551,10 +616,16 @@ static void recv_hello(uint8_t *buffer, int len, struct olsr_route_entry *origin
 static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *e)
 {
 	struct olsr_hmsg_tc *tc = (struct olsr_hmsg_tc *) buf;
-	uint16_t new_ansn = ntohs(tc->ansn);
+	uint16_t new_ansn;
 	int parsed = sizeof(struct olsr_hmsg_tc);
 	struct olsr_route_entry *rt;
 	struct olsr_neighbor *n;
+
+	if (size < (int)(sizeof(struct olsr_hmsg_tc) + sizeof(struct olsr_neighbor)))
+		return -1;
+
+	tc = (struct olsr_hmsg_tc *) buf;
+	new_ansn = ntohs(tc->ansn);
 
 	if (e->advertised_tc && fresher(new_ansn, e->ansn))
 	{
@@ -568,13 +639,13 @@ static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *
 
 	if (!e->advertised_tc) {
 		e->advertised_tc = malloc(size);
-		if (!e) {
+		if (!e->advertised_tc) {
 			perror("Allocating forward packet");
 			return -1;
 		}
 		memcpy(e->advertised_tc, buf, size);
 		e->ansn = new_ansn;
-		while (parsed < size) {
+		while (parsed + (int)sizeof(struct olsr_neighbor) <= size) {
 			n = (struct olsr_neighbor *) (buf + parsed);
 			parsed += sizeof(struct olsr_neighbor);
 			rt = get_route_by_address(Local_interfaces, n->addr);
@@ -584,6 +655,11 @@ static int reconsider_topology(uint8_t *buf, int size, struct olsr_route_entry *
 			} else if (!rt || (rt->metric > (e->metric + 1)) || (rt->nlq < n->nlq)) {
 				if (!rt) {
 					rt = malloc(sizeof (struct olsr_route_entry));
+					if (!rt) {
+						free(e->advertised_tc);
+						e->advertised_tc = NULL;
+						return -1;
+					}
 					memset(rt, 0, sizeof(struct olsr_route_entry));
 					rt->destination = n->addr;
 				} else {
@@ -623,12 +699,18 @@ static void olsr_recv(uint8_t *buffer, int len)
 
 	while (len > parsed) {
 		struct olsr_route_entry *origin;
+		int msize;
 		msg = (struct olsrmsg *) (buffer + parsed);
+		msize = ntohs(msg->size);
+		/* require a complete message, fully inside the datagram:
+		 * guarantees forward progress and bounds the payload reads */
+		if (msize < (int)sizeof(struct olsrmsg) || parsed + msize > len)
+			break;
 		origin = get_route_by_address(Local_interfaces, msg->orig);
 		if (!origin) {
 			/* Discard this msg while it is not from known host */
 			arp_storm(msg->orig);
-			parsed += ntohs(msg->size);
+			parsed += msize;
 			continue;
 		}
 		/* We know this is a Master host and a neighbor */
@@ -649,23 +731,37 @@ static void olsr_recv(uint8_t *buffer, int len)
 				msg->ttl = 0;
 				break;
 			case OLSRMSG_MID:
-				recv_mid(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin);
+			{
+				int mid_len = ntohs(msg->size) - (int)sizeof(struct olsrmsg);
+				int remain = len - parsed - (int)sizeof(struct olsrmsg);
+				if (mid_len > remain)
+					mid_len = remain;
+				recv_mid(buffer + parsed + sizeof(struct olsrmsg), mid_len, origin);
 				break;
+			}
 			case OLSRMSG_TC:
-				if (reconsider_topology(buffer + parsed + sizeof(struct olsrmsg), ntohs(msg->size) - (sizeof(struct olsrmsg)), origin) < 1)
+			{
+				int tc_len = ntohs(msg->size) - (int)sizeof(struct olsrmsg);
+				int remain = len - parsed - (int)sizeof(struct olsrmsg);
+				if (tc_len > remain)
+					tc_len = remain;
+				if (reconsider_topology(buffer + parsed + sizeof(struct olsrmsg), tc_len, origin) < 1)
 					msg->ttl = 0;
 				else {
 					msg->hop = origin->metric;
 				}
 				break;
+			}
 			default:
 				return;
 		}
 		if ((--msg->ttl) > 0) {
-			memcpy(outmsg + outsize, msg, ntohs(msg->size));
-			outsize += ntohs(msg->size);
+			if (outsize + msize <= (int)sizeof(outmsg)) {
+				memcpy(outmsg + outsize, msg, msize);
+				outsize += msize;
+			}
 		}
-		parsed += ntohs(msg->size);
+		parsed += msize;
 	}
 
 	if (outsize > sizeof(struct olsrhdr)) {

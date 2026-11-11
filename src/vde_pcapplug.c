@@ -94,14 +94,14 @@ static void cleanup(void)
 		vde_close(conn);
 }
 
+static volatile sig_atomic_t sig_pending = 0;
+
 static void sig_handler(int sig)
 {
-	cleanup();
+	/* cleanup() frees/closes: not async-signal-safe, defer it to the
+	 * main loop */
+	sig_pending = sig;
 	signal(sig, SIG_DFL);
-	if (sig == SIGTERM)
-		_exit(0);
-	else
-		kill(getpid(), sig);
 }
 
 static void setsighandlers()
@@ -192,7 +192,10 @@ static void save_pidfile()
 
 void pcap_callback(u_char *u, const struct pcap_pkthdr *h, const u_char *data)
 {
-	vde_send(conn, data, h->len, 0);
+	/* caplen is the number of bytes actually captured in data;
+	 * len is the original on-wire size and can exceed the buffer
+	 * when the snapshot length truncated the capture */
+	vde_send(conn, data, h->caplen, 0);
 }
 
 void setup_fd(int fd)
@@ -378,6 +381,10 @@ int main(int argc, char **argv)
 	pollv[2].fd=vde_ctlfd(conn);
 
 	for(;;) {
+		if (sig_pending) {
+			cleanup();
+			_exit(0);
+		}
 		poll(pollv,3,-1);
 		if ((pollv[0].revents | pollv[1].revents | pollv[2].revents) & POLLHUP ||
 				pollv[2].revents & POLLIN) 

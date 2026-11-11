@@ -38,7 +38,7 @@ void init_revmap (void)
 {
    unsigned int i;
    
-   revmap = malloc(256);
+   revmap = calloc(256, 1);
    
    for (i = 0; i < strlen((char*)map); i++)
      revmap[map[i]] = i;
@@ -77,6 +77,11 @@ nstx_decode(const unsigned char *data, int *rlen) {
      init_revmap();
    
    len = strlen((char*)data);
+
+   /* the first byte is the cut marker (map[0..2]); reject streams
+     * that do not carry a valid one */
+   if (len < 1 || revmap[data[0]] > 2)
+     return NULL;
 
    buf = realloc(buf, ((len+3)/4)*3);
    

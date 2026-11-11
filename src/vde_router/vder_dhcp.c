@@ -5,21 +5,88 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <pthread.h>
 
 static struct vder_dhcp_negotiation *Negotiation_list;
+/* The list is walked from the ARP receive/GC threads via
+ * vder_dhcp_lease_mac() while the DHCP thread inserts/evicts:
+ * all list access goes through this lock. */
+static pthread_mutex_t Negotiation_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct vder_udp_socket *udpsock;
 static struct vder_dhcpd_settings Settings;
+
+/* bound the negotiation list: a flood of unique xids would grow
+ * it without limit; the stalest negotiation is evicted at the cap.
+ * The ARP entry stays in the ARP table, where the ARP GC reaps it. */
+#define DHCP_MAX_NEGOTIATIONS 256
+
+static void dhcp_negotiation_evict_stalest(void)
+{
+	struct vder_dhcp_negotiation *cur = Negotiation_list;
+	struct vder_dhcp_negotiation *prev = NULL;
+	struct vder_dhcp_negotiation *oldest = NULL;
+	struct vder_dhcp_negotiation *oldest_prev = NULL;
+
+	pthread_mutex_lock(&Negotiation_lock);
+	while (cur) {
+		if (!oldest || cur->last_seen < oldest->last_seen) {
+			oldest = cur;
+			oldest_prev = prev;
+		}
+		prev = cur;
+		cur = cur->next;
+	}
+	if (!oldest) {
+		pthread_mutex_unlock(&Negotiation_lock);
+		return;
+	}
+	if (oldest_prev)
+		oldest_prev->next = oldest->next;
+	else
+		Negotiation_list = oldest->next;
+	pthread_mutex_unlock(&Negotiation_lock);
+	free(oldest);
+}
 
 static struct vder_dhcp_negotiation *
 get_negotiation_by_xid(uint32_t xid)
 {
 	struct vder_dhcp_negotiation *cur = Negotiation_list;
+	struct vder_dhcp_negotiation *found = NULL;
+
+	pthread_mutex_lock(&Negotiation_lock);
 	while (cur) {
-		if (cur->xid == xid)
-			return cur;
+		if (cur->xid == xid) {
+			found = cur;
+			break;
+		}
 		cur = cur->next;
 	}
-	return NULL;
+	pthread_mutex_unlock(&Negotiation_lock);
+	return found;
+}
+
+/*
+ * Copy the MAC of the DHCP lease assigned to this IP (network
+ * byte order) into mac_out; return 0 if the IP is leased by this
+ * server, -1 otherwise. The MAC is copied under the lock: the
+ * negotiation node (and its hwaddr) may be evicted after return.
+ */
+int vder_dhcp_lease_mac(uint32_t ipaddr, uint8_t *mac_out)
+{
+	struct vder_dhcp_negotiation *cur;
+	int found = -1;
+
+	pthread_mutex_lock(&Negotiation_lock);
+	for (cur = Negotiation_list; cur; cur = cur->next) {
+		if (cur->arp && cur->arp->ipaddr == ipaddr) {
+			memcpy(mac_out, cur->hwaddr, 6);
+			found = 0;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&Negotiation_lock);
+	return found;
 }
 
 static uint8_t dhcp_get_next_option(uint8_t *begin, uint8_t *data, int *len, uint8_t **nextopt)
@@ -147,8 +214,10 @@ static void dhcp_recv(uint8_t *buffer, int len)
 {
 	struct dhcphdr *dhdr = (struct dhcphdr *) buffer;
 	struct vder_dhcp_negotiation *dn = get_negotiation_by_xid(dhdr->xid);
+	struct vder_dhcp_negotiation *cur;
 	uint8_t *nextopt, opt_data[20], opt_type;
 	int opt_len = 20;
+	int n = 0;
 
 
 	if (!is_options_valid(dhdr->options, len - sizeof(struct dhcphdr)))
@@ -161,9 +230,18 @@ static void dhcp_recv(uint8_t *buffer, int len)
 		memset(dn, 0, sizeof(struct vder_dhcp_negotiation));
 		dn->xid = dhdr->xid;
 		dn->state = DHCPSTATE_DISCOVER;
+		dn->last_seen = time(NULL);
 		memcpy(dn->hwaddr, dhdr->hwaddr, HLEN_ETHER);
+		pthread_mutex_lock(&Negotiation_lock);
+		for (cur = Negotiation_list; cur; cur = cur->next)
+			n++;
+		pthread_mutex_unlock(&Negotiation_lock);
+		if (n >= DHCP_MAX_NEGOTIATIONS)
+			dhcp_negotiation_evict_stalest();
+		pthread_mutex_lock(&Negotiation_lock);
 		dn->next = Negotiation_list;
 		Negotiation_list = dn;
+		pthread_mutex_unlock(&Negotiation_lock);
 		dn->arp = vder_arp_get_record_by_macaddr(Settings.iface, dn->hwaddr);
 		if (!dn->arp) {
 			dn->arp = malloc(sizeof(struct vder_arp_entry));
@@ -174,6 +252,8 @@ static void dhcp_recv(uint8_t *buffer, int len)
 			Settings.pool_next = htonl(ntohl(Settings.pool_next) + 1);
 			vder_add_arp_entry(Settings.iface, dn->arp);
 		}
+	} else {
+		dn->last_seen = time(NULL);
 	}
 
 	if (!ip_inrange(dn->arp->ipaddr))
@@ -264,6 +344,10 @@ static int dhclient_recv_offer(struct dhcp_client_cookie *cli, uint8_t *data, in
 		printf("bad xid\n");
 		return 0;
 	}
+	/* the offer must be addressed to us: same client hardware
+	 * address as the one sent in the DISCOVER */
+	if (memcmp(dhdr->hwaddr, cli->iface->macaddr, HLEN_ETHER) != 0)
+		return 0;
 
 	if (!is_options_valid(dhdr->options, len - sizeof(struct dhcphdr))) {
 		printf("bad options\n");
@@ -299,8 +383,12 @@ static int dhclient_recv_ack(struct dhcp_client_cookie *cli, uint8_t *data, int 
 	uint8_t *nextopt, opt_data[20], opt_type;
 	int opt_len = 20;
 	uint8_t msg_type = 0xFF;
+	uint32_t server_id = 0;
 
 	if (dhdr->xid != cli->xid)
+		return 0;
+	/* the ack must be addressed to us */
+	if (memcmp(dhdr->hwaddr, cli->iface->macaddr, HLEN_ETHER) != 0)
 		return 0;
 
 	if (!is_options_valid(dhdr->options, len - sizeof(struct dhcphdr)))
@@ -311,11 +399,19 @@ static int dhclient_recv_ack(struct dhcp_client_cookie *cli, uint8_t *data, int 
 	while (opt_type != DHCPOPT_END) {
 		if (opt_type == DHCPOPT_MSGTYPE)
 			msg_type = opt_data[0];
+		if ((opt_type == DHCPOPT_SERVERID) && (opt_len == 4))
+			memcpy(&server_id, opt_data, 4);
 
 		opt_len = 20;
 		opt_type = dhcp_get_next_option(NULL, opt_data, &opt_len, &nextopt);
 	}
 	if (msg_type != DHCP_MSG_ACK)
+		return 0;
+	/* the ack must confirm the offered address, from the server
+	 * that sent the offer */
+	if (dhdr->yiaddr != cli->address)
+		return 0;
+	if (server_id != cli->server_id)
 		return 0;
 	return 1;
 }
@@ -424,7 +520,7 @@ void *dhcp_client_loop(void *iface)
 					perror("udp recv");
 					return NULL;
 				}
-				if (len > 0) {
+				if ((len > 0) && (from_port == DHCPD_PORT)) {
 					if (dhclient_recv_offer(&client, buffer, len)) {
 						client.state = DHCPSTATE_REQUEST;
 					}
@@ -439,7 +535,7 @@ void *dhcp_client_loop(void *iface)
 				}
 				if (len == 0)
 					break;
-				if (dhclient_recv_ack(&client, buffer, len))
+				if ((from_port == DHCPD_PORT) && dhclient_recv_ack(&client, buffer, len))
 					client.state = DHCPSTATE_ACK;
 				else {
 					if (client.address)

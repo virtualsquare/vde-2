@@ -21,12 +21,7 @@ static void Usage(char *programname)
 	exit(1);
 }
 
-#if USE_WOLFSSL
 static ChaCha ctx;
-#else
-static mbedtls_chacha20_context ctx;
-#include <mbedtls/chacha20.h>
-#endif
 static int encryption_disabled = 0;
 static int nfd;
 static unsigned long long mycounter=1;
@@ -63,8 +58,11 @@ isvalid_timestamp(unsigned char *block, int size, struct peer *p)
 {
 	int i;
 	unsigned long long pktcounter=0;
+	/* the counter is the last 8 bytes of the datagram
+	 * ([flag][payload][crc 4][counter 8]); shift as 64-bit:
+	 * an int shift is UB for i>=4 */
 	for(i=0;i<8;i++){
-		pktcounter+=block[size-12+i]<<(i*8);
+		pktcounter+=(unsigned long long)block[size-8+i]<<(i*8);
 	}
 	if(pktcounter>p->counter){
 		p->counter=pktcounter;
@@ -100,23 +98,10 @@ int data_encrypt_decrypt(unsigned char *src, unsigned char *dst, int len, unsign
 		memcpy(dst,src,len);
 		return len;
 	}
-#if USE_WOLFSSL
 	wc_Chacha_SetKey(&ctx, key, CHACHA_MAX_KEY_SZ);
 	wc_Chacha_SetIV(&ctx, iv, CHACHA_IV_BYTES);
 	if (wc_Chacha_Process(&ctx, dst, src, len) == 0)
 		return len;
-#else
-	mbedtls_chacha20_init(&ctx);
-	mbedtls_chacha20_setkey(&ctx, key);
-	mbedtls_chacha20_starts(&ctx, iv, 0);
-
-	if (mbedtls_chacha20_update(&ctx, len, src, dst) == 0) {
-		mbedtls_chacha20_free(&ctx);
-		return len;
-	}
-
-	mbedtls_chacha20_free(&ctx);
-#endif
 	return -1;
 }
 
@@ -150,8 +135,9 @@ send_udp (unsigned char *data, size_t len, struct peer *p, unsigned char flags)
 	struct sockaddr_in *destination=&(p->in_a);
 	unsigned char *crc;
 
-	if (len + 8 - 1 > MAXPKT) {
-		len = MAXPKT - 8 + 1;
+	/* room for 1 flag byte + len payload + 12 byte tail (crc + counter) */
+	if (len + 13 > MAXPKT) {
+		len = MAXPKT - 13;
 		vc_printlog(2,"Warning: Cropping down packet size to %d", len);
 	}
 
